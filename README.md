@@ -6,3 +6,5 @@
 =======
  Lucas Jaques
 >>>>>>> 2f60199a2bf5f904b644f1edbecedf886bb2d63f
+
+print("teste commit 011026-Robson");
