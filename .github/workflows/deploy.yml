@@ -15,6 +15,25 @@ jobs:
       - name: Pull latest changes
         run: git pull origin main
 
+- name: Diagnose PHP
+  shell: powershell
+  run: |
+    Write-Host "User:"
+    whoami
+
+    Write-Host "USERPROFILE:"
+    Write-Host $env:USERPROFILE
+
+    Write-Host "PHP path:"
+    Test-Path "C:\Users\Administrator\.config\herd-lite\bin\php.exe"
+
+    Write-Host "PHP command:"
+    Get-Command php -ErrorAction SilentlyContinue
+
+    Write-Host "PHP version:"
+    php -v
+
+
       - name: Run Migrations and Cache
         run: |
           & "C:\Users\Administrator\.config\herd-lite\bin\php.exe" artisan migrate --force
