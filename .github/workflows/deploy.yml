@@ -1,0 +1,22 @@
+name: Auto Deploy na VPS
+
+on:
+	push:
+		branches: [ main ]
+
+jobs:
+	deploy:
+		runs-on: self-hosted
+		steps:
+			-name: Checkout code
+			uses: actions/checkout@3
+			
+			-name: Install Dependencies
+			run: composer install --no-dev --optmize-autoloader
+
+			-name: Run Migrations and Cache
+			run: |
+				php artisan migrate --force
+				php artisan config:cache
+				php artisan rout:cache
+				php artisan view:cache
