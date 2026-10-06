@@ -2,7 +2,8 @@ name: Auto Deploy na VPS
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
 
 jobs:
   deploy:
@@ -10,31 +11,28 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Pull latest changes
-        run: git pull origin main
+      - name: Diagnose PHP
+        shell: powershell
+        run: |
+          Write-Host "User:"
+          whoami
 
-- name: Diagnose PHP
-  shell: powershell
-  run: |
-    Write-Host "User:"
-    whoami
+          Write-Host "USERPROFILE:"
+          Write-Host $env:USERPROFILE
 
-    Write-Host "USERPROFILE:"
-    Write-Host $env:USERPROFILE
+          Write-Host "PHP path:"
+          Test-Path "C:\Users\Administrator\.config\herd-lite\bin\php.exe"
 
-    Write-Host "PHP path:"
-    Test-Path "C:\Users\Administrator\.config\herd-lite\bin\php.exe"
+          Write-Host "PHP command:"
+          Get-Command php -ErrorAction SilentlyContinue
 
-    Write-Host "PHP command:"
-    Get-Command php -ErrorAction SilentlyContinue
-
-    Write-Host "PHP version:"
-    php -v
-
+          Write-Host "PHP version:"
+          php -v
 
       - name: Run Migrations and Cache
+        shell: powershell
         run: |
           & "C:\Users\Administrator\.config\herd-lite\bin\php.exe" artisan migrate --force
           & "C:\Users\Administrator\.config\herd-lite\bin\php.exe" artisan config:cache
