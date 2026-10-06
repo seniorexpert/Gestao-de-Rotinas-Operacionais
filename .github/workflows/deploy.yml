@@ -10,6 +10,9 @@ jobs:
 		steps:
 			-name: Checkout code
 			uses: actions/checkout@3
+            
+            -name: Pull latest changes
+            run: git pull origin main
 			
 			-name: Install Dependencies
 			run: composer install --no-dev --optmize-autoloader
