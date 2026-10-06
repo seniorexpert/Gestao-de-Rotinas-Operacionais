@@ -13,23 +13,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Diagnose PHP
+      - name: Install Dependencies
         shell: powershell
         run: |
-          Write-Host "User:"
-          whoami
-
-          Write-Host "USERPROFILE:"
-          Write-Host $env:USERPROFILE
-
-          Write-Host "PHP path:"
-          Test-Path "C:\Users\Administrator\.config\herd-lite\bin\php.exe"
-
-          Write-Host "PHP command:"
-          Get-Command php -ErrorAction SilentlyContinue
-
-          Write-Host "PHP version:"
-          php -v
+          C:\Users\Administrator\.config\herd-lite\bin\composer.bat install --no-interaction --prefer-dist --optimize-autoloader
 
       - name: Run Migrations and Cache
         shell: powershell
