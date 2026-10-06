@@ -13,15 +13,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Dependencies
+      - name: Copy files to production folder
         shell: powershell
         run: |
-          C:\Users\Administrator\.config\herd-lite\bin\composer.bat install --no-interaction --prefer-dist --optimize-autoloader
+          if (!(Test-Path "C:\www\gest-rotinas")) {
+              New-Item -ItemType Directory -Force -Path "C:\www\gest-rotinas"
+          }
+          Copy-Item -Path ".\*" -Destination "C:\www\gest-rotinas" -Recurse -Force
 
-      - name: Run Migrations and Cache
+      - name: Install Dependencies and Run Migrations
         shell: powershell
         run: |
+          cd C:\www\gest-rotinas
+          C:\Users\Administrator\.config\herd-lite\bin\composer.bat install --no-interaction --prefer-dist --optimize-autoloader
           & "C:\Users\Administrator\.config\herd-lite\bin\php.exe" artisan migrate --force
+          & "C:\Users\Administrator\.config\herd-lite\bin\php.exe" artisan optimize:clear
           & "C:\Users\Administrator\.config\herd-lite\bin\php.exe" artisan config:cache
           & "C:\Users\Administrator\.config\herd-lite\bin\php.exe" artisan route:cache
           & "C:\Users\Administrator\.config\herd-lite\bin\php.exe" artisan view:cache
