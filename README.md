@@ -9,3 +9,5 @@
 
 print("teste commit 011026-Robson");
 print("joice");
+
+teste de deploy automatico
