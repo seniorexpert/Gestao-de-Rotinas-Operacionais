@@ -17,7 +17,7 @@ jobs:
 
       - name: Run Migrations and Cache
         run: |
-          C:\php\php.exe artisan migrate --force
-          C:\php\php.exe artisan config:cache
-          C:\php\php.exe artisan route:cache
-          C:\php\php.exe artisan view:cache
+          C:\Users\Administrator\.config\herd-lite\bin\php.exe artisan migrate --force
+          C:\Users\Administrator\.config\herd-lite\bin\php.exe artisan config:cache
+          C:\Users\Administrator\.config\herd-lite\bin\php.exe artisan route:cache
+          C:\Users\Administrator\.config\herd-lite\bin\php.exe artisan view:cache
