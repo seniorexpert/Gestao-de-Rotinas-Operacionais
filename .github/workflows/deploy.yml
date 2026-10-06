@@ -15,9 +15,6 @@ jobs:
       - name: Pull latest changes
         run: git pull origin main
 
-      - name: Install Dependencies
-        run: composer install --no-dev --optimize-autoloader
-
       - name: Run Migrations and Cache
         run: |
           php artisan migrate --force
