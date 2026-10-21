@@ -20,9 +20,9 @@ use Illuminate\Notifications\Notifiable;
     'status',
 ])]
 #[Hidden(['password', 'remember_token'])]
+
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
     protected $table = 'usuarios';
@@ -49,6 +49,19 @@ class User extends Authenticatable
             'id_grupo_acesso'
         );
     }
+
+    protected $fillable = [
+        'name',
+        'username',
+        'password',
+        'group',
+        'profile',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
 
     protected function casts(): array
     {

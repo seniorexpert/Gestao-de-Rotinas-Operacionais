@@ -73,18 +73,25 @@
                     </button>
 
                     <div id="profileDropdownMenu" class="hidden absolute right-0 top-12 w-48 bg-white border border-gray-200 rounded-xl shadow-lg py-2 z-50">
+                        <div class="w-full">
+                        <a href="{{ url('/mudar-senha') }}" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2 transition">
+                            <i class="fa-solid fa-user"></i>
+                            <span>Área do usuário</span>
+                        </a>
+
+                        <a href="{{ url('/gestao-acessos') }}" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2 transition">
+                            <i class="fa-solid fa-users"></i>
+                            <span>Gestão de acessos</span>
+                        </a>
+
                         <form method="POST" action="{{ route('logout') }}">
-                            @csrf
-                            <button type="submit" class="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2 transition">
-                                <i class="fa-solid fa-right-from-bracket"></i>
-                                <span>Área do usuario</span>
-                            </button>
                             @csrf
                             <button type="submit" class="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2 transition">
                                 <i class="fa-solid fa-right-from-bracket"></i>
                                 <span>Sair</span>
                             </button>
                         </form>
+                    </div>
                     </div>
                 </div>
             </div>
