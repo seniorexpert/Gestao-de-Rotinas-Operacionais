@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 use App\Http\Controllers\ForgotPasswordController;
 
+use App\Http\Controllers\UsuarioController;
+
 Route::middleware(['auth'])->group(function () {
     Route::get('/mudar-senha', [ForgotPasswordController::class, 'edit'])->name('password.edit.custom');
 
@@ -36,3 +38,8 @@ Route::get('/dashboard', function () {
 Route::get('/', function () {
     return view('welcome');
 });
+
+
+Route::post('/usuarios', [UsuarioController::class, 'store'])
+    ->middleware('auth')
+    ->name('usuarios.store');
