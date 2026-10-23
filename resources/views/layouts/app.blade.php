@@ -21,7 +21,9 @@
     <aside id="sidebar" class="fixed top-0 left-0 w-72 h-full bg-white border-r border-gray-200 z-50 transform -translate-x-full transition-transform duration-300 ease-in-out flex flex-col justify-between p-6">
         <div>
             <div class="flex items-center justify-between mb-8">
-                <img src="{{ asset('images/Logo_Senior_Expert_azul.png') }}" alt="Senior Expert" class="h-8 w-auto object-contain">
+                <a href="{{ url('/home') }}">
+                    <img src="{{ asset('images/Logo_Senior_Expert_azul.png') }}" alt="Senior Expert" class="h-8 w-auto object-contain">
+                </a>
                 <button id="closeSidebar" class="text-gray-500 hover:text-gray-800 focus:outline-none">
                     <i class="fa-solid fa-xmark text-xl"></i>
                 </button>
@@ -53,21 +55,22 @@
             </div>
 
             <div class="absolute left-1/2 transform -translate-x-1/2 max-w-[120px] sm:max-w-none">
-                <img src="{{ asset('images/Logo_Senior_Expert_azul.png') }}" alt="Senior Expert" class="h-8 sm:h-10 w-auto object-contain">
+                <a href="{{ url('/home') }}">
+                    <img src="{{ asset('images/Logo_Senior_Expert_azul.png') }}" alt="Senior Expert" class="h-8 sm:h-10 w-auto object-contain">
+                </a>
             </div>
 
             <div class="flex items-center space-x-2 sm:space-x-4">
-                <!-- <button class="relative text-gray-600 hover:text-gray-900 focus:outline-none p-1">
-                    <i class="fa-regular fa-bell text-base sm:text-lg"></i>
-                    <span class="absolute -top-1 -right-1 bg-[#1e293b] text-white text-[9px] font-bold rounded-full h-3.5 w-3.5 sm:h-4 sm:w-4 flex items-center justify-center">3</span>
-                </button> -->
-                
                 <div class="relative flex items-center space-x-2 border-l pl-2 sm:pl-4 border-gray-200">
                     <span class="text-sm font-medium text-gray-700 hidden md:inline">{{ Auth::user()->name ?? Auth::user()->username ?? 'Utilizador' }}</span>
                     
                     <button id="profileDropdownBtn" class="flex items-center space-x-1 focus:outline-none">
-                        <div class="h-8 w-8 sm:h-9 sm:w-9 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 border border-gray-200 hover:bg-gray-200 transition">
-                            <i class="fa-regular fa-user text-xs sm:text-sm"></i>
+                        <div class="h-8 w-8 sm:h-9 sm:w-9 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 border border-gray-200 hover:bg-gray-200 transition overflow-hidden">
+                            @if(Auth::check() && !empty(Auth::user()->photo))
+                                <img src="{{ asset('storage/' . Auth::user()->photo) }}" alt="Foto de perfil" class="w-full h-full object-cover">
+                            @else
+                                <i class="fa-regular fa-user text-xs sm:text-sm"></i>
+                            @endif
                         </div>
                         <i class="fa-solid fa-chevron-down text-[10px] text-gray-400"></i>
                     </button>
@@ -79,7 +82,7 @@
                             <span>Área do usuário</span>
                         </a>
 
-                        <a href="{{ url('/gestao-acessos') }}" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2 transition">
+                        <a href="{{ url('/usuarios') }}" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2 transition">
                             <i class="fa-solid fa-users"></i>
                             <span>Gestão de acessos</span>
                         </a>

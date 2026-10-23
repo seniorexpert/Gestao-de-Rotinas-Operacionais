@@ -11,23 +11,36 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable([
-    'id_grupo_acesso',
-    'usuario',
-    'username',
-    'grupo_acesso_nome',
-    'password',
-    'status',
-])]
-#[Hidden(['password', 'remember_token'])]
 
+
+#[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
+    /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
-    protected $table = 'usuarios';
+    protected $table = 'teste';
 
-    protected $primaryKey = 'id_usuario';
+    // #[Fillable([
+    //     'id_grupo_acesso',
+    //     'usuario',
+    //     'username',
+    //     'grupo_acesso_nome',
+    //     'password',
+    //     'status',
+    // ])]
+
+    protected $fillable = [
+        'name',
+        'username',
+        'password',
+        'group',
+        'profile',
+        'unit',
+        'photo',
+    ];
+
+    // protected $primaryKey = 'id_usuario';
 
     public function empresas(): BelongsToMany
     {
@@ -50,19 +63,6 @@ class User extends Authenticatable
         );
     }
 
-    protected $fillable = [
-        'name',
-        'username',
-        'password',
-        'group',
-        'profile',
-    ];
-
-    protected $hidden = [
-        'password',
-        'remember_token',
-    ];
-
     protected function casts(): array
     {
         return [
@@ -71,3 +71,4 @@ class User extends Authenticatable
         ];
     }
 }
+
