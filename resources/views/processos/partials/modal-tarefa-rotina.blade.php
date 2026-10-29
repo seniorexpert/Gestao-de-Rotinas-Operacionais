@@ -80,9 +80,23 @@
 
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Morador(a)</label>
-                <select id="selectMorador" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
+                <select id="selectMorador" required onchange="aoMudarMorador(this.value)" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
                     <option value="" disabled selected>Selecione a unidade primeiro</option>
                 </select>
+            </div>
+
+            <div id="cardMoradorSelecionado" class="hidden mt-4">
+                <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Morador(a) Selecionado(a)</label>
+                <div class="border border-gray-200 rounded-3xl p-4 bg-white shadow-sm flex items-center gap-4">
+                    <div id="containerFotoMorador" class="w-16 h-16 rounded-2xl bg-gray-100 overflow-hidden flex items-center justify-center shrink-0 border border-gray-100">
+                    </div>
+                    <div>
+                        <h4 id="nomeMoradorCard" class="text-base font-bold text-[#1e2d3d]">--</h4>
+                        <p class="sans-text text-gray-400 text-xs flex items-center gap-1 mt-0.5">
+                            <i class="fa-regular fa-user text-[10px]"></i> Morador(a)
+                        </p>
+                    </div>
+                </div>
             </div>
 
             <div>
@@ -374,23 +388,59 @@
         if (!selectMorador) return;
 
         selectMorador.innerHTML = '<option value="" disabled selected>A carregar moradores...</option>';
+        esconderCardMorador();
 
         fetch(`https://adm.gestaoseniorexpert.com.br/consulta_moradores.php/${encodeURIComponent(unidadeNome)}`)
             .then(response => response.json())
             .then(data => {
-                selectMorador.innerHTML = '<option value="" disabled selected>Selecione a pessoa</option>';
+                selectMorador.innerHTML = '<option value="" selected>Nenhum (Tarefa Geral)</option>';
                 
-                if (data.length === 0) {
-                    selectMorador.innerHTML += '<option value="" disabled>Nenhum morador ativo nesta unidade</option>';
-                    return;
+                if (data && data.length > 0) {
+                    data.forEach(nomeMorador => {
+                        selectMorador.innerHTML += `<option value="${nomeMorador}">${nomeMorador}</option>`;
+                    });
                 }
-
-                data.forEach(nomeMorador => {
-                    selectMorador.innerHTML += `<option value="${nomeMorador}">${nomeMorador}</option>`;
-                });
             })
             .catch(() => {
                 selectMorador.innerHTML = '<option value="" disabled selected>Erro ao carregar moradores</option>';
             });
+    }
+
+    function aoMudarMorador(nomeMorador) {
+        if (!nomeMorador || nomeMorador === "") {
+            esconderCardMorador();
+            return;
+        }
+
+        document.getElementById('nomeMoradorCard').textContent = nomeMorador;
+        document.getElementById('cardMoradorSelecionado').classList.remove('hidden');
+
+        const containerFoto = document.getElementById('containerFotoMorador');
+        containerFoto.innerHTML = '<i class="fa-solid fa-spinner animate-spin text-gray-400 text-sm"></i>';
+
+        fetch(`https://adm.gestaoseniorexpert.com.br/consulta_foto_morador.php/${encodeURIComponent(nomeMorador)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data && data.length > 0 && data[0]) {
+                    let fotoSrc = data[0];
+                    if (!fotoSrc.startsWith('http') && !fotoSrc.startsWith('data:image')) {
+                        fotoSrc = `data:image/jpeg;base64,${fotoSrc}`;
+                    }
+                    containerFoto.innerHTML = `<img src="${fotoSrc}" alt="${nomeMorador}" class="w-full h-full object-cover">`;
+                } else {
+                    const iniciais = nomeMorador.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+                    containerFoto.innerHTML = `<span class="text-sm font-bold text-[#1e2d3d]">${iniciais}</span>`;
+                    containerFoto.className = "w-16 h-16 rounded-2xl bg-[#f4f1ea] overflow-hidden flex items-center justify-center shrink-0 border border-gray-100";
+                }
+            })
+            .catch(() => {
+                const iniciais = nomeMorador.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
+                containerFoto.innerHTML = `<span class="text-sm font-bold text-[#1e2d3d]">${iniciais}</span>`;
+            });
+    }
+
+    function esconderCardMorador() {
+        const card = document.getElementById('cardMoradorSelecionado');
+        if (card) card.classList.add('hidden');
     }
 </script>
