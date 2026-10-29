@@ -6,6 +6,24 @@ use App\Http\Controllers\HomeController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 use App\Http\Controllers\ForgotPasswordController;
+use App\Http\Controllers\ProcessoController;
+use App\Http\Controllers\LocaisController;
+use App\Http\Controllers\FerramentasController;
+use App\Http\Controllers\TarefasController;
+use Illuminate\Support\Facades\DB;
+
+Route::get('/api/usuarios-por-unidade', function (Request $request) {
+    $unitName = $request->query('unit');
+    $usuarios = DB::table('gr_usuarios')->where('unit', $unitName)->orderBy('name')->get();
+    return response()->json($usuarios);
+});
+
+Route::post('/ferramentas', [FerramentasController::class, 'store'])->name('ferramentas.store');
+Route::post('/tarefas', [TarefasController::class, 'store'])->name('tarefas.store');
+Route::post('/locais', [LocaisController::class, 'store'])->name('locais.store');
+
+Route::get('/iniciar-processos', [ProcessoController::class, 'index'])->name('processos.index');
+Route::get('/cadastros-gestao-rotinas', [ProcessoController::class, 'gestaoRotinas'])->name('processos.gestao-rotinas');
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/mudar-senha', [ForgotPasswordController::class, 'edit'])->name('password.edit.custom');

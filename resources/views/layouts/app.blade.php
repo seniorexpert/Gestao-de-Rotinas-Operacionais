@@ -18,32 +18,73 @@
 <body class="bg-white min-h-screen flex flex-col justify-between text-gray-800">
 
     <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-40 hidden transition-opacity"></div>
-    <aside id="sidebar" class="fixed top-0 left-0 w-72 h-full bg-white border-r border-gray-200 z-50 transform -translate-x-full transition-transform duration-300 ease-in-out flex flex-col justify-between p-6">
+    
+    <aside id="sidebar" class="fixed top-0 left-0 w-80 h-full bg-[#fcfbf9] border-r border-gray-200 z-50 transform -translate-x-full transition-transform duration-300 ease-in-out flex flex-col justify-between p-6">
+        
         <div>
-            <div class="flex items-center justify-between mb-8">
+            <div class="flex items-center justify-between mb-10">
                 <a href="{{ url('/home') }}">
-                    <img src="{{ asset('images/Logo_Senior_Expert_azul.png') }}" alt="Senior Expert" class="h-8 w-auto object-contain">
+                    <img src="{{ asset('images/Logo_Senior_Expert_azul.png') }}" alt="Senior Expert" class="h-9 w-auto object-contain">
                 </a>
-                <button id="closeSidebar" class="text-gray-500 hover:text-gray-800 focus:outline-none">
+                <button id="closeSidebar" class="text-gray-400 hover:text-gray-700 focus:outline-none">
                     <i class="fa-solid fa-xmark text-xl"></i>
                 </button>
             </div>
+
             <nav class="space-y-2">
-                <a href="#" class="flex items-center space-x-3 px-4 py-3 bg-gray-100 text-[#101722] font-medium rounded-xl">
-                    <i class="fa-solid fa-house text-sm"></i>
-                    <span>Rotinas</span>
+                <a href="#" class="flex items-center space-x-3.5 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition">
+                    <i class="fa-regular fa-clipboard-list text-lg text-gray-500"></i>
+                    <span>Rotinas Diárias</span>
+                </a>
+
+                <a href="#" class="flex items-center space-x-3.5 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition">
+                    <i class="fa-solid fa-chart-line text-lg text-gray-500"></i>
+                    <span>Centro de Monitoramento</span>
+                </a>
+
+                <a href="{{ route('processos.index') }}" class="flex items-center space-x-3.5 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition">
+                    <i class="fa-regular fa-circle-play text-lg text-gray-700"></i>
+                    <span>Iniciar Processos</span>
                 </a>
             </nav>
         </div>
-        <div class="border-t border-gray-100 pt-4">
-            <form method="POST" action="{{ route('logout') }}">
-                @csrf
-                <button type="submit" class="w-full flex items-center space-x-3 px-4 py-3 text-red-600 hover:bg-red-50 rounded-xl transition font-medium">
-                    <i class="fa-solid fa-right-from-bracket text-sm"></i>
-                    <span>Sair</span>
-                </button>
-            </form>
+
+        <div>
+            <div class="space-y-1 mb-6 pt-4 border-t border-gray-200/60">
+                <a href="#" class="flex items-center space-x-3.5 px-4 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-medium transition">
+                    <i class="fa-regular fa-circle-question text-base text-gray-500"></i>
+                    <span>Central de Ajuda</span>
+                </a>
+
+                <a href="{{ url('/mudar-senha') }}" class="flex items-center space-x-3.5 px-4 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-medium transition">
+                    <i class="fa-solid fa-gear text-base text-gray-500"></i>
+                    <span>Configurações</span>
+                </a>
+
+                <form method="POST" action="{{ route('logout') }}">
+                    @csrf
+                    <button type="submit" class="w-full flex items-center space-x-3.5 px-4 py-2.5 text-amber-700 hover:bg-amber-50 rounded-xl text-sm font-medium transition text-left">
+                        <i class="fa-solid fa-right-from-bracket text-base"></i>
+                        <span>Sair</span>
+                    </button>
+                </form>
+            </div>
+
+            <div class="pt-4 border-t border-gray-200/60 flex items-center space-x-3 px-2">
+                <div class="h-10 w-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 border border-gray-200 overflow-hidden shrink-0">
+                    @if(Auth::check() && !empty(Auth::user()->photo))
+                        <img src="{{ asset('storage/' . Auth::user()->photo) }}" alt="Foto de perfil" class="w-full h-full object-cover">
+                    @else
+                        <i class="fa-regular fa-user text-sm"></i>
+                    @endif
+                </div>
+                <div class="overflow-hidden">
+                    <h4 class="text-sm font-bold text-gray-800 truncate">{{ Auth::user()->name ?? Auth::user()->username ?? 'Admin Geral' }}</h4>
+                    <p class="text-xs text-gray-500 truncate">Administrador</p>
+                </div>
+            </div>
         </div>
+
     </aside>
 
     <div>
@@ -77,24 +118,24 @@
 
                     <div id="profileDropdownMenu" class="hidden absolute right-0 top-12 w-48 bg-white border border-gray-200 rounded-xl shadow-lg py-2 z-50">
                         <div class="w-full">
-                        <a href="{{ url('/mudar-senha') }}" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2 transition">
-                            <i class="fa-solid fa-user"></i>
-                            <span>Área do usuário</span>
-                        </a>
+                            <a href="{{ url('/mudar-senha') }}" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2 transition">
+                                <i class="fa-solid fa-user"></i>
+                                <span>Área do usuário</span>
+                            </a>
 
-                        <a href="{{ url('/usuarios') }}" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2 transition">
-                            <i class="fa-solid fa-users"></i>
-                            <span>Gestão de acessos</span>
-                        </a>
+                            <a href="{{ url('/usuarios') }}" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2 transition">
+                                <i class="fa-solid fa-users"></i>
+                                <span>Gestão de acessos</span>
+                            </a>
 
-                        <form method="POST" action="{{ route('logout') }}">
-                            @csrf
-                            <button type="submit" class="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2 transition">
-                                <i class="fa-solid fa-right-from-bracket"></i>
-                                <span>Sair</span>
-                            </button>
-                        </form>
-                    </div>
+                            <form method="POST" action="{{ route('logout') }}">
+                                @csrf
+                                <button type="submit" class="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center space-x-2 transition">
+                                    <i class="fa-solid fa-right-from-bracket"></i>
+                                    <span>Sair</span>
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>

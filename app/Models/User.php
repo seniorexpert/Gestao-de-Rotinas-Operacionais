@@ -19,7 +19,7 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
-    protected $table = 'teste';
+    protected $table = 'gr_usuarios';
 
     // #[Fillable([
     //     'id_grupo_acesso',
