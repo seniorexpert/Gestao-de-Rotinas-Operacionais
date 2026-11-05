@@ -9,7 +9,9 @@
             <p class="sans-text text-gray-500 text-sm mb-6">Adicione esta tarefa à rotina</p>
         </div>
 
-        <form id="formDadosTarefa" class="space-y-6 sans-text overflow-y-auto flex-1 pr-1">
+        <form action="{{ route('rotinas.store') }}" method="POST" id="formSalvarRotina" class="space-y-6 sans-text overflow-y-auto flex-1 pr-1">
+            @csrf
+            <input type="hidden" name="tarefas_json" id="tarefasJsonInput">
             <input type="hidden" id="tarefaIndexEdicao" value="">
 
             <div class="relative">
@@ -65,22 +67,22 @@
 
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Horário</label>
-                <input type="time" id="inputHorario" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
+                <input type="time" name="horario" id="inputHorario" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
             </div>
 
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Tarefa</label>
-                <select id="selectTarefa" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
+                <select name="tarefa" id="selectTarefa" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
                     <option value="" disabled selected>Selecione a tarefa</option>
-                    <option value="Alimentação">Alimentação</option>
-                    <option value="Banho e Higiene">Banho e Higiene</option>
-                    <option value="Medicação">Medicação</option>
+                    @foreach(DB::table('gr_tarefas')->orderBy('nome_tarefa')->get() as $tarefa)
+                        <option value="{{ $tarefa->id }}">{{ $tarefa->nome_tarefa }}</option>
+                    @endforeach
                 </select>
             </div>
 
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Morador(a)</label>
-                <select id="selectMorador" required onchange="aoMudarMorador(this.value)" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
+                <select name="morador" id="selectMorador" required onchange="aoMudarMorador(this.value)" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
                     <option value="" disabled selected>Selecione a unidade primeiro</option>
                 </select>
             </div>
@@ -101,10 +103,10 @@
 
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Local</label>
-                <select id="selectLocal" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
+                <select name="local" id="selectLocal" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
                     <option value="" disabled selected>Selecione o local</option>
                     @foreach(DB::table('gr_locais')->orderBy('nome_local')->get() as $local)
-                        <option value="{{ $local->nome_local }}">{{ $local->nome_local }}</option>
+                        <option value="{{ $local->id }}">{{ $local->nome_local }}</option>
                     @endforeach
                 </select>
             </div>
@@ -125,14 +127,14 @@
 
             <div id="campoCuidadorAuxiliar" class="hidden">
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Cuidador(a) auxiliar</label>
-                <select id="selectCuidadorAux" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
+                <select name="cuidador_auxiliar" id="selectCuidadorAux" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
                     <option value="" disabled selected>Selecione se necessário</option>
                 </select>
             </div>
 
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Observação</label>
-                <textarea id="inputObservacao" rows="3" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]" placeholder="Orientações adicionais (opcional)"></textarea>
+                <textarea name="observacao" id="inputObservacao" rows="3" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]" placeholder="Orientações adicionais (opcional)"></textarea>
             </div>
 
             <div class="flex items-center justify-end gap-4 pt-4 sticky bottom-0 bg-white pb-1">
@@ -148,7 +150,9 @@
 
     function fecharModalTarefa() {
         limparFormularioTarefa();
-        closeModal('tarefaRotinaModal');
+        const modal = document.getElementById('tarefaRotinaModal');
+        if (modal) modal.classList.add('hidden');
+        if (typeof closeModal === 'function') closeModal('tarefaRotinaModal');
     }
 
     function carregarCuidadoresAuxiliares(unidadeNome, valorSelecionado = '') {
@@ -225,16 +229,23 @@
         const indexEdicao = document.getElementById('tarefaIndexEdicao').value;
         const diasSelecionados = Array.from(document.querySelectorAll('.dia-checkbox:checked')).map(cb => cb.value);
         const horario = document.getElementById('inputHorario').value;
-        const tarefa = document.getElementById('selectTarefa').value;
+        
+        const selectTarefa = document.getElementById('selectTarefa');
+        const tarefaId = selectTarefa ? selectTarefa.value : null;
+        const tarefaNome = selectTarefa && selectTarefa.selectedIndex >= 0 ? selectTarefa.options[selectTarefa.selectedIndex].text : '';
+
+        const selectLocal = document.getElementById('selectLocal');
+        const localId = selectLocal ? selectLocal.value : null;
+        const localNome = selectLocal && selectLocal.selectedIndex >= 0 ? selectLocal.options[selectLocal.selectedIndex].text : '';
+
         const morador = document.getElementById('selectMorador').value;
-        const local = document.getElementById('selectLocal').value;
         const auxilioRadio = document.querySelector('input[name="necessita_auxilio"]:checked');
         const necessitaAuxilio = auxilioRadio ? auxilioRadio.value : 'Não';
         const selectCuidador = document.getElementById('selectCuidadorAux');
         const cuidadorAux = selectCuidador ? selectCuidador.value : '';
         const observacao = document.getElementById('inputObservacao').value;
 
-        if (!tarefa || !morador || !local || !horario || diasSelecionados.length === 0) {
+        if (!tarefaId || !morador || !localId || !horario || diasSelecionados.length === 0) {
             alert('Por favor, preencha os campos obrigatórios e selecione ao menos um dia.');
             return;
         }
@@ -242,9 +253,11 @@
         const dadosTarefa = {
             dias: diasSelecionados.join(', '),
             horario: horario,
-            tarefa: tarefa,
+            id_tarefa: tarefaId,
+            tarefa: tarefaNome,
             morador: morador,
-            local: local,
+            id_local: localId,
+            local: localNome,
             auxilio: necessitaAuxilio,
             cuidador: cuidadorAux,
             observacao: observacao
@@ -325,9 +338,10 @@
         
         document.getElementById('tarefaIndexEdicao').value = index;
         document.getElementById('inputHorario').value = t.horario;
-        document.getElementById('selectTarefa').value = t.tarefa;
+        document.getElementById('selectTarefa').value = t.id_tarefa;
         document.getElementById('selectMorador').value = t.morador;
-        document.getElementById('selectLocal').value = t.local;
+        aoMudarMorador(t.morador);
+        document.getElementById('selectLocal').value = t.id_local;
         document.getElementById('inputObservacao').value = t.observacao || '';
 
         const radios = document.querySelectorAll('input[name="necessita_auxilio"]');
@@ -346,7 +360,9 @@
         });
         atualizarContagemDias();
 
-        abrirModal('tarefaRotinaModal');
+        if (typeof abrirModal === 'function') {
+            abrirModal('tarefaRotinaModal');
+        }
     }
 
     function removerTarefa(index) {
@@ -355,7 +371,7 @@
     }
 
     function limparFormularioTarefa() {
-        const form = document.getElementById('formDadosTarefa');
+        const form = document.getElementById('formSalvarRotina');
         if (form) form.reset();
         
         const indexEdicao = document.getElementById('tarefaIndexEdicao');
@@ -381,6 +397,8 @@
         if (radioNao) {
             radioNao.checked = true;
         }
+
+        esconderCardMorador();
     }
 
     function carregarMoradoresPorUnidade(unidadeNome) {
@@ -393,7 +411,7 @@
         fetch(`https://adm.gestaoseniorexpert.com.br/consulta_moradores.php/${encodeURIComponent(unidadeNome)}`)
             .then(response => response.json())
             .then(data => {
-                selectMorador.innerHTML = '<option value="" selected>Nenhum (Tarefa Geral)</option>';
+                selectMorador.innerHTML = '<option value="Nenhum (Tarefa Geral)" selected>Nenhum (Tarefa Geral)</option>';
                 
                 if (data && data.length > 0) {
                     data.forEach(nomeMorador => {
@@ -407,7 +425,7 @@
     }
 
     function aoMudarMorador(nomeMorador) {
-        if (!nomeMorador || nomeMorador === "") {
+        if (!nomeMorador || nomeMorador === "" || nomeMorador === "Nenhum (Tarefa Geral)") {
             esconderCardMorador();
             return;
         }
@@ -442,5 +460,41 @@
     function esconderCardMorador() {
         const card = document.getElementById('cardMoradorSelecionado');
         if (card) card.classList.add('hidden');
+    }
+
+    function enviarRotinasParaBanco() {
+        if (listaTarefasMemoria.length === 0) {
+            alert('Adicione pelo menos uma tarefa na rotina antes de salvar.');
+            return;
+        }
+
+        const selectColab = document.getElementById('selectColaboradorModalRotina');
+        const colaboradorId = selectColab ? selectColab.value : null;
+
+        if (!colaboradorId) {
+            alert('Por favor, selecione um colaborador no cadastro da rotina.');
+            return;
+        }
+
+        const form = document.getElementById('formSalvarRotina');
+
+        let inputColabHidden = form.querySelector('input[name="colaborador_id"]');
+        if (!inputColabHidden) {
+            inputColabHidden = document.createElement('input');
+            inputColabHidden.type = 'hidden';
+            inputColabHidden.name = 'colaborador_id';
+            form.appendChild(inputColabHidden);
+        }
+        inputColabHidden.value = colaboradorId;
+
+        const inputJson = form.querySelector('#tarefasJsonInput');
+        if (inputJson) {
+            inputJson.value = JSON.stringify(listaTarefasMemoria);
+        } else {
+            alert("Erro: Campo de JSON não encontrado no formulário.");
+            return;
+        }
+
+        form.submit();
     }
 </script>

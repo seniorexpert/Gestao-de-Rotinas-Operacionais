@@ -37,7 +37,7 @@
                     <span>Rotinas Diárias</span>
                 </a>
 
-                <a href="#" class="flex items-center space-x-3.5 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition">
+                <a href="{{ route('monitoramento.index') }}" class="flex items-center space-x-3.5 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition">
                     <i class="fa-solid fa-chart-line text-lg text-gray-500"></i>
                     <span>Centro de Monitoramento</span>
                 </a>

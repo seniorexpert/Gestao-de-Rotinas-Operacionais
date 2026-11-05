@@ -7,10 +7,16 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 use App\Http\Controllers\ForgotPasswordController;
 use App\Http\Controllers\ProcessoController;
+use App\Http\Controllers\MonitoramentoController;
 use App\Http\Controllers\LocaisController;
 use App\Http\Controllers\FerramentasController;
 use App\Http\Controllers\TarefasController;
 use Illuminate\Support\Facades\DB;
+use App\Http\Controllers\RotinasController;
+
+Route::post('/rotinas/atribuir', [MonitoramentoController::class, 'atribuir'])->name('rotinas.atribuir');
+
+Route::get('/centro-monitoramento', [MonitoramentoController::class, 'centroMonitoramento']);
 
 Route::get('/api/usuarios-por-unidade', function (Request $request) {
     $unitName = $request->query('unit');
@@ -18,12 +24,14 @@ Route::get('/api/usuarios-por-unidade', function (Request $request) {
     return response()->json($usuarios);
 });
 
+Route::post('/rotinas/salvar', [RotinasController::class, 'store'])->name('rotinas.store');
 Route::post('/ferramentas', [FerramentasController::class, 'store'])->name('ferramentas.store');
 Route::post('/tarefas', [TarefasController::class, 'store'])->name('tarefas.store');
 Route::post('/locais', [LocaisController::class, 'store'])->name('locais.store');
 
 Route::get('/iniciar-processos', [ProcessoController::class, 'index'])->name('processos.index');
-Route::get('/cadastros-gestao-rotinas', [ProcessoController::class, 'gestaoRotinas'])->name('processos.gestao-rotinas');
+Route::get('/centro-monitoramento', [MonitoramentoController::class, 'index'])->name('monitoramento.index');
+Route::match(['get', 'post'], '/cadastros-gestao-rotinas', [ProcessoController::class, 'gestaoRotinas'])->name('processos.gestao-rotinas');
 
 Route::middleware(['auth'])->group(function () {
     Route::get('/mudar-senha', [ForgotPasswordController::class, 'edit'])->name('password.edit.custom');
@@ -34,7 +42,8 @@ Route::middleware(['auth'])->group(function () {
     Route::put('/usuarios/{id}', [AuthController::class, 'update'])->name('users.update');
 
     Route::get('/home', function () {
-        return view('home');
+        $rotinas = DB::table('gr_rotinas')->orderBy('horario', 'asc')->get();
+        return view('home', compact('rotinas'));
     })->name('home');
 });
 

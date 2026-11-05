@@ -9,8 +9,7 @@
             <p class="sans-text text-gray-500 text-sm mb-6">Configure a rotina e adicione suas tarefas</p>
         </div>
 
-        <form action="#" method="POST" class="space-y-6 sans-text overflow-y-auto flex-1 pr-1">
-            @csrf
+        <div class="space-y-6 sans-text overflow-y-auto flex-1 pr-1">
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Unidade</label>
                 <select name="unidade_id" id="selectUnidadeRotina" required onchange="carregarColaboradoresPorUnidade(this.value)" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
@@ -22,11 +21,11 @@
 
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Colaborador(a)</label>
-                <select name="colaborador_id" id="selectColaboradorRotina" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
+                <select name="colaborador_id" id="selectColaboradorModalRotina" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
                     <option value="" disabled selected>Selecione a unidade primeiro</option>
                 </select>
             </div>
-
+            
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Situação da rotina</label>
                 <div class="flex items-center gap-6 pt-2">
@@ -59,9 +58,9 @@
 
             <div class="flex items-center justify-end gap-4 pt-4 sticky bottom-0 bg-white pb-1">
                 <button type="button" onclick="closeModal('rotinaModal')" class="w-1/2 py-3.5 rounded-2xl border border-[#e5dec9] text-[#1e2d3d] hover:bg-gray-50 text-sm font-bold transition text-center">Cancelar</button>
-                <button type="submit" class="w-1/2 py-3.5 rounded-2xl bg-[#1e2d3d] text-white hover:bg-opacity-90 text-sm font-bold transition text-center">Salvar rotina</button>
+                <button type="button" onclick="enviarRotinasParaBanco()" class="w-1/2 py-3.5 rounded-2xl bg-[#1e2d3d] text-white hover:bg-opacity-90 text-sm font-bold transition text-center">Salvar rotina</button>
             </div>
-        </form>
+        </div>
     </div>
 </div>
 
@@ -77,7 +76,7 @@
     }
 
     function carregarColaboradoresPorUnidade(unidadeNome) {
-        const selectColab = document.getElementById('selectColaboradorRotina');
+        const selectColab = document.getElementById('selectColaboradorModalRotina');
         if (selectColab) {
             selectColab.innerHTML = '<option value="" disabled selected>A carregar...</option>';
             fetch(`/api/usuarios-por-unidade?unit=${encodeURIComponent(unidadeNome)}`)
@@ -102,8 +101,14 @@
             return;
         }
         
+        const unidadeNome = unidadeSelect.value;
+
         if (typeof carregarCuidadoresAuxiliares === 'function') {
-            carregarCuidadoresAuxiliares(unidadeSelect.value);
+            carregarCuidadoresAuxiliares(unidadeNome);
+        }
+        
+        if (typeof carregarMoradoresPorUnidade === 'function') {
+            carregarMoradoresPorUnidade(unidadeNome);
         }
         
         abrirModal('tarefaRotinaModal');
