@@ -94,7 +94,7 @@
     </div>
 </div>
 
-@include('sla.modal-detalhes-rotina')
+@include('sla.partials.modal-detalhes-rotina')
 
 <script>
     function mudarAba(botaoClicado) {
