@@ -46,12 +46,64 @@
                     <i class="fa-regular fa-circle-play text-lg text-gray-700"></i>
                     <span>Iniciar Processos</span>
                 </a>
+
+                <div class="pt-1">
+                    <button id="toggleRelatorios" class="w-full flex items-center justify-between px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition focus:outline-none">
+                        <div class="flex items-center space-x-3.5">
+                            <i class="fa-solid fa-chart-simple text-lg text-gray-700"></i>
+                            <span class="font-semibold text-gray-800">Relatórios</span>
+                        </div>
+                        <i id="relatoriosChevron" class="fa-solid fa-chevron-up text-xs text-gray-500 transition-transform duration-200 rotate-180"></i>
+                    </button>
+
+                    <div id="relatoriosMenu" class="hidden pl-4 pr-2 pt-2 space-y-4">
+                        <div>
+                            <span class="block px-4 pb-2 text-[11px] font-bold uppercase tracking-wider text-amber-800/80">CADASTROS</span>
+                            <div class="space-y-1">
+                                <a href="{{ route('relatorios.rotinas') }}" class="flex items-center space-x-3 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition">
+                                    <i class="fa-regular fa-calendar-days text-base text-gray-600 w-5 text-center"></i>
+                                    <span>Relatório de Rotinas</span>
+                                </a>
+                                <a href="{{ route('relatorios.tarefas') }}" class="flex items-center space-x-3 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition">
+                                    <i class="fa-solid fa-list-check text-base text-gray-600 w-5 text-center"></i>
+                                    <span>Relatório de Tarefas</span>
+                                </a>
+                                <a href="{{ route('relatorios.ferramentas') }}" class="flex items-center space-x-3 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition">
+                                    <i class="fa-solid fa-wrench text-base text-gray-600 w-5 text-center"></i>
+                                    <span>Relatório de Ferramentas</span>
+                                </a>
+                                <a href="{{ route('relatorios.locais') }}" class="flex items-center space-x-3 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition">
+                                    <i class="fa-solid fa-location-dot text-base text-gray-600 w-5 text-center"></i>
+                                    <span>Relatório de Locais</span>
+                                </a>
+                            </div>
+                        </div>
+
+                        <div>
+                            <span class="block px-4 pb-2 text-[11px] font-bold uppercase tracking-wider text-amber-800/80">HISTÓRICOS E ANÁLISE</span>
+                            <div class="space-y-1">
+                                <a href="{{ route('relatorios.rotinas-finalizadas') }}" class="flex items-center space-x-3 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition">
+                                    <i class="fa-regular fa-clipboard-check text-base text-gray-600 w-5 text-center"></i>
+                                    <span>Relatório de Rotinas Finalizadas</span>
+                                </a>
+                                <a href="{{ route('relatorios.rotinas-excel') }}" class="flex items-center space-x-3 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition">
+                                    <i class="fa-regular fa-file-excel text-base text-gray-600 w-5 text-center"></i>
+                                    <span>Relatório de Rotinas Excel</span>
+                                </a>
+                                <a href="{{ route('relatorios.logs-rotinas') }}" class="flex items-center space-x-3 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition">
+                                    <i class="fa-solid fa-receipt text-base text-gray-600 w-5 text-center"></i>
+                                    <span>Relatório de Log's – Rotinas</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </nav>
         </div>
 
         <div>
             <div class="space-y-1 mb-6 pt-4 border-t border-gray-200/60">
-                <a href="#" class="flex items-center space-x-3.5 px-4 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-medium transition">
+                <!-- <a href="#" class="flex items-center space-x-3.5 px-4 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-medium transition">
                     <i class="fa-regular fa-circle-question text-base text-gray-500"></i>
                     <span>Central de Ajuda</span>
                 </a>
@@ -59,7 +111,7 @@
                 <a href="{{ url('/mudar-senha') }}" class="flex items-center space-x-3.5 px-4 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-medium transition">
                     <i class="fa-solid fa-gear text-base text-gray-500"></i>
                     <span>Configurações</span>
-                </a>
+                </a> -->
 
                 <form method="POST" action="{{ route('logout') }}">
                     @csrf
@@ -177,6 +229,15 @@
             if (!profileMenu.classList.contains('hidden')) {
                 profileMenu.classList.add('hidden');
             }
+        });
+
+        const toggleRelatorios = document.getElementById('toggleRelatorios');
+        const relatoriosMenu = document.getElementById('relatoriosMenu');
+        const relatoriosChevron = document.getElementById('relatoriosChevron');
+
+        toggleRelatorios.addEventListener('click', function () {
+            relatoriosMenu.classList.toggle('hidden');
+            relatoriosChevron.classList.toggle('rotate-180');
         });
     </script>
 </body>

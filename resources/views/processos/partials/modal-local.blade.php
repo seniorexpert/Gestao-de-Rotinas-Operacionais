@@ -4,14 +4,17 @@
             <i class="fa-solid fa-xmark text-xl"></i>
         </button>
 
-        <h2 class="text-3xl font-bold text-[#1e2d3d] mb-1">Novo local</h2>
+        <h2 id="modalTituloLocal" class="text-3xl font-bold text-[#1e2d3d] mb-1">Novo local</h2>
         <p class="sans-text text-gray-500 text-sm mb-6">Informe os dados do local da unidade.</p>
 
         <form action="{{ route('locais.store') }}" method="POST" class="space-y-6 sans-text">
             @csrf
+            
+            <input type="hidden" name="id" id="local_id">
+
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Nome do local</label>
-                <input type="text" name="nome_local" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]" placeholder="Informe nome do local">
+                <input type="text" name="nome_local" id="nome_local" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]" placeholder="Informe nome do local">
             </div>
 
             <div class="flex items-center justify-end gap-4 pt-4">

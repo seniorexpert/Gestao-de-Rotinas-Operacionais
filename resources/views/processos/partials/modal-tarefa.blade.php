@@ -5,28 +5,31 @@
         </button>
 
         <div class="flex-shrink-0">
-            <h2 class="text-3xl font-bold text-[#1e2d3d] mb-1">Cadastro de tarefa</h2>
+            <h2 id="modalTituloTarefa" class="text-3xl font-bold text-[#1e2d3d] mb-1">Cadastro de tarefa</h2>
             <p class="sans-text text-gray-500 text-sm mb-6">Instruções e recursos utilizados</p>
         </div>
 
         <form action="{{ route('tarefas.store') }}" method="POST" enctype="multipart/form-data" class="space-y-6 sans-text overflow-y-auto flex-1 pr-1">
             @csrf
+            
+            <input type="hidden" name="id" id="tarefa_id">
+
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Nome da tarefa</label>
-                <input type="text" name="nome_tarefa" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]" placeholder="Ex.: Alimentação">
+                <input type="text" name="nome_tarefa" id="nome_tarefa" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]" placeholder="Ex.: Alimentação">
             </div>
 
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Duração</label>
                 <div class="relative flex items-center">
-                    <input type="number" name="tempo_tarefa" required min="1" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 pr-14 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]" placeholder="Ex: 15">
+                    <input type="number" name="tempo_tarefa" id="tempo_tarefa" required min="1" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 pr-14 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]" placeholder="Ex: 15">
                     <span class="absolute right-4 text-gray-400 text-sm font-medium">min</span>
                 </div>
             </div>
 
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Situação</label>
-                <select name="status_tarefa" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
+                <select name="status_tarefa" id="status_tarefa" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
                     <option value="Ativa">Ativa</option>
                     <option value="Inativa">Inativa</option>
                 </select>
@@ -62,7 +65,7 @@
 
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Descrição e instruções</label>
-                <textarea name="descricao_tarefa" rows="3" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]" placeholder="Orientações para execução..."></textarea>
+                <textarea name="descricao_tarefa" id="descricao_tarefa" rows="3" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]" placeholder="Orientações para execução..."></textarea>
             </div>
 
             <div>

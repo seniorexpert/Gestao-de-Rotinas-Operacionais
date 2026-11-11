@@ -4,14 +4,17 @@
             <i class="fa-solid fa-xmark text-xl"></i>
         </button>
 
-        <h2 class="text-3xl font-bold text-[#1e2d3d] mb-1">Nova ferramenta</h2>
+        <h2 id="modalTitulo" class="text-3xl font-bold text-[#1e2d3d] mb-1">Nova ferramenta</h2>
         <p class="sans-text text-gray-500 text-sm mb-6">Informe os dados da ferramenta de apoio.</p>
 
         <form action="{{ route('ferramentas.store') }}" method="POST" class="space-y-6 sans-text">
             @csrf
+            
+            <input type="hidden" name="id" id="ferramenta_id">
+
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Nome da ferramenta</label>
-                <input type="text" name="nome_ferramenta" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]" placeholder="Informe nome da ferramenta">
+                <input type="text" name="nome_ferramenta" id="nome_ferramenta" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]" placeholder="Informe nome da ferramenta">
             </div>
 
             <div class="flex items-center justify-end gap-4 pt-4">
