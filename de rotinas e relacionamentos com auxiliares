@@ -1,0 +1,119 @@
+[1mdiff --git a/database/migrations/2026_11_04_151954_create_tabelas_rotinas.php b/database/migrations/2026_11_04_151954_create_tabelas_rotinas.php[m
+[1mnew file mode 100644[m
+[1mindex 0000000..91d9605[m
+[1m--- /dev/null[m
+[1m+++ b/database/migrations/2026_11_04_151954_create_tabelas_rotinas.php[m
+[36m@@ -0,0 +1,112 @@[m
+[32m+[m[32m<?php[m
+[32m+[m
+[32m+[m[32muse Illuminate\Database\Migrations\Migration;[m
+[32m+[m[32muse Illuminate\Database\Schema\Blueprint;[m
+[32m+[m[32muse Illuminate\Support\Facades\Schema;[m
+[32m+[m
+[32m+[m[32mreturn new class extends Migration[m
+[32m+[m[32m{[m
+[32m+[m[32m    public function up(): void[m
+[32m+[m[32m    {[m
+[32m+[m[32m        Schema::create('ferramentas', function (Blueprint $table) {[m
+[32m+[m[32m            $table->id('id_ferramenta');[m
+[32m+[m[32m            $table->string('ferramenta')->nullable();[m
+[32m+[m[32m            $table->boolean('status')->nullable();[m
+[32m+[m[32m            $table->timestamps();[m
+[32m+[m[32m        });[m
+[32m+[m
+[32m+[m[32m        Schema::create('locais', function (Blueprint $table) {[m
+[32m+[m[32m            $table->id('id_local');[m
+[32m+[m[32m            $table->string('local');[m
+[32m+[m[32m            $table->boolean('status');[m
+[32m+[m[32m            $table->timestamps();[m
+[32m+[m[32m        });[m
+[32m+[m
+[32m+[m[32m        Schema::create('tarefas', function (Blueprint $table) {[m
+[32m+[m[32m            $table->id('id_tarefa');[m
+[32m+[m[32m            $table->boolean('icone')->nullable();[m
+[32m+[m[32m            $table->string('tarefa')->nullable();[m
+[32m+[m[32m            $table->time('tempo_realizar_tarefa')->nullable();[m
+[32m+[m[32m            $table->text('descricao')->nullable();[m
+[32m+[m[32m            $table->unsignedBigInteger('id_ferramenta')->nullable();[m
+[32m+[m[32m            $table->string('documentacao')->nullable();[m
+[32m+[m[32m            $table->boolean('status');[m
+[32m+[m[32m            $table->timestamps();[m
+[32m+[m
+[32m+[m[32m            $table->foreign('id_ferramenta')[m
+[32m+[m[32m                ->references('id_ferramenta')[m
+[32m+[m[32m                ->on('ferramentas')[m
+[32m+[m[32m                ->onUpdate('no action')[m
+[32m+[m[32m                ->onDelete('no action');[m
+[32m+[m[32m        });[m
+[32m+[m
+[32m+[m[32m        Schema::create('rotinas', function (Blueprint $table) {[m
+[32m+[m[32m            $table->id('id_rotina');[m
+[32m+[m[32m            $table->boolean('status');[m
+[32m+[m[32m            $table->unsignedBigInteger('id_empresa');[m
+[32m+[m[32m            $table->unsignedBigInteger('id_usuario');[m
+[32m+[m[32m            $table->string('dias_semanas');[m
+[32m+[m[32m            $table->time('horario');[m
+[32m+[m[32m            $table->unsignedBigInteger('id_tarefa');[m
+[32m+[m[32m            $table->string('morador')->nullable();[m
+[32m+[m[32m            $table->unsignedBigInteger('id_local')->nullable();[m
+[32m+[m[32m            $table->string('local')->nullable();[m
+[32m+[m[32m            $table->boolean('auxilio');[m
+[32m+[m[32m            $table->text('obs')->nullable();[m
+[32m+[m[32m            $table->timestamps();[m
+[32m+[m
+[32m+[m[32m            $table->foreign('id_tarefa')[m
+[32m+[m[32m                ->references('id_tarefa')[m
+[32m+[m[32m                ->on('tarefas')[m
+[32m+[m[32m                ->onUpdate('no action')[m
+[32m+[m[32m                ->onDelete('no action');[m
+[32m+[m
+[32m+[m[32m            $table->foreign('id_local')[m
+[32m+[m[32m                ->references('id_local')[m
+[32m+[m[32m                ->on('locais')[m
+[32m+[m[32m                ->onUpdate('no action')[m
+[32m+[m[32m                ->onDelete('no action');[m
+[32m+[m
+[32m+[m[32m            $table->foreign('id_empresa')[m
+[32m+[m[32m                ->references('id_empresa')[m
+[32m+[m[32m                ->on('empresas')[m
+[32m+[m[32m                ->onUpdate('no action')[m
+[32m+[m[32m                ->onDelete('no action');[m
+[32m+[m
+[32m+[m[32m            $table->foreign('id_usuario')[m
+[32m+[m[32m                ->references('id_usuario')[m
+[32m+[m[32m                ->on('usuarios')[m
+[32m+[m[32m                ->onUpdate('no action')[m
+[32m+[m[32m                ->onDelete('no action');[m
+[32m+[m[32m        });[m
+[32m+[m
+[32m+[m[32m        Schema::create('rotina_auxiliares', function (Blueprint $table) {[m
+[32m+[m[32m            $table->unsignedBigInteger('id_rotina');[m
+[32m+[m[32m            $table->unsignedBigInteger('id_usuario');[m
+[32m+[m
+[32m+[m[32m            // Impede repetir o mesmo auxiliar na mesma rotina.[m
+[32m+[m[32m            $table->primary(['id_rotina', 'id_usuario']);[m
+[32m+[m
+[32m+[m[32m            $table->foreign('id_rotina')[m
+[32m+[m[32m                ->references('id_rotina')[m
+[32m+[m[32m                ->on('rotinas')[m
+[32m+[m[32m                ->onUpdate('no action')[m
+[32m+[m[32m                ->onDelete('cascade');[m
+[32m+[m
+[32m+[m[32m            $table->foreign('id_usuario')[m
+[32m+[m[32m                ->references('id_usuario')[m
+[32m+[m[32m                ->on('usuarios')[m
+[32m+[m[32m                ->onUpdate('no action')[m
+[32m+[m[32m                ->onDelete('no action');[m
+[32m+[m[32m        });[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m    public function down(): void[m
+[32m+[m[32m    {[m
+[32m+[m[32m        Schema::dropIfExists('rotina_auxiliares');[m
+[32m+[m[32m        Schema::dropIfExists('rotinas');[m
+[32m+[m[32m        Schema::dropIfExists('tarefas');[m
+[32m+[m[32m        Schema::dropIfExists('locais');[m
+[32m+[m[32m        Schema::dropIfExists('ferramentas');[m
+[32m+[m[32m    }[m
+[32m+[m[32m};[m
+\ No newline at end of file[m

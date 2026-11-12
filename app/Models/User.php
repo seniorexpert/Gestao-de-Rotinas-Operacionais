@@ -2,45 +2,41 @@
 
 namespace App\Models;
 
-use Database\Factories\UserFactory;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-
-
-#[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
-    protected $table = 'gr_usuarios';
+    protected $table = 'usuarios';
 
-    // #[Fillable([
-    //     'id_grupo_acesso',
-    //     'usuario',
-    //     'username',
-    //     'grupo_acesso_nome',
-    //     'password',
-    //     'status',
-    // ])]
+    protected $primaryKey = 'id_usuario';
 
     protected $fillable = [
-        'name',
+        'id_grupo_acesso',
+        'usuario',
         'username',
+        'grupo_acesso_nome',
         'password',
-        'group',
-        'profile',
-        'unit',
-        'photo',
+        'status',
     ];
 
-    // protected $primaryKey = 'id_usuario';
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'password' => 'hashed',
+            'status' => 'boolean',
+        ];
+    }
 
     public function empresas(): BelongsToMany
     {
@@ -62,13 +58,4 @@ class User extends Authenticatable
             'id_grupo_acesso'
         );
     }
-
-    protected function casts(): array
-    {
-        return [
-            'password' => 'hashed',
-            'status' => 'boolean',
-        ];
-    }
 }
-

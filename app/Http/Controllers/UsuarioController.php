@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Empresa;
 use App\Models\GrupoAcesso;
 use App\Models\User;
+use App\Services\AuditoriaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -14,11 +15,30 @@ class UsuarioController extends Controller
     {
         $dados = $request->validate([
             'usuario' => ['required', 'string', 'max:255'],
-            'username' => ['required', 'string', 'max:100', 'unique:usuarios,username'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
-            'id_grupo_acesso' => ['nullable', 'integer', 'exists:grupos_acesso,id_grupo_acesso'],
+            'username' => [
+                'required',
+                'string',
+                'max:100',
+                'unique:usuarios,username',
+            ],
+            'password' => [
+                'required',
+                'string',
+                'min:8',
+                'confirmed',
+            ],
+            'id_grupo_acesso' => [
+                'nullable',
+                'integer',
+                'exists:grupos_acesso,id_grupo_acesso',
+            ],
             'empresas' => ['required', 'array', 'min:1'],
-            'empresas.*' => ['required', 'integer', 'distinct', 'exists:empresas,id_empresa'],
+            'empresas.*' => [
+                'required',
+                'integer',
+                'distinct',
+                'exists:empresas,id_empresa',
+            ],
         ]);
 
         DB::transaction(function () use ($dados) {
@@ -35,7 +55,18 @@ class UsuarioController extends Controller
                 'status' => true,
             ]);
 
-            $empresas = Empresa::whereIn('id_empresa', $dados['empresas'])->get();
+            AuditoriaService::registrar(
+                acao: 'criado',
+                tabela: $usuario->getTable(),
+                registroId: (string) $usuario->getKey(),
+                dadosNovos: $usuario->getAttributes(),
+                descricao: 'Cadastro de usuário.'
+            );
+
+            $empresas = Empresa::whereIn(
+                'id_empresa',
+                $dados['empresas']
+            )->get();
 
             $vinculos = [];
 
@@ -46,8 +77,26 @@ class UsuarioController extends Controller
             }
 
             $usuario->empresas()->sync($vinculos);
+
+            foreach ($empresas as $empresa) {
+                AuditoriaService::registrar(
+                    acao: 'criado',
+                    tabela: 'empresa_usuario',
+                    registroId: $usuario->getKey()
+                        . ':' . $empresa->getKey(),
+                    dadosNovos: [
+                        'id_usuario' => $usuario->getKey(),
+                        'id_empresa' => $empresa->getKey(),
+                        'empresa_nome' => $empresa->empresa,
+                    ],
+                    descricao: 'Vínculo do usuário com a empresa.'
+                );
+            }
         });
 
-        return back()->with('success', 'Usuário cadastrado com sucesso.');
+        return back()->with(
+            'success',
+            'Usuário cadastrado com sucesso.'
+        );
     }
 }
