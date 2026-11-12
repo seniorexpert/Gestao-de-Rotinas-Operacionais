@@ -13,6 +13,7 @@ use App\Http\Controllers\FerramentasController;
 use App\Http\Controllers\TarefasController;
 use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\RotinasController;
+use App\Http\Controllers\RotinasEmergenciaisController;
 use App\Http\Controllers\RelatorioController;
 
 Route::middleware(['auth'])->group(function () {
@@ -30,14 +31,16 @@ Route::middleware(['auth'])->group(function () {
 
     Route::prefix('relatorios')->name('relatorios.')->group(function () {
         Route::get('/rotinas', [RelatorioController::class, 'rotinas'])->name('rotinas');
+        Route::get('/rotinas-excel', [RelatorioController::class, 'rotinasExcel'])->name('excel');
+        Route::get('/rotinas-exportar-csv', [RelatorioController::class, 'exportarExcel'])->name('excel.exportar');
         Route::get('/tarefas', [RelatorioController::class, 'tarefas'])->name('tarefas');
         Route::get('/ferramentas', [RelatorioController::class, 'ferramentas'])->name('ferramentas');
         Route::get('/locais', [RelatorioController::class, 'locais'])->name('locais');
         Route::get('/rotinas-finalizadas', [RelatorioController::class, 'rotinasFinalizadas'])->name('rotinas-finalizadas');
-        Route::get('/rotinas-excel', [RelatorioController::class, 'rotinasExcel'])->name('rotinas-excel');
         Route::get('/logs-rotinas', [RelatorioController::class, 'logsRotinas'])->name('logs-rotinas');
         Route::get('/estatisticas', [RelatorioController::class, 'estatisticas'])->name('relatorios.estatisticas');
-
+        Route::get('/relatorios/api-log-detalhes/{id}', [RelatorioController::class, 'apiLogDetalhes']);
+        Route::get('/logs-rotinas-excel', [RelatorioController::class, 'exportarExcelLogs'])->name('logs.excel.exportar');
     });
 });
 
@@ -52,6 +55,7 @@ Route::get('/api/usuarios-por-unidade', function (Request $request) {
 });
 
 Route::post('/rotinas/salvar', [RotinasController::class, 'store'])->name('rotinas.store');
+Route::post('/rotinas-emergenciais', [RotinasEmergenciaisController::class, 'store'])->name('rotinas.emergenciais.store');
 Route::post('/ferramentas', [FerramentasController::class, 'store'])->name('ferramentas.store');
 Route::post('/tarefas', [TarefasController::class, 'store'])->name('tarefas.store');
 Route::post('/locais', [LocaisController::class, 'store'])->name('locais.store');

@@ -47,8 +47,8 @@
                 </div>
             </a>
 
-            <a href="#" 
-               class="group bg-white p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between h-64">
+            <a href="#" onclick="openModal('modalRotinaEmergencial')" 
+            class="group bg-white p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between h-64 cursor-pointer">
                 <div>
                     <div class="w-16 h-16 rounded-full bg-[#f4f1ea] group-hover:bg-[#1e2d3d] transition-colors duration-300 flex items-center justify-center mb-6">
                         <i class="fa-solid fa-lightbulb text-2xl text-[#1e2d3d] group-hover:text-white transition-colors duration-300"></i>
@@ -71,5 +71,28 @@
     </div>
 
 </body>
+<script>
+    function openModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.remove('hidden');
+        } else {
+            console.error("Modal não encontrado: " + modalId);
+        }
+    }
+
+    function closeModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.classList.add('hidden');
+        } else {
+            console.error("Modal não encontrado: " + modalId);
+        }
+    }
+</script>
 </html>
 @endsection
+
+@include('processos.partials.modal-rotina-emergencial')
+@include('processos.partials.modal-tarefa-rotina-emergencial')
+

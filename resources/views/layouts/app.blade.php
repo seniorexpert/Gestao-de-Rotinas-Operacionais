@@ -32,7 +32,7 @@
             </div>
 
             <nav class="space-y-2">
-                <a href="#" class="flex items-center space-x-3.5 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition">
+                <a href="{{ url('/home') }}" class="flex items-center space-x-3.5 px-4 py-3 text-gray-700 hover:bg-gray-100 rounded-xl font-medium transition">
                     <i class="fa-regular fa-clipboard-list text-lg text-gray-500"></i>
                     <span>Rotinas Diárias</span>
                 </a>
@@ -82,11 +82,11 @@
                         <div>
                             <span class="block px-4 pb-2 text-[11px] font-bold uppercase tracking-wider text-amber-800/80">HISTÓRICOS E ANÁLISE</span>
                             <div class="space-y-1">
-                                <a href="{{ route('relatorios.rotinas-finalizadas') }}" class="flex items-center space-x-3 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition">
+                                <!-- <a href="{{ route('relatorios.rotinas-finalizadas') }}" class="flex items-center space-x-3 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition">
                                     <i class="fa-regular fa-clipboard-check text-base text-gray-600 w-5 text-center"></i>
                                     <span>Relatório de Rotinas Finalizadas</span>
-                                </a>
-                                <a href="{{ route('relatorios.rotinas-excel') }}" class="flex items-center space-x-3 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition">
+                                </a> -->
+                                <a href="{{ route('relatorios.excel') }}" class="flex items-center space-x-3 px-4 py-2 text-sm font-medium...">
                                     <i class="fa-regular fa-file-excel text-base text-gray-600 w-5 text-center"></i>
                                     <span>Relatório de Rotinas Excel</span>
                                 </a>

@@ -28,7 +28,7 @@ class RotinasController extends Controller
                 DB::table('gr_rotinas')->insert([
                     'status' => 1,
                     'id_empresa' => session('id_empresa', 1),
-                    'id_usuario' => $colaboradorId, // Agora recebe o ID corretamente (ex: 6)
+                    'id_usuario' => $colaboradorId,
                     'dias_semanas' => $t['dias'] ?? '',
                     'horario' => $t['horario'] ?? '',
                     'id_tarefa' => $t['id_tarefa'] ?? null,
