@@ -39,15 +39,16 @@
                 <tbody class="divide-y divide-gray-100 text-sm">
                     @forelse($ferramentas as $ferramenta)
                         <tr class="linha-ferramenta hover:bg-gray-50/60 transition">
-                            <td class="py-4 px-6 font-medium text-gray-500">#{{ $ferramenta->id }}</td>
+                            <td class="py-4 px-6 font-medium text-gray-500">#{{ $ferramenta->id_ferramenta }}</td>
                             <td class="py-4 px-6">
                                 <div class="flex items-center space-x-3">
-                                    <span class="font-bold text-gray-800 uppercase">{{ $ferramenta->nome_ferramenta ?? $ferramenta->nome ?? 'Sem nome' }}</span>
+                                    <span class="font-bold text-gray-800 uppercase">{{ $ferramenta->ferramenta ?? 'Sem nome' }}</span>
                                 </div>
                             </td>
                             <td class="py-4 px-6 text-right">
-                                <button type="button" 
-                                    onclick="abrirModalEdicao({ id: '{{ $ferramenta->id }}', nome: '{{ $ferramenta->nome_ferramenta }}' })" 
+                                @php($dadosEdicao = ['id' => $ferramenta->id_ferramenta, 'nome' => $ferramenta->ferramenta])
+                                <button type="button"
+                                    onclick="abrirModalEdicao(@js($dadosEdicao))"
                                     class="inline-flex items-center space-x-1 text-sm font-semibold text-gray-700 hover:text-gray-900 transition">
                                     <span>Editar</span>
                                     <i class="fa-solid fa-chevron-right text-xs"></i>

@@ -36,31 +36,33 @@
                 } else {
                     $icone = '🚶';
                 }
+
+                $ativa = (bool) $rotina->status;
+                $detalhes = [
+                    'tarefa' => $rotina->tarefa ?: 'Tarefa',
+                    'horario' => $rotina->horario,
+                    'local' => $rotina->local,
+                    'morador' => $rotina->morador ?: 'Não informado',
+                    'obs' => $rotina->obs,
+                    'ativa' => $ativa,
+                    'icone' => $icone,
+                ];
             @endphp
 
-            <div onclick="abrirModalDetalhes({
-                id: '{{ $rotina->id ?? '' }}',
-                tarefa: '{{ addslashes($rotina->tarefa_nome ?? $rotina->tarefa ?? 'Tarefa') }}',
-                horario: '{{ addslashes($rotina->horario ?? '') }}',
-                local: '{{ addslashes($rotina->local ?? '') }}',
-                morador: '{{ addslashes($rotina->morador ?? '') }}',
-                dias: '{{ addslashes($rotina->dias_semanas ?? '') }}',
-                auxilio: '{{ $rotina->auxilio ?? 0 }}',
-                obs: '{{ addslashes($rotina->obs ?? '') }}',
-                icone: '{{ $icone }}'
-            })" class="flex items-center justify-between p-4 border border-amber-200/80 rounded-2xl bg-white shadow-sm hover:shadow-md hover:border-slate-400 transition cursor-pointer">
+            <div onclick="abrirModalDetalhes({{ \Illuminate\Support\Js::from($detalhes) }})"
+                 class="flex items-center justify-between p-4 border border-amber-200/80 rounded-2xl bg-white shadow-sm hover:shadow-md hover:border-slate-400 transition cursor-pointer">
                 <div class="flex items-center gap-4">
                     <div class="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center text-3xl">
                         {{ $icone }}
                     </div>
                     <div>
-                        <h2 class="text-lg font-bold text-slate-800">{{ $rotina->morador }}</h2>
+                        <h2 class="text-lg font-bold text-slate-800">{{ $detalhes['tarefa'] }}</h2>
                         <div class="flex items-center gap-4 text-xs text-gray-500 mt-1">
                             <span class="flex items-center gap-1">
                                 📍 <span><strong>Onde:</strong> {{ $rotina->local }}</span>
                             </span>
                             <span class="flex items-center gap-1">
-                                👤 <span><strong>Morador:</strong> {{ $rotina->morador }}</span>
+                                👤 <span><strong>Morador:</strong> {{ $detalhes['morador'] }}</span>
                             </span>
                             @if(isset($rotina->auxilio) && $rotina->auxilio == 1)
                                 <span class="flex items-center gap-1 text-amber-700 font-medium">
@@ -77,8 +79,8 @@
                     </div>
                 </div>
                 <div class="flex items-center gap-4">
-                    <span class="px-3 py-1 text-xs font-medium bg-emerald-100 text-emerald-700 rounded-full">
-                        Ativa
+                    <span class="px-3 py-1 text-xs font-medium rounded-full {{ $ativa ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">
+                        {{ $ativa ? 'Ativa' : 'Inativa' }}
                     </span>
                     <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>

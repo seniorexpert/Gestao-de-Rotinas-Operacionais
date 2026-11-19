@@ -22,7 +22,7 @@
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Duração</label>
                 <div class="relative flex items-center">
-                    <input type="number" name="tempo_tarefa" id="tempo_tarefa" required min="1" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 pr-14 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]" placeholder="Ex: 15">
+                    <input type="number" name="tempo_tarefa" id="tempo_tarefa" required min="0.01" max="1439.99" step="any" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 pr-14 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]" placeholder="15">
                     <span class="absolute right-4 text-gray-400 text-sm font-medium">min</span>
                 </div>
             </div>
@@ -35,32 +35,14 @@
                 </select>
             </div>
 
-            <div class="relative">
-                <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Ferramentas</label>
-                
-                <button type="button" onclick="toggleFerramentasDropdown()" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 flex items-center justify-between focus:outline-none focus:border-[#1e2d3d]">
-                    <span id="ferramentasTextoBtn" class="text-gray-400">Selecionar ferramentas</span>
-                    <i id="ferramentasIconeSetra" class="fa-solid fa-chevron-up transition-transform duration-200 text-gray-400 text-xs"></i>
-                </button>
-
-                <div id="ferramentasDropdownList" class="absolute left-0 right-0 mt-2 bg-white border border-gray-300 rounded-2xl p-4 max-h-52 overflow-y-auto space-y-3 shadow-xl z-50 hidden">
-                    @php
-                        $ferramentasList = DB::table('gr_ferramentas')->orderBy('nome_ferramenta')->get();
-                    @endphp
-
-                    @if($ferramentasList->count() > 0)
-                        @foreach($ferramentasList as $ferramenta)
-                            <label class="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-2 rounded-xl transition">
-                                <span class="text-sm text-gray-800">{{ $ferramenta->nome_ferramenta }}</span>
-                                <input type="checkbox" name="ferramentas_tarefa[]" value="{{ $ferramenta->nome_ferramenta }}" onchange="atualizarContagemFerramentas()" class="w-4 h-4 rounded border-gray-300 text-[#1e2d3d] focus:ring-[#1e2d3d]">
-                            </label>
-                        @endforeach
-                    @else
-                        <div class="text-center py-4 text-gray-400 text-xs">
-                            Nenhuma ferramenta cadastrada.
-                        </div>
-                    @endif
-                </div>
+            <div>
+                <label for="id_ferramenta" class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Ferramenta</label>
+                <select name="id_ferramenta" id="id_ferramenta" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
+                    <option value="">Nenhuma ferramenta</option>
+                    @foreach ($ferramentas as $ferramenta)
+                        <option value="{{ $ferramenta->id_ferramenta }}">{{ $ferramenta->ferramenta }}</option>
+                    @endforeach
+                </select>
             </div>
 
             <div>
@@ -80,34 +62,3 @@
         </form>
     </div>
 </div>
-
-<script>
-    function toggleFerramentasDropdown() {
-        const lista = document.getElementById('ferramentasDropdownList');
-        const icone = document.getElementById('ferramentasIconeSetra');
-        lista.classList.toggle('hidden');
-        icone.classList.toggle('rotate-180');
-    }
-
-    function atualizarContagemFerramentas() {
-        const checkboxes = document.querySelectorAll('input[name="ferramentas_tarefa[]"]:checked');
-        const spanTexto = document.getElementById('ferramentasTextoBtn');
-        
-        if (checkboxes.length === 0) {
-            spanTexto.textContent = 'Selecionar ferramentas';
-            spanTexto.className = 'text-gray-400';
-        } else {
-            spanTexto.textContent = checkboxes.length + ' ferramenta(s) selecionada(s)';
-            spanTexto.className = 'text-gray-800 font-medium';
-        }
-    }
-
-    document.addEventListener('click', function(event) {
-        const container = document.getElementById('ferramentasDropdownList');
-        const botao = container.previousElementSibling;
-        if (!container.contains(event.target) && !botao.contains(event.target)) {
-            container.classList.add('hidden');
-            document.getElementById('ferramentasIconeSetra').classList.remove('rotate-180');
-        }
-    });
-</script>

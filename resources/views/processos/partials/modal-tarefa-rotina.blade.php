@@ -1,17 +1,25 @@
-<div id="tarefaRotinaModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+@php
+    $emergencial = $emergencial ?? false;
+    $modalTarefa = $emergencial ? 'tarefaRotinaEmergencialModal' : 'tarefaRotinaModal';
+@endphp
+
+<div id="{{ $modalTarefa }}" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
     <div class="bg-white rounded-3xl max-w-xl w-full p-8 relative shadow-2xl max-h-[90vh] flex flex-col">
         <button type="button" onclick="fecharModalTarefa()" class="absolute top-6 right-6 text-gray-400 hover:text-gray-700 focus:outline-none">
             <i class="fa-solid fa-xmark text-xl"></i>
         </button>
 
         <div class="flex-shrink-0">
-            <h2 id="modalTarefaTitulo" class="text-3xl font-bold text-[#1e2d3d] mb-1">Dados da tarefa</h2>
+            <h2 id="modalTarefaTitulo" class="text-3xl font-bold text-[#1e2d3d] mb-1">{{ $emergencial ? 'Dados da tarefa emergencial' : 'Dados da tarefa' }}</h2>
             <p class="sans-text text-gray-500 text-sm mb-6">Adicione esta tarefa à rotina</p>
         </div>
 
-        <form action="{{ route('rotinas.store') }}" method="POST" id="formSalvarRotina" class="space-y-6 sans-text overflow-y-auto flex-1 pr-1">
+        <form action="{{ route($emergencial ? 'rotinas.emergenciais.store' : 'rotinas.store') }}" method="POST" id="formSalvarRotina" class="space-y-6 sans-text overflow-y-auto flex-1 pr-1">
             @csrf
             <input type="hidden" name="tarefas_json" id="tarefasJsonInput">
+            <input type="hidden" name="id_empresa">
+            <input type="hidden" name="colaborador_id">
+            <input type="hidden" name="status_rotina">
             <input type="hidden" id="tarefaIndexEdicao" value="">
 
             <div class="relative">
@@ -74,8 +82,8 @@
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Tarefa</label>
                 <select name="tarefa" id="selectTarefa" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
                     <option value="" disabled selected>Selecione a tarefa</option>
-                    @foreach(DB::table('gr_tarefas')->orderBy('nome_tarefa')->get() as $tarefa)
-                        <option value="{{ $tarefa->id }}">{{ $tarefa->nome_tarefa }}</option>
+                    @foreach ($tarefas as $tarefa)
+                        <option value="{{ $tarefa->id_tarefa }}">{{ $tarefa->tarefa }}</option>
                     @endforeach
                 </select>
             </div>
@@ -105,8 +113,8 @@
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Local</label>
                 <select name="local" id="selectLocal" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
                     <option value="" disabled selected>Selecione o local</option>
-                    @foreach(DB::table('gr_locais')->orderBy('nome_local')->get() as $local)
-                        <option value="{{ $local->id }}">{{ $local->nome_local }}</option>
+                    @foreach ($locais as $local)
+                        <option value="{{ $local->id_local }}">{{ $local->local }}</option>
                     @endforeach
                 </select>
             </div>
@@ -150,29 +158,13 @@
 
     function fecharModalTarefa() {
         limparFormularioTarefa();
-        const modal = document.getElementById('tarefaRotinaModal');
+        const modal = document.getElementById('{{ $modalTarefa }}');
         if (modal) modal.classList.add('hidden');
-        if (typeof closeModal === 'function') closeModal('tarefaRotinaModal');
     }
 
-    function carregarCuidadoresAuxiliares(unidadeNome, valorSelecionado = '') {
+    function carregarCuidadoresAuxiliares(unidadeId, valorSelecionado = '') {
         const selectCuidador = document.getElementById('selectCuidadorAux');
-        if (!selectCuidador) return;
-
-        selectCuidador.innerHTML = '<option value="" disabled selected>A carregar...</option>';
-
-        fetch(`/api/usuarios-por-unidade?unit=${encodeURIComponent(unidadeNome)}`)
-            .then(response => response.json())
-            .then(data => {
-                selectCuidador.innerHTML = '<option value="" disabled selected>Selecione se necessário</option>';
-                data.forEach(user => {
-                    const selected = user.name === valorSelecionado ? 'selected' : '';
-                    selectCuidador.innerHTML += `<option value="${user.name}" ${selected}>${user.name}</option>`;
-                });
-            })
-            .catch(() => {
-                selectCuidador.innerHTML = '<option value="" disabled selected>Erro ao carregar cuidadores</option>';
-            });
+        carregarUsuariosPorUnidade(selectCuidador, unidadeId, 'Selecione se necessário', valorSelecionado);
     }
 
     function toggleDiasDropdown() {
@@ -242,7 +234,7 @@
         const auxilioRadio = document.querySelector('input[name="necessita_auxilio"]:checked');
         const necessitaAuxilio = auxilioRadio ? auxilioRadio.value : 'Não';
         const selectCuidador = document.getElementById('selectCuidadorAux');
-        const cuidadorAux = selectCuidador ? selectCuidador.value : '';
+        const cuidadorAux = necessitaAuxilio === 'Sim' ? selectCuidador.value || null : null;
         const observacao = document.getElementById('inputObservacao').value;
 
         if (!tarefaId || !morador || !localId || !horario || diasSelecionados.length === 0) {
@@ -260,6 +252,7 @@
             local: localNome,
             auxilio: necessitaAuxilio,
             cuidador: cuidadorAux,
+            cuidador_nome: cuidadorAux ? selectCuidador.selectedOptions[0].text : '',
             observacao: observacao
         };
 
@@ -271,6 +264,12 @@
 
         renderizarTarefasNaTela();
         fecharModalTarefa();
+    }
+
+    function escaparTexto(texto) {
+        const elemento = document.createElement('span');
+        elemento.textContent = texto;
+        return elemento.innerHTML;
     }
 
     function renderizarTarefasNaTela() {
@@ -293,21 +292,21 @@
                 <div class="border border-gray-200 rounded-3xl p-6 mb-4 bg-white shadow-sm text-left transition-all">
                     <div class="flex items-center justify-between cursor-pointer" onclick="toggleAcordeaoTarefa(${index})">
                         <div>
-                            <h4 class="text-lg font-bold text-[#1e2d3d]">${t.tarefa}</h4>
-                            <p class="text-xs text-gray-500 mt-0.5">${t.dias} · ${t.morador}</p>
+                            <h4 class="text-lg font-bold text-[#1e2d3d]">${escaparTexto(t.tarefa)}</h4>
+                            <p class="text-xs text-gray-500 mt-0.5">${escaparTexto(t.dias)} · ${escaparTexto(t.morador)}</p>
                         </div>
                         <div class="flex items-center gap-3">
-                            <span class="bg-gray-100 text-gray-800 text-xs font-bold px-3 py-1.5 rounded-full">${t.horario}</span>
+                            <span class="bg-gray-100 text-gray-800 text-xs font-bold px-3 py-1.5 rounded-full">${escaparTexto(t.horario)}</span>
                             <i id="iconeAcordeao_${index}" class="fa-solid fa-chevron-down text-gray-400 text-xs transition-transform duration-200"></i>
                         </div>
                     </div>
 
                     <div id="detalhesTarefa_${index}" class="hidden mt-4 pt-4 border-t border-gray-100 space-y-2 text-xs text-gray-600">
-                        <div class="flex justify-between"><span class="font-bold text-gray-400">Dias</span> <span class="text-gray-800 font-medium">${t.dias}</span></div>
-                        <div class="flex justify-between"><span class="font-bold text-gray-400">Morador(a)</span> <span class="text-gray-800 font-medium">${t.morador}</span></div>
-                        <div class="flex justify-between"><span class="font-bold text-gray-400">Local</span> <span class="text-gray-800 font-medium">${t.local}</span></div>
-                        <div class="flex justify-between"><span class="font-bold text-gray-400">Auxílio</span> <span class="text-gray-800 font-medium">${t.auxilio} ${t.auxilio === 'Sim' && t.cuidador ? '('+t.cuidador+')' : ''}</span></div>
-                        ${t.observacao ? '<div class="flex justify-between"><span class="font-bold text-gray-400">Observação</span> <span class="text-gray-800 font-medium">'+t.observacao+'</span></div>' : ''}
+                        <div class="flex justify-between"><span class="font-bold text-gray-400">Dias</span> <span class="text-gray-800 font-medium">${escaparTexto(t.dias)}</span></div>
+                        <div class="flex justify-between"><span class="font-bold text-gray-400">Morador(a)</span> <span class="text-gray-800 font-medium">${escaparTexto(t.morador)}</span></div>
+                        <div class="flex justify-between"><span class="font-bold text-gray-400">Local</span> <span class="text-gray-800 font-medium">${escaparTexto(t.local)}</span></div>
+                        <div class="flex justify-between"><span class="font-bold text-gray-400">Auxílio</span> <span class="text-gray-800 font-medium">${escaparTexto(t.auxilio)} ${t.cuidador_nome ? '(' + escaparTexto(t.cuidador_nome) + ')' : ''}</span></div>
+                        ${t.observacao ? '<div class="flex justify-between"><span class="font-bold text-gray-400">Observação</span> <span class="text-gray-800 font-medium">' + escaparTexto(t.observacao) + '</span></div>' : ''}
 
                         <div class="flex items-center justify-end gap-6 pt-4 mt-2 border-t border-gray-100">
                             <button type="button" onclick="editarTarefa(${index})" class="text-[#1e2d3d] hover:underline font-bold flex items-center gap-1.5">
@@ -333,7 +332,7 @@
 
     function editarTarefa(index) {
         const unidadeSelect = document.getElementById('selectUnidadeRotina');
-        const unidadeNome = unidadeSelect ? unidadeSelect.value : '';
+        const unidadeId = unidadeSelect ? unidadeSelect.value : '';
         const t = listaTarefasMemoria[index];
         
         document.getElementById('tarefaIndexEdicao').value = index;
@@ -352,7 +351,7 @@
         });
 
         toggleCuidadorAuxiliar(t.auxilio === 'Sim');
-        carregarCuidadoresAuxiliares(unidadeNome, t.cuidador || '');
+        carregarCuidadoresAuxiliares(unidadeId, t.cuidador || '');
 
         const diasArray = t.dias.split(', ');
         document.querySelectorAll('.dia-checkbox').forEach(cb => {
@@ -361,7 +360,7 @@
         atualizarContagemDias();
 
         if (typeof abrirModal === 'function') {
-            abrirModal('tarefaRotinaModal');
+            abrirModal('{{ $modalTarefa }}');
         }
     }
 
@@ -405,22 +404,23 @@
         const selectMorador = document.getElementById('selectMorador');
         if (!selectMorador) return;
 
-        selectMorador.innerHTML = '<option value="" disabled selected>A carregar moradores...</option>';
+        const tarefaGeral = 'Nenhum (Tarefa Geral)';
+        selectMorador.replaceChildren(new Option(tarefaGeral, tarefaGeral, true, true));
         esconderCardMorador();
 
         fetch(`https://adm.gestaoseniorexpert.com.br/consulta_moradores.php/${encodeURIComponent(unidadeNome)}`)
             .then(response => response.json())
             .then(data => {
-                selectMorador.innerHTML = '<option value="Nenhum (Tarefa Geral)" selected>Nenhum (Tarefa Geral)</option>';
-                
-                if (data && data.length > 0) {
-                    data.forEach(nomeMorador => {
-                        selectMorador.innerHTML += `<option value="${nomeMorador}">${nomeMorador}</option>`;
-                    });
+                const unidade = document.getElementById('selectUnidadeRotina');
+                if (unidade.selectedOptions[0]?.dataset.nome !== unidadeNome) {
+                    return;
+                }
+                for (const nomeMorador of Array.isArray(data) ? data : []) {
+                    selectMorador.add(new Option(nomeMorador, nomeMorador));
                 }
             })
             .catch(() => {
-                selectMorador.innerHTML = '<option value="" disabled selected>Erro ao carregar moradores</option>';
+                // A tarefa geral continua disponível durante falhas no cadastro externo.
             });
     }
 
@@ -444,16 +444,20 @@
                     if (!fotoSrc.startsWith('http') && !fotoSrc.startsWith('data:image')) {
                         fotoSrc = `data:image/jpeg;base64,${fotoSrc}`;
                     }
-                    containerFoto.innerHTML = `<img src="${fotoSrc}" alt="${nomeMorador}" class="w-full h-full object-cover">`;
+                    const foto = document.createElement('img');
+                    foto.src = fotoSrc;
+                    foto.alt = nomeMorador;
+                    foto.className = 'w-full h-full object-cover';
+                    containerFoto.replaceChildren(foto);
                 } else {
                     const iniciais = nomeMorador.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
-                    containerFoto.innerHTML = `<span class="text-sm font-bold text-[#1e2d3d]">${iniciais}</span>`;
+                    containerFoto.innerHTML = `<span class="text-sm font-bold text-[#1e2d3d]">${escaparTexto(iniciais)}</span>`;
                     containerFoto.className = "w-16 h-16 rounded-2xl bg-[#f4f1ea] overflow-hidden flex items-center justify-center shrink-0 border border-gray-100";
                 }
             })
             .catch(() => {
                 const iniciais = nomeMorador.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase();
-                containerFoto.innerHTML = `<span class="text-sm font-bold text-[#1e2d3d]">${iniciais}</span>`;
+                containerFoto.innerHTML = `<span class="text-sm font-bold text-[#1e2d3d]">${escaparTexto(iniciais)}</span>`;
             });
     }
 
@@ -477,15 +481,9 @@
         }
 
         const form = document.getElementById('formSalvarRotina');
-
-        let inputColabHidden = form.querySelector('input[name="colaborador_id"]');
-        if (!inputColabHidden) {
-            inputColabHidden = document.createElement('input');
-            inputColabHidden.type = 'hidden';
-            inputColabHidden.name = 'colaborador_id';
-            form.appendChild(inputColabHidden);
-        }
-        inputColabHidden.value = colaboradorId;
+        form.elements.id_empresa.value = document.getElementById('selectUnidadeRotina').value;
+        form.elements.colaborador_id.value = colaboradorId;
+        form.elements.status_rotina.value = document.querySelector('input[type="radio"][name="status_rotina"]:checked')?.value ?? 'Ativa';
 
         const inputJson = form.querySelector('#tarefasJsonInput');
         if (inputJson) {

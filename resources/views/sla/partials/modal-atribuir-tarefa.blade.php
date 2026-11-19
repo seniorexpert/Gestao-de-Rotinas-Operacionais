@@ -20,32 +20,26 @@
                     <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Colaborador atual</label>
                     <select id="filtroColaboradorAtual" onchange="filtrarTarefasPorColaborador()" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
                         <option value="">Todos os colaboradores</option>
-                        @foreach(DB::table('gr_usuarios')->orderBy('name')->get() as $user)
-                            <option value="{{ $user->id }}">{{ $user->name }}</option>
+                        @foreach ($colaboradores as $colaborador)
+                            <option value="{{ $colaborador->id_usuario }}">{{ $colaborador->usuario }}</option>
                         @endforeach
                     </select>
                 </div>
 
                 <div class="space-y-2 max-h-48 overflow-y-auto pr-1" id="listaTarefasModal">
-                    @php
-                        $rotinasCompletas = DB::table('gr_rotinas')
-                            ->join('gr_tarefas', 'gr_rotinas.id_tarefa', '=', 'gr_tarefas.id')
-                            ->leftJoin('gr_usuarios', 'gr_rotinas.id_usuario', '=', 'gr_usuarios.id')
-                            ->select('gr_rotinas.*', 'gr_tarefas.nome_tarefa', 'gr_usuarios.name as usuario_nome')
-                            ->get();
-                    @endphp
-
-                    @foreach($rotinasCompletas as $rotina)
+                    @foreach ($rotinas as $rotina)
                         <div class="item-tarefa border border-gray-200 rounded-2xl p-4 flex items-center justify-between bg-white cursor-pointer hover:bg-gray-50 transition" data-usuario="{{ $rotina->id_usuario }}">
                             <div class="flex items-center gap-3">
                                 <span class="text-xs font-bold text-slate-700">{{ $rotina->horario }}</span>
                                 <div>
-                                    <p class="text-sm font-bold text-slate-800">{{ $rotina->nome_tarefa ?? 'Tarefa' }}</p>
-                                    <span class="text-[10px] text-gray-400">Local: {{ $rotina->local }} | Resp: {{ $rotina->usuario_nome ?? 'Não atribuído' }}</span>
+                                    <p class="text-sm font-bold text-slate-800">{{ $rotina->tarefa ?? 'Tarefa' }}</p>
+                                    <span class="text-[10px] text-gray-400">Local {{ $rotina->local ?: ($rotina->local_cadastrado ?? '—') }} · {{ $rotina->usuario }}</span>
                                 </div>
                             </div>
                             <div class="flex items-center gap-3">
-                                <span class="px-2.5 py-1 text-[10px] font-semibold bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100">Ativa</span>
+                                <span class="px-2.5 py-1 text-[10px] font-semibold rounded-full border {{ $rotina->status ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-600 border-slate-100' }}">
+                                    {{ $rotina->status ? 'Ativa' : 'Inativa' }}
+                                </span>
                                 <input type="checkbox" name="rotinas_ids[]" value="{{ $rotina->id_rotina }}" class="w-4 h-4 rounded border-gray-300 text-[#1e2d3d] focus:ring-[#1e2d3d]">
                             </div>
                         </div>
@@ -59,8 +53,8 @@
                     <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Novo responsável</label>
                     <select name="novo_colaborador_id" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
                         <option value="" disabled selected>Selecione o novo colaborador</option>
-                        @foreach(DB::table('gr_usuarios')->orderBy('name')->get() as $user)
-                            <option value="{{ $user->id }}">{{ $user->name }}</option>
+                        @foreach ($colaboradores as $colaborador)
+                            <option value="{{ $colaborador->id_usuario }}">{{ $colaborador->usuario }}</option>
                         @endforeach
                     </select>
                 </div>

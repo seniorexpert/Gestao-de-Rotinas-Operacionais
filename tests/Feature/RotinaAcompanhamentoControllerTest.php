@@ -1,0 +1,485 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\User;
+use Carbon\CarbonImmutable;
+use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+use PHPUnit\Framework\Attributes\DataProvider;
+use PHPUnit\Framework\Attributes\TestWith;
+use Tests\TestCase;
+
+class RotinaAcompanhamentoControllerTest extends TestCase
+{
+    use LazilyRefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->travelTo(CarbonImmutable::parse('2026-11-18 15:00:00', 'UTC'));
+    }
+
+    public function test_convidado_e_redirecionado_para_o_login(): void
+    {
+        $this->get(route('acompanhamento.index'))->assertRedirectToRoute('login');
+    }
+
+    public function test_iniciar_processos_exibe_um_unico_link_de_acompanhamento(): void
+    {
+        $gerente = $this->usuario('Gerente Exemplo', 'Gerente Geral', $this->empresa('Unidade Centro'));
+        $link = 'href="'.route('acompanhamento.index').'"';
+
+        $resposta = $this->actingAs($gerente)->get(route('processos.index'));
+
+        $resposta->assertOk();
+        $this->assertSame(1, substr_count($resposta->getContent(), $link));
+    }
+
+    public function test_colaborador_nao_pode_concluir_verificacoes(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $colaborador = $this->usuario('João Silva', 'Cuidador', $empresa);
+        $id = $this->execucao('Hidratação', $colaborador, $empresa);
+
+        $this->actingAs($colaborador)
+            ->post(route('acompanhamento.store', $id), ['acao' => 'Ação registrada'])
+            ->assertForbidden();
+
+        $this->assertDatabaseEmpty('rotinas_verificacoes');
+    }
+
+    public function test_lista_atrasos_de_inicio_e_conclusao_da_unidade(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $gerente = $this->usuario('Rita Souza', 'Gerente', $empresa);
+        $colaborador = $this->usuario('João Silva', 'Enfermagem', $empresa);
+
+        $this->execucao('Hidratação atrasada', $colaborador, $empresa);
+        $this->execucao('Apoio em andamento', $colaborador, $empresa, [
+            'status' => 'em_andamento',
+            'iniciado_em' => '2026-11-18 14:50:00',
+            'duracao_prevista_segundos' => 300,
+        ]);
+        $this->execucao('Refeição concluída com atraso', $colaborador, $empresa, [
+            'status' => 'concluida',
+            'iniciado_em' => '2026-11-18 14:50:00',
+            'concluido_em' => '2026-11-18 14:58:00',
+            'duracao_prevista_segundos' => 300,
+        ]);
+        $this->execucao('Atividade iniciada tarde', $colaborador, $empresa, [
+            'status' => 'concluida',
+            'iniciado_em' => '2026-11-18 14:52:00',
+            'concluido_em' => '2026-11-18 14:53:00',
+            'duracao_prevista_segundos' => 300,
+        ]);
+        $this->execucao('Execução antiga vencida', $colaborador, $empresa, [
+            'status' => 'concluida',
+            'iniciado_em' => '2026-11-18 14:50:00',
+            'concluido_em' => '2026-11-18 14:58:00',
+        ]);
+        $this->execucao('Rotina no prazo', $colaborador, $empresa, [
+            'status' => 'concluida',
+            'iniciado_em' => '2026-11-18 14:50:00',
+            'concluido_em' => '2026-11-18 14:51:00',
+            'duracao_prevista_segundos' => 300,
+        ]);
+        $this->execucao('Rotina futura', $colaborador, $empresa, [
+            'previsto_em' => '2026-11-18 15:05:00',
+        ]);
+        $this->execucao('Rotina cancelada', $colaborador, $empresa, ['status' => 'cancelada']);
+
+        $outraEmpresa = $this->empresa('Unidade Norte');
+        $outroColaborador = $this->usuario('José Lima', 'Enfermagem', $outraEmpresa);
+        $this->execucao('Rotina de outra unidade', $outroColaborador, $outraEmpresa);
+
+        $this->actingAs($gerente)->get(route('acompanhamento.index'))
+            ->assertOk()
+            ->assertSeeText(['Hidratação atrasada', 'Apoio em andamento', 'Refeição concluída com atraso',
+                'Atividade iniciada tarde', 'Execução antiga vencida'])
+            ->assertDontSeeText('Rotina no prazo')
+            ->assertDontSeeText('Rotina futura')
+            ->assertDontSeeText('Rotina cancelada')
+            ->assertDontSeeText('Rotina de outra unidade');
+    }
+
+    #[TestWith(['joao'])]
+    #[TestWith(['HIDRATACAO'])]
+    #[TestWith(['beatriz'])]
+    #[TestWith(['sala de estar'])]
+    #[TestWith(['solicitacao de auxilio'])]
+    public function test_busca_ignora_caixa_e_acentos_nos_campos_do_item(string $termo): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $gerente = $this->usuario('Rita Souza', 'Gerente', $empresa);
+        $colaborador = $this->usuario('João Silva', 'Enfermagem', $empresa);
+        $this->execucao('Hidratação', $colaborador, $empresa, rotina: ['morador' => 'Beatriz', 'auxilio' => true]);
+
+        $this->actingAs($gerente)->get(route('acompanhamento.index', ['busca' => $termo]))
+            ->assertOk()
+            ->assertSeeText('Hidratação');
+    }
+
+    public function test_link_direto_abre_a_tarefa_com_horario_local_e_auxiliar(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $gerente = $this->usuario('Rita Souza', 'Gerente', $empresa);
+        $colaborador = $this->usuario('João Silva', 'Enfermagem', $empresa);
+        $auxiliar = $this->usuario('Bianca Rocha', 'Cuidador', $empresa);
+        $id = $this->execucao('Hidratação', $colaborador, $empresa, rotina: ['auxilio' => true]);
+        DB::table('rotina_auxiliares')->insert([
+            'id_rotina' => DB::table('rotinas_execucoes')->where('id_execucao', $id)->value('id_rotina'),
+            'id_usuario' => $auxiliar->getKey(),
+        ]);
+
+        $this->actingAs($gerente)->get(route('acompanhamento.index', ['item' => $id]))
+            ->assertOk()
+            ->assertSeeText(['Verificação da Tarefa', '11:50 · quarta-feira', '18/11/2026', 'Sala de Estar',
+                'João Silva', 'Bianca Rocha', 'Solicitação de Auxílio', 'Qual ação foi realizada?']);
+    }
+
+    public static function acoesInvalidas(): array
+    {
+        return [
+            'em branco' => ['   ', 'Descreva a ação realizada para concluir.'],
+            'outro tipo' => [['Texto inválido'], 'A ação realizada deve ser informada em texto.'],
+            'acima do limite' => [str_repeat('a', 2001), 'A ação realizada deve ter até 2.000 caracteres.'],
+        ];
+    }
+
+    #[DataProvider('acoesInvalidas')]
+    public function test_acao_invalida_retorna_ao_detalhe_sem_gravar(string|array $acao, string $mensagem): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $gerente = $this->usuario('Rita Souza', 'Gerente', $empresa);
+        $colaborador = $this->usuario('João Silva', 'Enfermagem', $empresa);
+        $id = $this->execucao('Hidratação', $colaborador, $empresa);
+        $detalhe = route('acompanhamento.index', ['item' => $id]);
+
+        $this->actingAs($gerente)->from($detalhe)->followingRedirects()
+            ->post(route('acompanhamento.store', $id), ['acao' => $acao])
+            ->assertOk()
+            ->assertSeeText(['Verificação da Tarefa', $mensagem]);
+
+        $this->assertDatabaseEmpty('rotinas_verificacoes');
+    }
+
+    public function test_verificacao_registra_acao_data_e_gerente_da_sessao(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $gerente = $this->usuario('Rita Souza', 'Gerente', $empresa);
+        $colaborador = $this->usuario('João Silva', 'Enfermagem', $empresa);
+        $id = $this->execucao('Hidratação', $colaborador, $empresa);
+
+        $this->actingAs($gerente)
+            ->post(route('acompanhamento.store', ['id' => $id, 'busca' => 'hidratação']), [
+                'acao' => '  Conversei com a equipe.  ',
+                'id_usuario_verificacao' => $colaborador->getKey(),
+            ])
+            ->assertRedirectToRoute('acompanhamento.index', ['aba' => 'pendentes', 'busca' => 'hidratação'])
+            ->assertSessionHas('success', 'Verificação concluída.');
+
+        $this->assertDatabaseHas('rotinas_verificacoes', [
+            'id_execucao' => $id,
+            'id_usuario_verificacao' => $gerente->getKey(),
+            'acao' => 'Conversei com a equipe.',
+            'verificado_em' => '2026-11-18 15:00:00',
+            'encaminhamentos' => '{"Gerente da Unidade":"2026-11-18T14:51:00.000000Z"}',
+        ]);
+        $this->assertDatabaseHas('rotinas_execucoes', [
+            'id_execucao' => $id,
+            'status' => 'pendente',
+            'concluido_em' => null,
+        ]);
+    }
+
+    public function test_envio_repetido_preserva_a_verificacao_original(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $gerente = $this->usuario('Rita Souza', 'Gerente', $empresa);
+        $id = $this->execucao('Hidratação', $gerente, $empresa);
+        $this->verificacao($id, $gerente, 'Ação original');
+
+        $this->actingAs($gerente)
+            ->post(route('acompanhamento.store', $id), ['acao' => 'Outro texto'])
+            ->assertRedirectToRoute('acompanhamento.index', ['aba' => 'pendentes']);
+
+        $this->assertDatabaseCount('rotinas_verificacoes', 1);
+        $this->assertDatabaseHas('rotinas_verificacoes', ['id_execucao' => $id, 'acao' => 'Ação original']);
+    }
+
+    #[TestWith(['pendentes', 'Hidratação pendente', 'Hidratação verificada'])]
+    #[TestWith(['verificadas', 'Hidratação verificada', 'Hidratação pendente'])]
+    public function test_abas_separam_os_itens_conforme_o_registro_de_verificacao(string $aba, string $visivel, string $oculto): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $gerente = $this->usuario('Rita Souza', 'Gerente', $empresa);
+        $colaborador = $this->usuario('João Silva', 'Enfermagem', $empresa);
+        $this->execucao('Hidratação pendente', $colaborador, $empresa);
+        $id = $this->execucao('Hidratação verificada', $colaborador, $empresa);
+        $this->verificacao($id, $gerente, 'Orientei a equipe.');
+
+        $this->actingAs($gerente)->get(route('acompanhamento.index', ['aba' => $aba]))
+            ->assertOk()
+            ->assertSeeText($visivel)
+            ->assertDontSeeText($oculto);
+    }
+
+    public function test_historico_mostra_autor_data_e_acao_como_texto(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $gerente = $this->usuario('Rita Souza', 'Gerente', $empresa);
+        $id = $this->execucao('Hidratação', $gerente, $empresa, ['status' => 'cancelada']);
+        $acao = 'Ação <b>registrada</b>';
+        $this->verificacao($id, $gerente, $acao);
+
+        $this->actingAs($gerente)->get(route('acompanhamento.index', ['item' => $id]))
+            ->assertOk()
+            ->assertSeeText(['Verificação concluída', '18/11/2026 às 11:55', 'Rita Souza', $acao])
+            ->assertDontSee($acao, false)
+            ->assertDontSeeText('Concluir verificação');
+    }
+
+    #[TestWith(['detalhe'])]
+    #[TestWith(['verificacao'])]
+    public function test_execucao_de_outra_unidade_e_indisponivel(string $operacao): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $outraEmpresa = $this->empresa('Unidade Norte');
+        $gerente = $this->usuario('Rita Souza', 'Gerente', $empresa);
+        $colaborador = $this->usuario('João Silva', 'Enfermagem', $outraEmpresa);
+        $id = $this->execucao('Hidratação', $colaborador, $outraEmpresa);
+        $this->actingAs($gerente);
+
+        $resposta = $operacao === 'detalhe'
+            ? $this->get(route('acompanhamento.index', ['item' => $id]))
+            : $this->post(route('acompanhamento.store', $id), ['acao' => 'Tentei registrar']);
+
+        $resposta->assertNotFound();
+        $this->assertDatabaseEmpty('rotinas_verificacoes');
+    }
+
+    public function test_execucao_dentro_da_tolerancia_nao_pode_ser_verificada(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $gerente = $this->usuario('Rita Souza', 'Gerente', $empresa);
+        $colaborador = $this->usuario('João Silva', 'Enfermagem', $empresa);
+        $id = $this->execucao('Hidratação', $colaborador, $empresa, ['previsto_em' => '2026-11-18 14:59:30']);
+
+        $this->actingAs($gerente)
+            ->post(route('acompanhamento.store', $id), ['acao' => 'Tentei registrar'])
+            ->assertNotFound();
+
+        $this->assertDatabaseEmpty('rotinas_verificacoes');
+    }
+
+    public function test_paginacao_mantem_contadores_e_filtros_da_lista(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $gerente = $this->usuario('Rita Souza', 'Gerente', $empresa);
+        $colaborador = $this->usuario('João Silva', 'Enfermagem', $empresa);
+        $this->execucao('Hidratação mais antiga', $colaborador, $empresa, ['previsto_em' => '2026-11-18 14:45:00']);
+        foreach (range(1, 24) as $numero) {
+            $this->execucao("Hidratação $numero", $colaborador, $empresa);
+        }
+        $this->execucao('Refeição que não corresponde à busca', $colaborador, $empresa);
+
+        $this->actingAs($gerente)->get(route('acompanhamento.index', ['busca' => 'hidratacao', 'page' => 2]))
+            ->assertOk()
+            ->assertSeeText('Hidratação mais antiga')
+            ->assertDontSeeText('Hidratação 24')
+            ->assertViewHas('totais', ['pendentes' => 26, 'verificadas' => 0]);
+    }
+
+    #[TestWith(['Cuidadores', 'Enfermagem'])]
+    #[TestWith(['Farmácia', 'Enfermagem'])]
+    #[TestWith(['Estoque', 'Coordenador'])]
+    #[TestWith(['Manutenção', 'Coordenador'])]
+    #[TestWith(['Auxiliar de Limpeza', 'Coordenador'])]
+    #[TestWith(['Auxiliar de Cozinha', 'Coordenação'])]
+    #[TestWith(['Coordenação', 'Coordenador'])]
+    #[TestWith(['Coordenação', 'Gerente da Unidade'])]
+    #[TestWith(['Enfermagem', 'Gerente da Unidade'])]
+    #[TestWith(['Gerente da Unidade', 'Gerente Geral'])]
+    public function test_rotina_diaria_entra_na_caixa_destinada_ao_grupo_de_origem(string $origem, string $destino): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $colaborador = $this->usuario('João Silva', $origem, $empresa);
+        $responsavel = $this->usuario('Rita Souza', $destino, $empresa);
+        $this->execucao('Tarefa fora do prazo', $colaborador, $empresa);
+
+        $this->actingAs($responsavel)->get(route('acompanhamento.index'))
+            ->assertOk()
+            ->assertSeeText('Tarefa fora do prazo');
+    }
+
+    #[TestWith(['Enfermagem', '15:05:59', 'No prazo'])]
+    #[TestWith(['Enfermagem', '15:06:00', 'Expirando'])]
+    #[TestWith(['Enfermagem', '15:20:59', 'Expirando'])]
+    #[TestWith(['Enfermagem', '15:21:00', 'Atrasada'])]
+    #[TestWith(['Gerente da Unidade', '15:21:00', 'No prazo'])]
+    #[TestWith(['Gerente da Unidade', '15:36:00', 'Expirando'])]
+    #[TestWith(['Gerente Geral', '15:51:00', 'No prazo'])]
+    #[TestWith(['Gerente Geral', '16:21:00', 'Atrasada'])]
+    #[TestWith(['Gerente da Unidade', '15:21:00', 'No prazo', 'Estoque'])]
+    #[TestWith(['Gerente Geral', '15:21:00', 'No prazo', 'Coordenação'])]
+    public function test_cada_caixa_conta_o_sla_desde_o_proprio_recebimento(string $destino, string $hora, string $situacao, string $origem = 'Cuidadores'): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $colaborador = $this->usuario('João Silva', $origem, $empresa);
+        $responsavel = $this->usuario('Rita Souza', $destino, $empresa);
+        $this->execucao('Hidratação', $colaborador, $empresa);
+        $this->travelTo(CarbonImmutable::parse("2026-11-18 $hora", 'UTC'));
+
+        $this->actingAs($responsavel)->get(route('acompanhamento.index'))
+            ->assertOk()
+            ->assertSeeText(['Hidratação', "Acompanhamento · $situacao"]);
+    }
+
+    #[TestWith(['Gerente da Unidade', '15:20:59'])]
+    #[TestWith(['Gerente Geral', '15:50:59'])]
+    #[TestWith(['Coordenador', '16:30:00'])]
+    public function test_verificacao_exige_encaminhamento_para_a_caixa_do_usuario(string $destino, string $hora): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $colaborador = $this->usuario('João Silva', 'Farmácia', $empresa);
+        $responsavel = $this->usuario('Rita Souza', $destino, $empresa);
+        $id = $this->execucao('Hidratação', $colaborador, $empresa);
+        $this->travelTo(CarbonImmutable::parse("2026-11-18 $hora", 'UTC'));
+
+        $this->actingAs($responsavel)
+            ->post(route('acompanhamento.store', $id), ['acao' => 'Ação registrada'])
+            ->assertNotFound();
+
+        $this->assertDatabaseEmpty('rotinas_verificacoes');
+    }
+
+    public function test_gerente_geral_ve_apenas_as_execucoes_encaminhadas_a_sua_caixa(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $gerenteGeral = $this->usuario('Rita Souza', 'Gerente Geral', $empresa);
+        $enfermagem = $this->usuario('João Silva', 'Enfermagem', $empresa);
+        $gerenteDaUnidade = $this->usuario('Bianca Lima', 'Gerente da Unidade', $empresa);
+        $this->execucao('Rotina de enfermagem', $enfermagem, $empresa);
+        $this->execucao('Rotina de gestão da unidade', $gerenteDaUnidade, $empresa);
+        $this->execucao('Rotina da gestão geral', $gerenteGeral, $empresa, ['previsto_em' => '2026-11-18 10:00:00']);
+
+        $this->actingAs($gerenteGeral)->get(route('acompanhamento.index'))
+            ->assertOk()
+            ->assertSeeText('Rotina de gestão da unidade')
+            ->assertDontSeeText('Rotina de enfermagem')
+            ->assertDontSeeText('Rotina da gestão geral');
+    }
+
+    public function test_escalonamento_da_coordenacao_preserva_o_primeiro_recebimento_da_gerencia(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $coordenacao = $this->usuario('João Silva', 'Coordenação', $empresa);
+        $gerente = $this->usuario('Rita Souza', 'Gerente da Unidade', $empresa);
+        $id = $this->execucao('Conferência da unidade', $coordenacao, $empresa);
+        $this->travelTo(CarbonImmutable::parse('2026-11-18 15:21:00', 'UTC'));
+
+        $this->actingAs($gerente)->get(route('acompanhamento.index', ['item' => $id]))
+            ->assertOk()
+            ->assertSeeText(['18/11/2026 11:51', '18/11/2026 12:21', 'Acompanhamento · Atrasada']);
+    }
+
+    public function test_fim_atrasado_preserva_o_vencimento_anterior_do_inicio(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $colaborador = $this->usuario('João Silva', 'Cuidadores', $empresa);
+        $gerente = $this->usuario('Rita Souza', 'Gerente da Unidade', $empresa);
+        $id = $this->execucao('Hidratação', $colaborador, $empresa, [
+            'status' => 'concluida',
+            'previsto_em' => '2026-11-18 14:00:00',
+            'iniciado_em' => '2026-11-18 14:25:00',
+            'concluido_em' => '2026-11-18 14:31:00',
+            'duracao_prevista_segundos' => 300,
+        ]);
+        $this->travelTo(CarbonImmutable::parse('2026-11-18 14:31:00', 'UTC'));
+
+        $this->actingAs($gerente)->get(route('acompanhamento.index', ['item' => $id]))
+            ->assertOk()
+            ->assertSeeText(['18/11/2026 11:31', 'Acompanhamento · No prazo']);
+    }
+
+    public function test_verificacao_encerra_o_encaminhamento_para_novas_caixas(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $enfermagem = $this->usuario('Rita Souza', 'Enfermagem', $empresa);
+        $colaborador = $this->usuario('João Silva', 'Cuidadores', $empresa);
+        $gerenteGeral = $this->usuario('Bianca Lima', 'Gerente Geral', $empresa);
+        $id = $this->execucao('Hidratação', $colaborador, $empresa);
+        $this->actingAs($enfermagem)->post(route('acompanhamento.store', $id), ['acao' => 'Orientei a equipe.'])
+            ->assertSessionHas('success', 'Verificação concluída.');
+        $this->travelTo(CarbonImmutable::parse('2026-11-18 16:30:00', 'UTC'));
+
+        $this->actingAs($gerenteGeral)->get(route('acompanhamento.index', ['item' => $id]))
+            ->assertNotFound();
+    }
+
+    private function empresa(string $nome): int
+    {
+        return DB::table('empresas')->insertGetId(['empresa' => $nome], 'id_empresa');
+    }
+
+    private function usuario(string $nome, string $perfil, int $empresa): User
+    {
+        $grupo = DB::table('grupos_acesso')->insertGetId(['grupo_acesso' => $perfil], 'id_grupo_acesso');
+        $id = DB::table('usuarios')->insertGetId([
+            'usuario' => $nome,
+            'username' => Str::slug($nome),
+            'id_grupo_acesso' => $grupo,
+            'password' => Hash::make('senha-de-teste'),
+        ], 'id_usuario');
+        DB::table('empresa_usuario')->insert([
+            'id_empresa' => $empresa,
+            'id_usuario' => $id,
+            'empresa_nome' => DB::table('empresas')->where('id_empresa', $empresa)->value('empresa'),
+        ]);
+
+        return User::query()->findOrFail($id);
+    }
+
+    private function execucao(string $nome, User $colaborador, int $empresa, array $dados = [], array $rotina = []): int
+    {
+        $tarefa = DB::table('tarefas')->insertGetId(['tarefa' => $nome, 'status' => true], 'id_tarefa');
+        $local = DB::table('locais')->insertGetId(['local' => 'Sala de Estar', 'status' => true], 'id_local');
+        $sla = DB::table('slas')->insertGetId(['sla' => 'SLA padrão', 'tempo_limite_minutos' => 5], 'id_sla');
+        $idRotina = DB::table('rotinas')->insertGetId([
+            'status' => true,
+            'id_empresa' => $empresa,
+            'id_usuario' => $colaborador->getKey(),
+            'dias_semanas' => 'Qua',
+            'horario' => '11:50:00',
+            'id_tarefa' => $tarefa,
+            'id_local' => $local,
+            'auxilio' => false,
+            ...$rotina,
+        ], 'id_rotina');
+
+        return DB::table('rotinas_execucoes')->insertGetId([
+            'id_rotina' => $idRotina,
+            'id_empresa' => $empresa,
+            'id_usuario_responsavel' => $colaborador->getKey(),
+            'id_sla' => $sla,
+            'previsto_em' => '2026-11-18 14:50:00',
+            'prazo_em' => '2026-11-18 14:55:00',
+            'tempo_limite_minutos' => 5,
+            ...$dados,
+        ], 'id_execucao');
+    }
+
+    private function verificacao(int $id, User $gerente, string $acao): void
+    {
+        DB::table('rotinas_verificacoes')->insert([
+            'id_execucao' => $id,
+            'id_usuario_verificacao' => $gerente->getKey(),
+            'acao' => $acao,
+            'verificado_em' => '2026-11-18 14:55:00',
+        ]);
+    }
+}

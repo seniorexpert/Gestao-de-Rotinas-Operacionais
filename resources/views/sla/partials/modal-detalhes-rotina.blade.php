@@ -61,10 +61,13 @@
         document.getElementById('modalObs').textContent = data.obs ? data.obs : 'Respeitar orientações individuais cadastradas para esta rotina.';
 
         const badge = document.getElementById('modalBadgeStatus');
-        badge.textContent = 'Ativa';
-        badge.className = 'inline-block px-3 py-1 text-xs font-medium bg-amber-100 text-amber-800 rounded-full mb-3';
+        badge.textContent = data.ativa ? 'Ativa' : 'Inativa';
+        badge.className = 'inline-block px-3 py-1 text-xs font-medium rounded-full mb-3 '
+            + (data.ativa ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600');
 
-        document.getElementById('modalFooterAcoes').innerHTML = `
+        const footer = document.getElementById('modalFooterAcoes');
+        footer.classList.toggle('hidden', !data.ativa);
+        footer.innerHTML = `
             <button type="button" onclick="iniciarTarefa()" class="w-full py-3.5 rounded-2xl bg-[#1e2d3d] text-white hover:bg-opacity-90 text-sm font-bold transition text-center">
                 Iniciar tarefa
             </button>

@@ -39,15 +39,16 @@
                 <tbody class="divide-y divide-gray-100 text-sm">
                     @forelse($locais as $local)
                         <tr class="linha-local hover:bg-gray-50/60 transition">
-                            <td class="py-4 px-6 font-medium text-gray-500">#{{ $local->id }}</td>
+                            <td class="py-4 px-6 font-medium text-gray-500">#{{ $local->id_local }}</td>
                             <td class="py-4 px-6">
                                 <div class="flex items-center space-x-3">
-                                    <span class="font-bold text-gray-800 uppercase">{{ $local->nome_local ?? $local->nome ?? 'Sem nome' }}</span>
+                                    <span class="font-bold text-gray-800 uppercase">{{ $local->local }}</span>
                                 </div>
                             </td>
                             <td class="py-4 px-6 text-right">
-                                <button type="button" 
-                                    onclick="abrirModalEdicao({ id: '{{ $local->id }}', nome: '{{ $local->nome_local ?? $local->nome }}' })" 
+                                @php($dadosEdicao = ['id' => $local->id_local, 'nome' => $local->local])
+                                <button type="button"
+                                    onclick="abrirModalEdicao(@js($dadosEdicao))"
                                     class="inline-flex items-center space-x-1 text-sm font-semibold text-gray-700 hover:text-gray-900 transition">
                                     <span>Editar</span>
                                     <i class="fa-solid fa-chevron-right text-xs"></i>

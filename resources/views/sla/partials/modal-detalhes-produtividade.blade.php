@@ -18,23 +18,15 @@
         </div>
 
         <div class="space-y-4 sans-text overflow-y-auto flex-1 pr-1" id="modalProdListaTarefas">
-            @php
-                $todasRotinas = DB::table('gr_rotinas')
-                    ->join('gr_tarefas', 'gr_rotinas.id_tarefa', '=', 'gr_tarefas.id')
-                    ->leftJoin('gr_usuarios', 'gr_rotinas.id_usuario', '=', 'gr_usuarios.id')
-                    ->select('gr_rotinas.*', 'gr_tarefas.nome_tarefa', 'gr_usuarios.name as usuario_nome')
-                    ->get();
-            @endphp
-
-            @foreach($todasRotinas as $rotina)
+            @foreach ($rotinas as $rotina)
                 <div class="item-tarefa-prod border border-gray-200 rounded-2xl p-4 flex items-center justify-between bg-white shadow-sm" data-usuario="{{ $rotina->id_usuario }}">
                     <div class="flex items-center gap-4">
                         <div class="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center text-2xl">
                             🛁
                         </div>
                         <div>
-                            <h4 class="text-base font-bold text-slate-800">{{ $rotina->nome_tarefa ?? 'Rotina' }}</h4>
-                            <p class="text-xs text-gray-500 mt-0.5">Onde: {{ $rotina->local }} | Morador: {{ $rotina->morador ?? 'N/A' }}</p>
+                            <h4 class="text-base font-bold text-slate-800">{{ $rotina->tarefa ?? 'Rotina' }}</h4>
+                            <p class="text-xs text-gray-500 mt-0.5">{{ $rotina->local ?: ($rotina->local_cadastrado ?? '—') }} · {{ $rotina->morador ?? 'Tarefa geral' }}</p>
                             <span class="text-xs font-semibold text-gray-700 mt-1 block">Horário: {{ $rotina->horario }}</span>
                         </div>
                     </div>

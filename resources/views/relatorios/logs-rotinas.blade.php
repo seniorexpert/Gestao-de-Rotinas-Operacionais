@@ -96,8 +96,8 @@
                         <tr class="hover:bg-gray-50/60 transition">
                             <td class="py-4 px-6 font-semibold text-gray-400 tabular-nums">#{{ $log->id }}</td>
                             <td class="py-4 px-6">
-                                <span class="px-3 py-1 rounded-full text-xs font-bold {{ $log->situacao == 'Finalizado' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700' }}">
-                                    {{ $log->situacao ?? 'Aberto' }}
+                                <span class="px-3 py-1 rounded-full text-xs font-bold {{ $log->situacao == 'Ativa' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' }}">
+                                    {{ $log->situacao }}
                                 </span>
                             </td>
                             <td class="py-4 px-6">

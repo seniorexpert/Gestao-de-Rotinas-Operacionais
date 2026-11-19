@@ -40,31 +40,36 @@
                 </thead>
                 <tbody class="divide-y divide-gray-100 text-sm">
                     @forelse($tarefas as $tarefa)
+                        @php
+                            [$horas, $minutos, $segundos] = array_pad(explode(':', $tarefa->tempo_realizar_tarefa ?? ''), 3, 0);
+                            $dadosEdicao = [
+                                'id' => $tarefa->id_tarefa,
+                                'nome' => $tarefa->tarefa,
+                                'tempo' => ((int) $horas * 3600 + (int) $minutos * 60 + (int) $segundos) / 60,
+                                'status' => $tarefa->status ? 'Ativa' : 'Inativa',
+                                'descricao' => $tarefa->descricao,
+                                'id_ferramenta' => $tarefa->id_ferramenta,
+                            ];
+                        @endphp
                         <tr class="linha-tarefa hover:bg-gray-50/60 transition">
-                            <td class="py-4 px-6 font-medium text-gray-500">#{{ $tarefa->id }}</td>
+                            <td class="py-4 px-6 font-medium text-gray-500">#{{ $tarefa->id_tarefa }}</td>
                             <td class="py-4 px-6">
                                 <div class="flex items-center space-x-3">
                                     <span class="h-8 w-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-500 shrink-0">
                                         <i class="fa-solid fa-capsules"></i>
                                     </span>
-                                    <span class="font-bold text-gray-800 uppercase">{{ $tarefa->nome_tarefa ?? $tarefa->descricao_tarefa ?? 'Sem nome' }}</span>
+                                    <span class="font-bold text-gray-800 uppercase">{{ $tarefa->tarefa ?? 'Sem nome' }}</span>
                                 </div>
                             </td>
                             <td class="py-4 px-6 text-gray-500">
-                                {{ isset($tarefa->tempo_tarefa) && $tarefa->tempo_tarefa ? $tarefa->tempo_tarefa : 'Não informada' }}
+                                {{ $tarefa->tempo_realizar_tarefa ? substr($tarefa->tempo_realizar_tarefa, 0, 8) : 'Não informada' }}
                             </td>
                             <td class="py-4 px-6 text-gray-500">
-                                {{ isset($tarefa->ferramentas_tarefa) ? $tarefa->ferramentas_tarefa : '0' }} ferramentas
+                                {{ $tarefa->ferramenta ?? '—' }}
                             </td>
                             <td class="py-4 px-6 text-right">
-                                <button type="button" 
-                                    onclick="abrirModalEdicao({ 
-                                        id: '{{ $tarefa->id }}', 
-                                        nome: '{{ addslashes($tarefa->nome_tarefa ?? $tarefa->descricao_tarefa) }}', 
-                                        tempo: '{{ $tarefa->tempo_tarefa ?? '' }}', 
-                                        status: '{{ $tarefa->status_tarefa ?? 'Ativa' }}', 
-                                        descricao: '{{ addslashes($tarefa->descricao_tarefa ?? '') }}' 
-                                    })" 
+                                <button type="button"
+                                    onclick="abrirModalEdicao(@js($dadosEdicao))"
                                     class="inline-flex items-center space-x-1 text-sm font-semibold text-gray-700 hover:text-gray-900 transition">
                                     <span>Editar</span>
                                     <i class="fa-solid fa-chevron-right text-xs"></i>
@@ -126,19 +131,12 @@
         const titulo = document.getElementById('modalTituloTarefa');
         if (titulo) titulo.textContent = 'Cadastro de tarefa';
 
-        const spanTexto = document.getElementById('ferramentasTextoBtn');
-        if (spanTexto) {
-            spanTexto.textContent = 'Selecionar ferramentas';
-            spanTexto.className = 'text-gray-400';
-        }
-
-        document.querySelectorAll('input[name="ferramentas_tarefa[]"]').forEach(cb => cb.checked = false);
-
         openModal(modalId);
     }
 
     function abrirModalEdicao(dados) {
         const modalId = 'taskModal';
+        document.querySelector('#taskModal form')?.reset();
         
         const inputId = document.getElementById('tarefa_id');
         if (inputId) inputId.value = dados.id;
@@ -147,13 +145,15 @@
         if (inputNome) inputNome.value = dados.nome;
 
         const inputTempo = document.getElementById('tempo_tarefa');
-        if (inputTempo) inputTempo.value = dados.tempo;
+        if (inputTempo) inputTempo.value = dados.tempo || '';
 
         const selectStatus = document.getElementById('status_tarefa');
         if (selectStatus) selectStatus.value = dados.status;
 
         const inputDescricao = document.getElementById('descricao_tarefa');
-        if (inputDescricao) inputDescricao.value = dados.descricao;
+        if (inputDescricao) inputDescricao.value = dados.descricao ?? '';
+
+        document.getElementById('id_ferramenta').value = dados.id_ferramenta ?? '';
 
         const titulo = document.getElementById('modalTituloTarefa');
         if (titulo) titulo.textContent = 'Editar tarefa';

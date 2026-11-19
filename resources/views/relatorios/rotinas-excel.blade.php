@@ -50,10 +50,10 @@
                         <th class="py-4 px-6 w-28 border-r border-gray-200 uppercase tracking-wider">HORA</th>
                         @foreach($colaboradores as $c)
                             <th class="py-4 px-6 border-r border-gray-200 min-w-[280px]">
-                                <span class="block font-bold text-[#1b2a38] text-sm">{{ $c->name }}</span>
+                                <span class="block font-bold text-[#1b2a38] text-sm">{{ $c->usuario }}</span>
                                 <span class="block font-normal text-xs text-gray-400 mt-0.5">
-                                    {{ $c->group ? $c->group . ' · ' : '' }} 
-                                    {{ $rotinas->where('id_usuario', $c->id)->count() }} tarefas
+                                    {{ $c->grupo_acesso ? $c->grupo_acesso . ' · ' : '' }}
+                                    {{ $rotinas->where('id_usuario', $c->id_usuario)->count() }} tarefas
                                 </span>
                             </th>
                         @endforeach
@@ -68,7 +68,7 @@
                             @foreach($colaboradores as $c)
                                 <td class="py-4 px-6 border-r border-gray-200 align-top">
                                     @php
-                                        $tarefasDoHorario = $rotinas->where('id_usuario', $c->id)->where('horario', $horario);
+                                        $tarefasDoHorario = $rotinas->where('id_usuario', $c->id_usuario)->where('horario', $horario);
                                     @endphp
                                     @foreach($tarefasDoHorario as $tarefa)
                                         <div class="bg-white border border-gray-200 p-4 rounded-2xl shadow-sm mb-3 hover:border-gray-300 transition">
@@ -78,7 +78,7 @@
                                                 </div>
                                                 <div>
                                                     <h4 class="font-bold text-[#1b2a38] text-xs uppercase leading-snug mb-1">
-                                                        {{ $tarefa->descricao ?? 'Tarefa de Rotina' }}
+                                                        {{ $tarefa->tarefa ?? $tarefa->descricao ?? 'Tarefa de rotina' }}
                                                     </h4>
                                                     <p class="text-xs text-gray-500 font-medium">
                                                         @php

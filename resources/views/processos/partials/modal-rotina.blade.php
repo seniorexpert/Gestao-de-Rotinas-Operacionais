@@ -1,21 +1,28 @@
-<div id="rotinaModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+@php
+    $emergencial = $emergencial ?? false;
+    $modalRotina = $emergencial ? 'modalRotinaEmergencial' : 'rotinaModal';
+    $modalTarefa = $emergencial ? 'tarefaRotinaEmergencialModal' : 'tarefaRotinaModal';
+@endphp
+
+<div id="{{ $modalRotina }}" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
     <div class="bg-white rounded-3xl max-w-2xl w-full p-8 relative shadow-2xl max-h-[90vh] flex flex-col">
-        <button type="button" onclick="closeModal('rotinaModal')" class="absolute top-6 right-6 text-gray-400 hover:text-gray-700 focus:outline-none">
+        <button type="button" onclick="closeModal('{{ $modalRotina }}')" class="absolute top-6 right-6 text-gray-400 hover:text-gray-700 focus:outline-none">
             <i class="fa-solid fa-xmark text-xl"></i>
         </button>
 
         <div class="flex-shrink-0">
-            <h2 class="text-3xl font-bold text-[#1e2d3d] mb-1">Cadastro de Rotinas</h2>
+            <h2 class="text-3xl font-bold text-[#1e2d3d] mb-1">{{ $emergencial ? 'Cadastro de Rotina Emergencial' : 'Cadastro de Rotinas' }}</h2>
             <p class="sans-text text-gray-500 text-sm mb-6">Configure a rotina e adicione suas tarefas</p>
         </div>
 
         <div class="space-y-6 sans-text overflow-y-auto flex-1 pr-1">
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Unidade</label>
-                <select name="unidade_id" id="selectUnidadeRotina" required onchange="carregarColaboradoresPorUnidade(this.value)" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
+                <select name="id_empresa" id="selectUnidadeRotina" data-url-usuarios="{{ route('processos.usuarios-por-unidade') }}" required onchange="carregarColaboradoresPorUnidade(this)" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
                     <option value="" disabled selected>Selecione a unidade</option>
-                    <option value="Garden Ville">Garden Ville</option>
-                    <option value="Menino Deus">Menino Deus</option>
+                    @foreach ($empresas as $empresa)
+                        <option value="{{ $empresa->id_empresa }}" data-nome="{{ $empresa->empresa }}">{{ $empresa->empresa }}</option>
+                    @endforeach
                 </select>
             </div>
 
@@ -57,7 +64,7 @@
             </div>
 
             <div class="flex items-center justify-end gap-4 pt-4 sticky bottom-0 bg-white pb-1">
-                <button type="button" onclick="closeModal('rotinaModal')" class="w-1/2 py-3.5 rounded-2xl border border-[#e5dec9] text-[#1e2d3d] hover:bg-gray-50 text-sm font-bold transition text-center">Cancelar</button>
+                <button type="button" onclick="closeModal('{{ $modalRotina }}')" class="w-1/2 py-3.5 rounded-2xl border border-[#e5dec9] text-[#1e2d3d] hover:bg-gray-50 text-sm font-bold transition text-center">Cancelar</button>
                 <button type="button" onclick="enviarRotinasParaBanco()" class="w-1/2 py-3.5 rounded-2xl bg-[#1e2d3d] text-white hover:bg-opacity-90 text-sm font-bold transition text-center">Salvar rotina</button>
             </div>
         </div>
@@ -65,6 +72,8 @@
 </div>
 
 <script>
+    const consultasDeUsuarios = new WeakMap();
+
     function abrirModal(modalId) {
         const modal = document.getElementById(modalId);
         if (modal) modal.classList.remove('hidden');
@@ -75,23 +84,39 @@
         if (modal) modal.classList.add('hidden');
     }
 
-    function carregarColaboradoresPorUnidade(unidadeNome) {
-        const selectColab = document.getElementById('selectColaboradorModalRotina');
-        if (selectColab) {
-            selectColab.innerHTML = '<option value="" disabled selected>A carregar...</option>';
-            fetch(`/api/usuarios-por-unidade?unit=${encodeURIComponent(unidadeNome)}`)
-                .then(response => response.json())
-                .then(data => {
-                    selectColab.innerHTML = '<option value="" disabled selected>Selecione a pessoa</option>';
-                    data.forEach(user => {
-                        selectColab.innerHTML += `<option value="${user.id}">${user.name}</option>`;
-                    });
-                });
-        }
+    async function carregarUsuariosPorUnidade(select, unidadeId, rotulo, selecionado = '') {
+        const consulta = Symbol();
+        consultasDeUsuarios.set(select, consulta);
+        select.replaceChildren(new Option('Carregando...', '', true, true));
 
-        if (typeof carregarMoradoresPorUnidade === 'function') {
-            carregarMoradoresPorUnidade(unidadeNome);
+        try {
+            const url = new URL(document.getElementById('selectUnidadeRotina').dataset.urlUsuarios);
+            url.searchParams.set('id_empresa', unidadeId);
+            const resposta = await fetch(url, { headers: { Accept: 'application/json' } });
+            if (!resposta.ok) {
+                throw new Error('Falha ao consultar colaboradores.');
+            }
+
+            const usuarios = await resposta.json();
+            if (consultasDeUsuarios.get(select) !== consulta) {
+                return;
+            }
+
+            select.replaceChildren(new Option(rotulo, '', true, true));
+            for (const usuario of usuarios) {
+                const id = String(usuario.id_usuario);
+                select.add(new Option(usuario.usuario, id, false, id === String(selecionado)));
+            }
+        } catch {
+            if (consultasDeUsuarios.get(select) === consulta) {
+                select.replaceChildren(new Option('Erro ao carregar colaboradores', '', true, true));
+            }
         }
+    }
+
+    function carregarColaboradoresPorUnidade(unidade) {
+        const select = document.getElementById('selectColaboradorModalRotina');
+        carregarUsuariosPorUnidade(select, unidade.value, 'Selecione a pessoa');
     }
 
     function abrirModalTarefaRotina() {
@@ -101,16 +126,14 @@
             return;
         }
         
-        const unidadeNome = unidadeSelect.value;
-
         if (typeof carregarCuidadoresAuxiliares === 'function') {
-            carregarCuidadoresAuxiliares(unidadeNome);
+            carregarCuidadoresAuxiliares(unidadeSelect.value);
         }
         
         if (typeof carregarMoradoresPorUnidade === 'function') {
-            carregarMoradoresPorUnidade(unidadeNome);
+            carregarMoradoresPorUnidade(unidadeSelect.selectedOptions[0].dataset.nome);
         }
         
-        abrirModal('tarefaRotinaModal');
+        abrirModal('{{ $modalTarefa }}');
     }
 </script>
