@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\AuditoriaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -19,11 +20,13 @@ class AuthController extends Controller
             'password' => ['required'],
         ]);
 
-        if (Auth::attempt($credentials)) {
+        if (Auth::attempt([...$credentials, 'status' => true])) {
             $request->session()->regenerate();
 
             return redirect()->intended('home');
         }
+
+        $request->attributes->set(AuditoriaService::RESULTADO_HTTP, 'recusado');
 
         return back()->withErrors([
             'username' => 'As credenciais fornecidas não batem com os nossos registros.',

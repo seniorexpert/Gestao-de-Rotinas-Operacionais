@@ -3,15 +3,23 @@
 namespace App\Http\Controllers;
 
 use App\Services\CalculadoraSla;
+use App\Services\ConsultaRotinas;
+use App\Services\ExecucoesDiarias;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class EstatisticasController extends Controller
 {
+    public function __construct(
+        private ConsultaRotinas $rotinas,
+        private ExecucoesDiarias $execucoesDiarias,
+        private CalculadoraSla $sla,
+    ) {}
+
     public function index(Request $request)
     {
         $opcoesPeriodo = [
@@ -54,16 +62,17 @@ class EstatisticasController extends Controller
             $de = $etapa.'_de';
             $ate = $etapa.'_ate';
             $periodos[$etapa] = $filtros['periodo_'.$etapa]
-                ?? (!empty($filtros[$de]) || !empty($filtros[$ate]) ? 'personalizado' : 'todos');
+                ?? (! empty($filtros[$de]) || ! empty($filtros[$ate]) ? 'personalizado' : 'todos');
 
-            if (!$finalizados || $periodos[$etapa] !== 'personalizado') {
+            if (! $finalizados || $periodos[$etapa] !== 'personalizado') {
                 unset($filtros[$de], $filtros[$ate]);
+
                 continue;
             }
 
             if (
-                !empty($filtros[$de])
-                && !empty($filtros[$ate])
+                ! empty($filtros[$de])
+                && ! empty($filtros[$ate])
                 && $filtros[$de] > $filtros[$ate]
             ) {
                 return back()->withErrors([
@@ -94,11 +103,14 @@ class EstatisticasController extends Controller
             'finalizados' => (int) $finalizados,
         ]);
 
-        $empresas = DB::table('empresa_usuario')
-            ->where('id_usuario', $request->user()->getAuthIdentifier())
-            ->pluck('id_empresa');
+        $usuario = $request->user();
+        $empresas = $this->rotinas->empresas($usuario);
+        $semEmpresas = ! $empresas->exists();
+        $agora = now()->toImmutable();
+        if (! $semEmpresas) {
+            $this->execucoesDiarias->gerar($agora, $empresas);
+        }
 
-        $semEmpresas = $empresas->isEmpty();
         $status = [];
 
         if ($pendentes) {
@@ -113,40 +125,13 @@ class EstatisticasController extends Controller
             $status[] = 'concluida';
         }
 
-        $consulta = DB::table('rotinas_execucoes as e')
-            ->leftJoin('usuarios as u', 'e.id_usuario_responsavel', '=', 'u.id_usuario')
-            ->leftJoin('grupos_acesso as g', 'u.id_grupo_acesso', '=', 'g.id_grupo_acesso')
-            ->leftJoin('rotinas as r', function ($join) {
-                $join->on('e.id_rotina', '=', 'r.id_rotina')
-                    ->on('e.id_empresa', '=', 'r.id_empresa');
-            })
-            ->leftJoin('tarefas as t', 'r.id_tarefa', '=', 't.id_tarefa')
-            ->leftJoin('locais as l', 'r.id_local', '=', 'l.id_local')
-            ->whereIn('e.id_empresa', $empresas)
+        $consulta = $this->rotinas->execucoes($usuario)
             ->whereIn('e.status', $status)
-            ->select([
-                'e.id_execucao',
-                'e.id_rotina',
-                'e.id_usuario_responsavel',
-                'e.previsto_em',
-                'e.prazo_em',
-                'e.iniciado_em',
-                'e.concluido_em',
-                'e.tempo_limite_minutos',
-                'e.duracao_prevista_segundos',
-                'e.status',
-                'u.usuario as responsavel',
-                'u.id_grupo_acesso',
-                'g.grupo_acesso',
-                't.tarefa',
-                'r.morador',
-                'r.local as local_rotina',
-                'l.local as local_cadastrado',
-            ])
             ->orderBy('e.previsto_em', 'desc');
 
         if ($finalizados) {
-            $hoje = CarbonImmutable::today('America/Sao_Paulo');
+            $hoje = $agora->setTimezone(ExecucoesDiarias::FUSO)->startOfDay();
+            $faixas = [];
 
             foreach (['inicio' => 'iniciado_em', 'fim' => 'concluido_em'] as $etapa => $coluna) {
                 [$de, $ate] = $this->intervalo(
@@ -157,34 +142,32 @@ class EstatisticasController extends Controller
                 );
 
                 if ($de) {
-                    $consulta->where("e.$coluna", '>=', $de->startOfDay()->utc());
+                    $faixas[] = ["e.$coluna", '>=', $de->startOfDay()->utc()];
                 }
 
                 if ($ate) {
-                    $consulta->where("e.$coluna", '<', $ate->addDay()->startOfDay()->utc());
+                    $faixas[] = ["e.$coluna", '<', $ate->addDay()->startOfDay()->utc()];
                 }
+            }
+
+            if ($faixas !== []) {
+                $consulta->where(fn (Builder $estados) => $estados->where('e.status', '<>', 'concluida')
+                    ->orWhere(fn (Builder $concluidas) => $concluidas->where('e.status', 'concluida')->where($faixas)));
             }
         }
 
-        $agora = now();
-        $calculadora = new CalculadoraSla;
         $inconsistentes = 0;
 
         $execucoes = $consulta->get()
-            ->map(function ($execucao) use ($agora, $calculadora, &$inconsistentes) {
+            ->map(function ($execucao) use ($agora, &$inconsistentes) {
                 try {
-                    $resultado = $calculadora->calcular($execucao, $agora);
+                    $resultado = $this->sla->calcular($execucao, $agora);
 
                     $execucao->situacao = $resultado['sla_atual'];
                     $execucao->sla_inicio = $resultado['sla_inicio'];
                     $execucao->sla_conclusao = $resultado['sla_conclusao'];
 
-                    $execucao->prazo_em = $execucao->status === 'pendente'
-                        ? Carbon::parse($execucao->previsto_em)
-                            ->addMinute()->format('Y-m-d H:i:s')
-                        : Carbon::parse($execucao->iniciado_em)
-                            ->addSeconds((int) $execucao->duracao_prevista_segundos)
-                            ->format('Y-m-d H:i:s');
+                    $execucao->prazo_em = $resultado['prazo_em']->utc()->format('Y-m-d H:i:s');
 
                     $execucao->tarefa = trim($execucao->tarefa ?? '')
                         ?: 'Tarefa não localizada';
@@ -254,7 +237,7 @@ class EstatisticasController extends Controller
             $rotinasDetalhe = $detalhe['execucoes']
                 ->filter(function ($execucao) use ($termo) {
                     $horario = Carbon::parse($execucao->previsto_em, 'UTC')
-                        ->setTimezone('America/Sao_Paulo')
+                        ->setTimezone(ExecucoesDiarias::FUSO)
                         ->format('H:i');
 
                     $texto = mb_strtolower(Str::ascii(implode(' ', [

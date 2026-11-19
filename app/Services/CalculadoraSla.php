@@ -8,6 +8,21 @@ use InvalidArgumentException;
 
 class CalculadoraSla
 {
+    public const ROTULOS = [
+        'noPrazo' => 'No prazo',
+        'expirando' => 'Expirando',
+        'atrasado' => 'Atrasada',
+    ];
+
+    public function segundosDaTarefa(?string $tempo): int
+    {
+        if ($tempo === null || ! preg_match('/^(\d{2}):([0-5]\d):([0-5]\d)(?:\.\d+)?$/', $tempo, $partes)) {
+            return 0;
+        }
+
+        return (int) $partes[1] * 3600 + (int) $partes[2] * 60 + (int) $partes[3];
+    }
+
     public function pendente(
         DateTimeInterface|string $previstoEm,
         DateTimeInterface|string|null $referencia = null
@@ -75,6 +90,7 @@ class CalculadoraSla
         return 'noPrazo';
     }
 
+    /** @return array{sla_atual: string, sla_inicio: ?string, sla_conclusao: ?string, prazo_em: CarbonImmutable} */
     public function calcular(
         object $execucao,
         DateTimeInterface|string|null $referencia = null
@@ -116,6 +132,7 @@ class CalculadoraSla
                 ),
                 'sla_inicio' => null,
                 'sla_conclusao' => null,
+                'prazo_em' => $this->prazoInicio($execucao->previsto_em),
             ];
         }
 
@@ -125,7 +142,7 @@ class CalculadoraSla
             );
         }
 
-        $duracao = (int) ($execucao->duracao_prevista_segundos ?? 0);
+        $duracao = $this->duracaoPrevista($execucao);
 
         if ($duracao <= 0) {
             throw new InvalidArgumentException(
@@ -138,6 +155,7 @@ class CalculadoraSla
             $execucao->previsto_em,
             $execucao->iniciado_em
         );
+        $prazoConclusao = $this->data($execucao->iniciado_em)->addSeconds($duracao);
 
         if ($execucao->status === 'concluida') {
             if (empty($execucao->concluido_em)) {
@@ -157,6 +175,7 @@ class CalculadoraSla
                 'sla_atual' => $slaConclusao,
                 'sla_inicio' => $slaInicio,
                 'sla_conclusao' => $slaConclusao,
+                'prazo_em' => $prazoConclusao,
             ];
         }
 
@@ -174,24 +193,15 @@ class CalculadoraSla
             ),
             'sla_inicio' => $slaInicio,
             'sla_conclusao' => null,
+            'prazo_em' => $prazoConclusao,
         ];
     }
 
     /** @return array{vencido_em: CarbonImmutable, segundos: int}|null */
     public function atraso(object $execucao, DateTimeInterface $agora): ?array
     {
-        if ($execucao->iniciado_em && (int) ($execucao->duracao_prevista_segundos ?? 0) <= 0) {
-            // Execuções antigas podem ter apenas o prazo registrado ou o SLA em minutos.
-            $execucao = clone $execucao;
-            $inicio = $this->data($execucao->iniciado_em);
-            $duracao = (int) $inicio->diffInSeconds($this->data($execucao->prazo_em));
-            $execucao->duracao_prevista_segundos = $duracao > 0
-                ? $duracao
-                : (int) $execucao->tempo_limite_minutos * 60;
-        }
-
         $sla = $this->calcular($execucao, $agora);
-        $prazoInicio = $this->prazoInicio($this->data($execucao->previsto_em));
+        $prazoInicio = $this->prazoInicio($execucao->previsto_em);
 
         if ($execucao->status === 'pendente') {
             return $sla['sla_atual'] === 'atrasado'
@@ -203,7 +213,7 @@ class CalculadoraSla
         $iniciouComAtraso = $sla['sla_inicio'] === 'atrasado';
 
         if ($sla['sla_atual'] === 'atrasado') {
-            $prazo = $inicio->addSeconds((int) $execucao->duracao_prevista_segundos);
+            $prazo = $sla['prazo_em'];
             $referencia = $execucao->concluido_em ? $this->data($execucao->concluido_em) : $agora;
 
             return [
@@ -217,9 +227,24 @@ class CalculadoraSla
             : null;
     }
 
-    private function prazoInicio(CarbonImmutable $previsto): CarbonImmutable
+    public function prazoInicio(DateTimeInterface|string $previsto): CarbonImmutable
     {
-        return $previsto->addMinute();
+        return $this->data($previsto)->addMinute();
+    }
+
+    private function duracaoPrevista(object $execucao): int
+    {
+        $duracao = (int) ($execucao->duracao_prevista_segundos ?? 0);
+        if ($duracao > 0) {
+            return $duracao;
+        }
+
+        if (! empty($execucao->prazo_em)) {
+            $inicio = $this->data($execucao->iniciado_em);
+            $duracao = (int) $inicio->diffInSeconds($this->data($execucao->prazo_em));
+        }
+
+        return $duracao > 0 ? $duracao : (int) ($execucao->tempo_limite_minutos ?? 0) * 60;
     }
 
     private function data(
@@ -227,6 +252,6 @@ class CalculadoraSla
     ): CarbonImmutable {
         return $valor instanceof DateTimeInterface
             ? CarbonImmutable::instance($valor)
-            : CarbonImmutable::parse($valor);
+            : CarbonImmutable::parse($valor, 'UTC');
     }
 }

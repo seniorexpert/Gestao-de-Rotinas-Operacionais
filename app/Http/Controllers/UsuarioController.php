@@ -61,11 +61,12 @@ class UsuarioController extends Controller
         return redirect()->route('usuarios.index')->with('status', 'Usuário atualizado com sucesso.');
     }
 
-    /** @return array{usuario: string, username?: string, password?: ?string, id_grupo_acesso?: int|string|null, empresas?: list<int|string>|null, photo?: ?UploadedFile, remove_photo?: bool|int|string} */
+    /** @return array{usuario: string, username?: string, status?: bool|int|string, password?: ?string, id_grupo_acesso?: int|string|null, empresas?: list<int|string>|null, photo?: ?UploadedFile, remove_photo?: bool|int|string} */
     private function validar(Request $request, bool $cadastro): array
     {
         $regras = [
             'usuario' => ['required', 'string', 'max:255'],
+            'status' => ['sometimes', 'boolean'],
             'id_grupo_acesso' => ['bail', 'nullable', 'integer', Rule::exists(GrupoAcesso::class, 'id_grupo_acesso')],
             'empresas' => ['nullable', 'array', 'list'],
             'empresas.*' => ['bail', 'required', 'integer', 'distinct', Rule::exists(Empresa::class, 'id_empresa')],
@@ -80,6 +81,7 @@ class UsuarioController extends Controller
 
         return $request->validate($regras, [
             'usuario.required' => 'Informe o nome completo.',
+            'status.boolean' => 'Selecione a situação Ativo ou Inativo.',
             'username.required' => 'Informe o nome de usuário.',
             'username.unique' => self::LOGIN_EXISTENTE,
             'id_grupo_acesso.exists' => 'Selecione um grupo de acesso cadastrado.',
@@ -90,7 +92,7 @@ class UsuarioController extends Controller
         ]);
     }
 
-    /** @param array{usuario: string, username?: string, password?: ?string, id_grupo_acesso?: int|string|null, empresas?: list<int|string>|null, photo?: ?UploadedFile, remove_photo?: bool|int|string} $dados */
+    /** @param array{usuario: string, username?: string, status?: bool|int|string, password?: ?string, id_grupo_acesso?: int|string|null, empresas?: list<int|string>|null, photo?: ?UploadedFile, remove_photo?: bool|int|string} $dados */
     private function persistir(array $dados, ?int $id = null): void
     {
         $novaFoto = ($dados['photo'] ?? null)?->store('users', 'public');
@@ -122,12 +124,16 @@ class UsuarioController extends Controller
         }
     }
 
-    /** @param array{usuario: string, username?: string, password?: ?string, id_grupo_acesso?: int|string|null, empresas?: list<int|string>|null, remove_photo?: bool|int|string} $dados */
+    /** @param array{usuario: string, username?: string, status?: bool|int|string, password?: ?string, id_grupo_acesso?: int|string|null, empresas?: list<int|string>|null, remove_photo?: bool|int|string} $dados */
     private function salvar(User $usuario, array $dados, ?string $novaFoto): void
     {
         $novo = ! $usuario->exists;
         $anteriores = $novo ? null : $usuario->getAttributes();
         $atributos = Arr::only($dados, ['usuario', 'username']);
+
+        if (isset($dados['status'])) {
+            $atributos['status'] = (bool) $dados['status'];
+        }
 
         if (array_key_exists('id_grupo_acesso', $dados)) {
             $grupo = $dados['id_grupo_acesso'] === null ? null : GrupoAcesso::findOrFail($dados['id_grupo_acesso']);
@@ -146,13 +152,22 @@ class UsuarioController extends Controller
         $usuario->fill($atributos)->save();
 
         if ($novo || $usuario->wasChanged()) {
+            $descricao = match (true) {
+                $novo => 'Cadastro de usuário.',
+                $usuario->wasChanged('status') => $usuario->status ? 'Usuário reativado.' : 'Usuário inativado.',
+                default => 'Atualização de usuário.',
+            };
+            if (! $novo && $usuario->wasChanged('password')) {
+                $descricao .= ' Senha redefinida.';
+            }
+
             AuditoriaService::registrar(
                 acao: $novo ? 'criado' : 'atualizado',
                 tabela: $usuario->getTable(),
                 registroId: (string) $usuario->getKey(),
                 dadosAnteriores: $anteriores,
                 dadosNovos: $usuario->getAttributes(),
-                descricao: $novo ? 'Cadastro de usuário.' : 'Atualização de usuário.'
+                descricao: $descricao
             );
         }
 
@@ -182,7 +197,8 @@ class UsuarioController extends Controller
                     'id_empresa' => $idEmpresa,
                     'empresa_nome' => $empresas[$idEmpresa],
                 ],
-                descricao: 'Vínculo do usuário com a empresa.'
+                descricao: 'Vínculo do usuário com a empresa.',
+                idEmpresa: (int) $idEmpresa,
             );
         }
 
@@ -192,7 +208,8 @@ class UsuarioController extends Controller
                 tabela: 'empresa_usuario',
                 registroId: $usuario->getKey().':'.$idEmpresa,
                 dadosAnteriores: ['id_usuario' => $usuario->getKey(), 'id_empresa' => $idEmpresa],
-                descricao: 'Remoção do vínculo do usuário com a empresa.'
+                descricao: 'Remoção do vínculo do usuário com a empresa.',
+                idEmpresa: (int) $idEmpresa,
             );
         }
     }

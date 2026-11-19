@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\CadastroCatalogo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class FerramentasController extends Controller
 {
@@ -15,16 +15,9 @@ class FerramentasController extends Controller
             'nome_ferramenta' => 'required|string|max:100',
         ]);
 
-        $registro = [
+        CadastroCatalogo::salvar('ferramentas', 'id_ferramenta', $dados['id'] ?? null, [
             'ferramenta' => $dados['nome_ferramenta'],
-            'updated_at' => now(),
-        ];
-
-        if (isset($dados['id'])) {
-            DB::table('ferramentas')->where('id_ferramenta', $dados['id'])->update($registro);
-        } else {
-            DB::table('ferramentas')->insert([...$registro, 'status' => true, 'created_at' => now()]);
-        }
+        ], 'ferramenta');
 
         return back()->with('success', 'Ferramenta salva com sucesso.');
     }

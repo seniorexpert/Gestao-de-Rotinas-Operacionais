@@ -296,7 +296,7 @@
             'Históricos e Análise' => [
                 ['Relatório de Rotinas Finalizadas', 'relatorios.rotinas-finalizadas', 'clipboard-check'],
                 ['Relatório de Rotinas Excel', 'relatorios.excel', 'file-spreadsheet'],
-                ["Relatório de Log's – Rotinas", 'relatorios.logs-rotinas', 'scroll-text'],
+                [$sidebarUser?->can('gerenciar-usuarios') ? 'Logs e Auditoria' : 'Logs de Rotinas', 'relatorios.logs-rotinas', 'scroll-text'],
             ],
         ];
     @endphp
@@ -523,7 +523,7 @@
         </header>
 
         <main>
-            @if (request()->routeIs('processos.*', 'monitoramento.index', 'relatorios.rotinas', 'relatorios.tarefas', 'relatorios.locais', 'relatorios.ferramentas'))
+            @if (request()->routeIs('home', 'processos.*', 'monitoramento.index', 'relatorios.rotinas', 'relatorios.tarefas', 'relatorios.locais', 'relatorios.ferramentas'))
                 @if (session('success'))
                     <p class="mx-auto mt-4 max-w-6xl rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
                         {{ session('success') }}

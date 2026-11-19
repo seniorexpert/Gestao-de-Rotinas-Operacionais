@@ -6,8 +6,8 @@
         </button>
 
         <div class="flex-shrink-0 mb-6">
-            <h2 id="modalProdNomeColaborador" class="text-3xl font-bold text-[#1e2d3d] font-serif">Nome do Colaborador</h2>
-            <p id="modalProdSubtitulo" class="text-sm text-gray-500 mt-1">Gerência · Garden Ville · Tarefas do dia</p>
+            <h2 id="modalProdNomeColaborador" class="text-3xl font-bold text-[#1e2d3d] font-serif"></h2>
+            <p id="modalProdSubtitulo" class="text-sm text-gray-500 mt-1"></p>
         </div>
 
         <div class="space-y-4 mb-4">
@@ -18,23 +18,33 @@
         </div>
 
         <div class="space-y-4 sans-text overflow-y-auto flex-1 pr-1" id="modalProdListaTarefas">
-            @foreach ($rotinas as $rotina)
-                <div class="item-tarefa-prod border border-gray-200 rounded-2xl p-4 flex items-center justify-between bg-white shadow-sm" data-usuario="{{ $rotina->id_usuario }}">
-                    <div class="flex items-center gap-4">
-                        <div class="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center text-2xl">
-                            🛁
-                        </div>
-                        <div>
-                            <h4 class="text-base font-bold text-slate-800">{{ $rotina->tarefa ?? 'Rotina' }}</h4>
-                            <p class="text-xs text-gray-500 mt-0.5">{{ $rotina->local ?: ($rotina->local_cadastrado ?? '—') }} · {{ $rotina->morador ?? 'Tarefa geral' }}</p>
-                            <span class="text-xs font-semibold text-gray-700 mt-1 block">Horário: {{ $rotina->horario }}</span>
-                        </div>
+            @foreach ($execucoes as $execucao)
+                <div class="item-tarefa-prod flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-4" data-usuario="{{ $execucao->id_usuario_responsavel }}">
+                    <div>
+                        <h3 class="font-semibold text-slate-800">{{ $execucao->tarefa ?? 'Rotina' }}</h3>
+                        <p class="mt-0.5 text-xs text-slate-600">
+                            {{ $execucao->horario }} · {{ $execucao->local_rotina ?: ($execucao->local_cadastrado ?? 'Local não informado') }} · {{ $execucao->morador ?? 'Tarefa geral' }}
+                        </p>
+                        <p class="mt-1 text-xs text-slate-600">
+                            {{ ['pendente' => 'Pendente', 'em_andamento' => 'Em andamento', 'concluida' => 'Concluída'][$execucao->status] }}
+                            @if ($execucao->limite)
+                                · Limite em {{ $execucao->limite }}
+                            @endif
+                        </p>
                     </div>
-                    <div class="flex flex-col items-end gap-2">
-                        <span class="px-2.5 py-1 text-[10px] font-semibold bg-emerald-50 text-emerald-700 rounded-full border border-emerald-100">No prazo</span>
-                        <button type="button" onclick="atribuirTarefaIndividual('{{ $rotina->id_rotina }}', '{{ $rotina->id_usuario }}')" class="text-xs font-bold text-slate-700 hover:text-[#1e2d3d] flex items-center gap-1 transition cursor-pointer">
-                            ⇄ Atribuir
-                        </button>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <span data-sla-execucao="{{ $execucao->situacao_sla }}" @class([
+                            'rounded-full px-2.5 py-1 text-xs font-semibold',
+                            'bg-emerald-50 text-emerald-900' => $execucao->situacao_sla === 'noPrazo',
+                            'bg-amber-50 text-amber-900' => $execucao->situacao_sla === 'expirando',
+                            'bg-rose-100 text-rose-900' => $execucao->situacao_sla === 'atrasado',
+                            'bg-slate-100 text-slate-700' => $execucao->situacao_sla === 'semDados',
+                        ])>{{ \App\Services\CalculadoraSla::ROTULOS[$execucao->situacao_sla] ?? 'Sem dados de SLA' }}</span>
+                        @if ($execucao->status === 'pendente' && $execucao->rotina_ativa)
+                            <button type="button" onclick="atribuirTarefaIndividual(@js((string) $execucao->id_rotina), @js((string) $execucao->rotina_responsavel))" class="text-xs font-semibold text-slate-700 hover:underline">
+                                Atribuir
+                            </button>
+                        @endif
                     </div>
                 </div>
             @endforeach
@@ -54,14 +64,12 @@
 
 <script>
     let colaboradorAtualId = null;
-    let colaboradorAtualNome = '';
-
-    function abrirModalDetalhesProd(idColaborador, nomeColaborador, totalTarefas) {
+    function abrirModalDetalhesProd(idColaborador, nomeColaborador, totalTarefas, unidades) {
         colaboradorAtualId = idColaborador;
-        colaboradorAtualNome = nomeColaborador;
 
         document.getElementById('modalProdNomeColaborador').textContent = nomeColaborador;
-        document.getElementById('modalProdSubtitulo').textContent = `Gerência · Garden Ville · ${totalTarefas} tarefas no dia`;
+        document.getElementById('modalProdSubtitulo').textContent = [unidades, totalTarefas + ' tarefas no dia'].filter(Boolean).join(' · ');
+        document.getElementById('inputBuscaProd').value = '';
 
         const itens = document.querySelectorAll('.item-tarefa-prod');
         itens.forEach(item => {

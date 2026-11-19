@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\AuditoriaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 
 class ForgotPasswordController extends Controller
@@ -21,9 +23,13 @@ class ForgotPasswordController extends Controller
 
         $user = $request->user();
 
-        $user->update([
-            'password' => Hash::make($request->password)
-        ]);
+        DB::transaction(function () use ($user, $request) {
+            $user->update(['password' => Hash::make($request->password)]);
+            AuditoriaService::registrar(
+                'ALTERAR_SENHA', 'usuarios', (string) $user->getKey(),
+                descricao: 'Alteração da própria senha',
+            );
+        });
 
         Auth::logout();
         $request->session()->invalidate();

@@ -50,15 +50,25 @@
                 class="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-sm text-stone-800 focus:outline-none focus:ring-1 focus:ring-stone-400 read-only:bg-stone-100">
         </div>
 
-        <div>
-            <label for="grupoAcessoUsuario" class="block text-xs font-medium text-stone-700 mb-1.5">Grupo de Acesso</label>
-            <select id="grupoAcessoUsuario" name="id_grupo_acesso"
-                class="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-sm text-stone-800 focus:outline-none focus:ring-1 focus:ring-stone-400">
-                <option value="">Sem grupo de acesso</option>
-                @foreach ($gruposAcesso as $grupo)
-                    <option value="{{ $grupo->id_grupo_acesso }}">{{ $grupo->grupo_acesso }}{{ $grupo->status ? '' : ' (inativo)' }}</option>
-                @endforeach
-            </select>
+        <div class="grid gap-4 sm:grid-cols-3">
+            <div class="sm:col-span-2">
+                <label for="grupoAcessoUsuario" class="block text-xs font-medium text-stone-700 mb-1.5">Grupo de Acesso</label>
+                <select id="grupoAcessoUsuario" name="id_grupo_acesso"
+                    class="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-sm text-stone-800 focus:outline-none focus:ring-1 focus:ring-stone-400">
+                    <option value="">Sem grupo de acesso</option>
+                    @foreach ($gruposAcesso as $grupo)
+                        <option value="{{ $grupo->id_grupo_acesso }}">{{ $grupo->grupo_acesso }}{{ $grupo->status ? '' : ' (inativo)' }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label for="statusUsuario" class="block text-xs font-medium text-stone-700 mb-1.5">Situação</label>
+                <select id="statusUsuario" name="status" required
+                    class="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-sm text-stone-800 focus:outline-none focus:ring-1 focus:ring-stone-400">
+                    <option value="1">Ativo</option>
+                    <option value="0">Inativo</option>
+                </select>
+            </div>
         </div>
 
         <fieldset>
@@ -161,6 +171,7 @@
         document.getElementById('tituloUsuario').textContent = editando ? 'Editar Usuário' : 'Novo Usuário';
         document.getElementById('nomeCompletoUsuario').value = typeof dados.usuario === 'string' ? dados.usuario : '';
         document.getElementById('grupoAcessoUsuario').value = dados.id_grupo_acesso ?? '';
+        document.getElementById('statusUsuario').value = String(dados.status ?? usuario?.status ?? 1);
         formUsuario.querySelectorAll('input[name="empresas[]"]').forEach(campo => {
             campo.checked = empresas.includes(campo.value);
         });
@@ -206,6 +217,7 @@
             'usuario' => old('usuario'),
             'username' => old('username'),
             'id_grupo_acesso' => old('id_grupo_acesso'),
+            'status' => old('status'),
             'empresas' => old('empresas'),
             'remove_photo' => old('remove_photo'),
         ]);

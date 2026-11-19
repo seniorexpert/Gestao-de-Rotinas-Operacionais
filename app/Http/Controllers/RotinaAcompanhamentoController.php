@@ -3,7 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Services\AuditoriaService;
+use App\Services\ConsultaRotinas;
 use App\Services\EscalonamentoAcompanhamento;
+use App\Services\ExecucoesDiarias;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use Illuminate\Contracts\View\View;
@@ -26,9 +29,11 @@ class RotinaAcompanhamentoController extends Controller
 
     private const ITENS_POR_PAGINA = 24;
 
-    private const FUSO_HORARIO = 'America/Sao_Paulo';
-
-    public function __construct(private EscalonamentoAcompanhamento $escalonamento) {}
+    public function __construct(
+        private EscalonamentoAcompanhamento $escalonamento,
+        private ExecucoesDiarias $execucoesDiarias,
+        private ConsultaRotinas $rotinas,
+    ) {}
 
     public function index(Request $request): View|RedirectResponse
     {
@@ -42,6 +47,7 @@ class RotinaAcompanhamentoController extends Controller
         $usuario = $request->user();
         $caixa = $this->escalonamento->caixaDoUsuario($usuario);
         abort_if($caixa === null, 403);
+        $this->execucoesDiarias->gerar($agora, $this->rotinas->empresas($usuario));
 
         $consulta = $this->itens($usuario);
 
@@ -53,6 +59,9 @@ class RotinaAcompanhamentoController extends Controller
                 ->first();
 
             abort_unless($item && $this->prepararItem($item, $agora, $caixa, $usuario), 404);
+
+            $request->attributes->set(AuditoriaService::UNIDADE_HTTP, (int) $item->id_empresa);
+            $request->attributes->set(AuditoriaService::ROTINA_HTTP, (int) $item->id_rotina);
 
             $auxiliares = DB::table('rotina_auxiliares as a')
                 ->join('usuarios as u', 'u.id_usuario', '=', 'a.id_usuario')
@@ -181,6 +190,14 @@ class RotinaAcompanhamentoController extends Controller
                     $envio['recebimentos'],
                 ), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
             ]);
+
+            AuditoriaService::registrar(
+                'VERIFICAR', 'rotinas_verificacoes', (string) $id,
+                dadosNovos: ['id_execucao' => $id, 'caixa' => $caixa, 'verificado_em' => $agora],
+                descricao: 'Verificação concluída no acompanhamento',
+                idEmpresa: (int) $execucao->id_empresa,
+                idRotina: (int) $execucao->id_rotina,
+            );
         }, 3);
 
         return to_route('acompanhamento.index', [
@@ -214,6 +231,7 @@ class RotinaAcompanhamentoController extends Controller
             ->select([
                 'e.id_execucao',
                 'e.id_rotina',
+                'e.id_empresa',
                 'e.id_usuario_responsavel',
                 'e.previsto_em',
                 'e.prazo_em',
@@ -261,8 +279,8 @@ class RotinaAcompanhamentoController extends Controller
         }
 
         $item->atraso_segundos = $envio['atraso_segundos'];
-        $item->recebido_em = $recebidoEm->timezone(self::FUSO_HORARIO);
-        $item->limite_acompanhamento = $this->escalonamento->limite($recebidoEm)->timezone(self::FUSO_HORARIO);
+        $item->recebido_em = $recebidoEm->timezone(ExecucoesDiarias::FUSO);
+        $item->limite_acompanhamento = $this->escalonamento->limite($recebidoEm)->timezone(ExecucoesDiarias::FUSO);
         $item->sla_acompanhamento = $this->escalonamento->situacao($recebidoEm, $agora);
 
         return true;
@@ -322,7 +340,7 @@ class RotinaAcompanhamentoController extends Controller
         $item->morador = trim($item->morador ?? '') ?: 'Não informado';
         $item->colaborador = trim($item->colaborador ?? '') ?: 'Colaborador não localizado';
         $item->horario = CarbonImmutable::parse($item->previsto_em, 'UTC')
-            ->timezone(self::FUSO_HORARIO)->locale('pt_BR');
+            ->timezone(ExecucoesDiarias::FUSO)->locale('pt_BR');
 
         if ($item->atraso_segundos !== null) {
             $item->atraso = $item->atraso_segundos === 0
@@ -333,7 +351,7 @@ class RotinaAcompanhamentoController extends Controller
 
         if ($item->verificado_em !== null) {
             $item->verificado_em = CarbonImmutable::parse($item->verificado_em, 'UTC')
-                ->timezone(self::FUSO_HORARIO);
+                ->timezone(ExecucoesDiarias::FUSO);
         }
 
         return $item;

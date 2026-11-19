@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\CadastroCatalogo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class LocaisController extends Controller
 {
@@ -15,16 +15,9 @@ class LocaisController extends Controller
             'nome_local' => 'required|string|max:100',
         ]);
 
-        $registro = [
+        CadastroCatalogo::salvar('locais', 'id_local', $dados['id'] ?? null, [
             'local' => $dados['nome_local'],
-            'updated_at' => now(),
-        ];
-
-        if (isset($dados['id'])) {
-            DB::table('locais')->where('id_local', $dados['id'])->update($registro);
-        } else {
-            DB::table('locais')->insert([...$registro, 'status' => true, 'created_at' => now()]);
-        }
+        ], 'local');
 
         return back()->with('success', 'Local salvo com sucesso.');
     }

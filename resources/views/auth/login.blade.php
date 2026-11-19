@@ -80,6 +80,10 @@
         <form method="POST" action="{{ route('login') }}">
             @csrf
 
+            @error('conta')
+                <p role="alert" class="mb-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800">{{ $message }}</p>
+            @enderror
+
             <div class="mb-4 relative">
                 <span class="absolute inset-y-0 left-0 flex items-center pl-4 @error('username') text-red-500 @else text-gray-400 @enderror">
                     <i class="fa-regular fa-user"></i>

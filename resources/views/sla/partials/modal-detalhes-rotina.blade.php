@@ -30,6 +30,12 @@
                     </div>
                 </div>
 
+                <div id="modalSlaExecucao" class="hidden border-t border-gray-100 pt-4">
+                    <span class="block text-xs text-gray-500">SLA da etapa</span>
+                    <strong id="modalSituacaoSla" class="text-sm text-slate-800"></strong>
+                    <span id="modalPrazoExecucao" class="mt-1 block text-xs text-gray-600"></span>
+                </div>
+
                 <div class="border-t border-gray-100 pt-4">
                     <span class="text-xs text-gray-400 block mb-1">Morador</span>
                     <span id="modalMorador" class="text-sm font-bold text-[#1e2d3d]">--</span>
@@ -42,11 +48,10 @@
             </div>
         </div>
 
-        <div id="modalFooterAcoes" class="pt-6 border-t border-gray-100 mt-4">
-            <button type="button" onclick="iniciarTarefa()" class="w-full py-3.5 rounded-2xl bg-[#1e2d3d] text-white hover:bg-opacity-90 text-sm font-bold transition text-center">
-                Iniciar tarefa
-            </button>
-        </div>
+        <form id="modalFooterAcoes" method="POST" class="hidden pt-6 border-t border-gray-100 mt-4">
+            @csrf
+            <button id="modalExecutarTarefa" type="submit" disabled class="w-full py-3.5 rounded-2xl bg-[#1e2d3d] text-white hover:bg-opacity-90 text-sm font-bold transition text-center"></button>
+        </form>
 
     </div>
 </div>
@@ -61,57 +66,29 @@
         document.getElementById('modalObs').textContent = data.obs ? data.obs : 'Respeitar orientações individuais cadastradas para esta rotina.';
 
         const badge = document.getElementById('modalBadgeStatus');
-        badge.textContent = data.ativa ? 'Ativa' : 'Inativa';
+        badge.textContent = data.estado;
         badge.className = 'inline-block px-3 py-1 text-xs font-medium rounded-full mb-3 '
             + (data.ativa ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600');
 
-        const footer = document.getElementById('modalFooterAcoes');
-        footer.classList.toggle('hidden', !data.ativa);
-        footer.innerHTML = `
-            <button type="button" onclick="iniciarTarefa()" class="w-full py-3.5 rounded-2xl bg-[#1e2d3d] text-white hover:bg-opacity-90 text-sm font-bold transition text-center">
-                Iniciar tarefa
-            </button>
-        `;
+        document.getElementById('modalSlaExecucao').classList.toggle('hidden', !data.sla);
+        document.getElementById('modalSituacaoSla').textContent = data.sla ?? '';
+        document.getElementById('modalPrazoExecucao').textContent = data.prazo ? 'Limite em ' + data.prazo : '';
+
+        const formulario = document.getElementById('modalFooterAcoes');
+        const botao = document.getElementById('modalExecutarTarefa');
+        formulario.classList.toggle('hidden', !data.acao);
+        formulario.removeAttribute('action');
+        botao.textContent = data.acao?.rotulo ?? '';
+        botao.disabled = !data.acao;
+
+        if (data.acao) {
+            formulario.action = data.acao.url;
+        }
 
         const modal = document.getElementById('modalDetalhesRotina');
         if (modal) {
             modal.classList.remove('hidden');
         }
-    }
-
-    function iniciarTarefa() {
-        const badge = document.getElementById('modalBadgeStatus');
-        badge.textContent = 'Realizando';
-        badge.className = 'inline-block px-3 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full mb-3';
-
-        const footer = document.getElementById('modalFooterAcoes');
-        footer.innerHTML = `
-            <div class="space-y-3">
-                <button type="button" onclick="finalizarTarefa()" class="w-full py-3.5 rounded-2xl bg-[#1e2d3d] text-white hover:bg-opacity-90 text-sm font-bold transition text-center">
-                    Finalizar tarefa
-                </button>
-                <button type="button" onclick="naoPodeSerRealizada()" class="w-full py-3.5 rounded-2xl bg-white border border-red-300 text-red-800 hover:bg-red-50 text-sm font-bold transition text-center">
-                    Não pode ser realizada
-                </button>
-                <button type="button" onclick="solicitarAuxilio()" class="w-full py-3.5 rounded-2xl bg-white border border-gray-300 text-[#1e2d3d] hover:bg-gray-50 text-sm font-bold transition text-center">
-                    Solicitar auxílio
-                </button>
-            </div>
-        `;
-    }
-
-    function finalizarTarefa() {
-        alert('Tarefa finalizada com sucesso!');
-        fecharModalDetalhes();
-    }
-
-    function naoPodeSerRealizada() {
-        alert('Ação registrada: Não pode ser realizada.');
-        fecharModalDetalhes();
-    }
-
-    function solicitarAuxilio() {
-        alert('Auxílio solicitado!');
     }
 
     function fecharModalDetalhes() {

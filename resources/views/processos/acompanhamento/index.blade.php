@@ -143,14 +143,18 @@
             let agendamento;
             let requisicao;
 
-            async function atualizarLista(endereco, atualizarEndereco = false) {
+            async function atualizarLista(endereco, atualizarEndereco = false, automatica = false) {
                 requisicao?.abort();
                 const controle = new AbortController();
                 const { signal } = controle;
                 requisicao = controle;
 
                 try {
-                    const resposta = await fetch(endereco, { signal, cache: 'no-store' });
+                    const resposta = await fetch(endereco, {
+                        signal,
+                        cache: 'no-store',
+                        headers: automatica ? { 'X-Atualizacao-Automatica': '1' } : {},
+                    });
                     if (!resposta.ok) {
                         return;
                     }
@@ -194,7 +198,7 @@
             setInterval(() => {
                 const foco = document.activeElement;
                 if (!document.hidden && !agendamento && !requisicao && !abas.contains(foco) && !resultados.contains(foco)) {
-                    atualizarLista(window.location.href);
+                    atualizarLista(window.location.href, false, true);
                 }
             }, 30000);
         })();

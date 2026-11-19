@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\AuditoriaService;
 use App\Services\ConsultaRotinas;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
@@ -38,6 +39,7 @@ class ProcessoController extends Controller
             : $empresas->where('empresa', $dados['unit'])->value('id_empresa');
 
         abort_unless($idEmpresa, 404);
+        $request->attributes->set(AuditoriaService::UNIDADE_HTTP, (int) $idEmpresa);
 
         return response()->json($this->consultaRotinas->colaboradores($usuario)
             ->whereIn('u.id_usuario', DB::table('empresa_usuario')->select('id_usuario')->where('id_empresa', $idEmpresa))

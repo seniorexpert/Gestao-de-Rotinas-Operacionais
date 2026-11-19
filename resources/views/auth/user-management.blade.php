@@ -51,6 +51,7 @@
                         'username' => $usuario->username,
                         'fotoUrl' => $fotoUrl,
                         'id_grupo_acesso' => (string) $usuario->id_grupo_acesso,
+                        'status' => (int) $usuario->status,
                         'empresas' => array_map('strval', $usuario->empresas->modelKeys()),
                     ];
                 @endphp

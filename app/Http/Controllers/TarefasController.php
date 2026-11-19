@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\CadastroCatalogo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Throwable;
@@ -35,7 +35,6 @@ class TarefasController extends Controller
             'status' => $dados['status_tarefa'] === 'Ativa',
             'id_ferramenta' => $dados['id_ferramenta'] ?? null,
             'descricao' => $dados['descricao_tarefa'] ?? null,
-            'updated_at' => now(),
         ];
 
         if ($caminho) {
@@ -43,11 +42,7 @@ class TarefasController extends Controller
         }
 
         try {
-            if (isset($dados['id'])) {
-                DB::table('tarefas')->where('id_tarefa', $dados['id'])->update($registro);
-            } else {
-                DB::table('tarefas')->insert([...$registro, 'created_at' => now()]);
-            }
+            CadastroCatalogo::salvar('tarefas', 'id_tarefa', $dados['id'] ?? null, $registro, 'tarefa');
         } catch (Throwable $erro) {
             if ($caminho) {
                 Storage::disk('public')->delete($caminho);

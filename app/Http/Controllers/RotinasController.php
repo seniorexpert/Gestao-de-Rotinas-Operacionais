@@ -3,14 +3,18 @@
 namespace App\Http\Controllers;
 
 use App\Services\AuditoriaService;
+use App\Services\ExecucoesDiarias;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
 class RotinasController extends Controller
 {
+    public function __construct(private ExecucoesDiarias $execucoes) {}
+
     public function store(Request $request): RedirectResponse
     {
         $dados = $request->validate([
@@ -40,8 +44,11 @@ class RotinasController extends Controller
         $locais = DB::table('locais')->whereIn('id_local', array_column($tarefas, 'id_local'))
             ->pluck('local', 'id_local');
 
-        DB::transaction(function () use ($dados, $tarefas, $locais) {
-            $agora = now();
+        $descricao = $request->routeIs('rotinas.emergenciais.store') ? 'Tarefa emergencial cadastrada' : 'Rotina cadastrada';
+
+        DB::transaction(function () use ($dados, $tarefas, $locais, $descricao) {
+            $agora = now()->toImmutable();
+            $idsRotinas = [];
 
             foreach ($tarefas as $tarefa) {
                 $auxilio = $tarefa['auxilio'] === 'Sim';
@@ -61,6 +68,7 @@ class RotinasController extends Controller
                     'updated_at' => $agora,
                 ];
                 $idRotina = DB::table('rotinas')->insertGetId($registro, 'id_rotina');
+                $idsRotinas[] = (int) $idRotina;
 
                 if ($auxilio && filled($tarefa['cuidador'] ?? null)) {
                     DB::table('rotina_auxiliares')->insert([
@@ -69,11 +77,19 @@ class RotinasController extends Controller
                     ]);
                 }
 
-                AuditoriaService::registrar('CREATE', 'rotinas', (string) $idRotina, null, [
-                    'id_empresa' => $dados['id_empresa'],
-                    'id_usuario' => $dados['colaborador_id'],
-                ], 'Rotina cadastrada');
+                AuditoriaService::registrar(
+                    'CREATE', 'rotinas', (string) $idRotina,
+                    dadosNovos: [
+                        ...Arr::only($registro, ['status', 'id_empresa', 'id_usuario', 'dias_semanas', 'horario', 'id_tarefa', 'id_local', 'auxilio']),
+                        'id_usuario_auxiliar' => $auxilio ? ($tarefa['cuidador'] ?? null) : null,
+                    ],
+                    descricao: $descricao,
+                    idEmpresa: (int) $dados['id_empresa'],
+                    idRotina: (int) $idRotina,
+                );
             }
+
+            $this->execucoes->gerar($agora, idsRotinas: $idsRotinas);
         });
 
         return back()->with('success', 'Todas as rotinas foram salvas com sucesso!');

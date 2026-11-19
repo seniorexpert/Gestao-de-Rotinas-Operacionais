@@ -11,13 +11,13 @@
     </div>
 
     <div class="flex items-center gap-6 border-b border-gray-200 mb-6 text-sm">
-        <button type="button" onclick="mudarAba(this)" class="aba-btn pb-3 border-b-2 border-emerald-800 font-semibold text-emerald-900 transition">
+        <button type="button" data-estado="" aria-pressed="true" onclick="mudarAba(this)" class="aba-btn pb-3 border-b-2 border-emerald-800 font-semibold text-emerald-900 transition">
             Todas
         </button>
-        <button type="button" onclick="mudarAba(this)" class="aba-btn pb-3 text-gray-500 hover:text-gray-700 font-medium transition border-b-2 border-transparent">
+        <button type="button" data-estado="em_andamento" aria-pressed="false" onclick="mudarAba(this)" class="aba-btn pb-3 text-gray-500 hover:text-gray-700 font-medium transition border-b-2 border-transparent">
             Em andamento
         </button>
-        <button type="button" onclick="mudarAba(this)" class="aba-btn pb-3 text-gray-500 hover:text-gray-700 font-medium transition border-b-2 border-transparent">
+        <button type="button" data-estado="concluida" aria-pressed="false" onclick="mudarAba(this)" class="aba-btn pb-3 text-gray-500 hover:text-gray-700 font-medium transition border-b-2 border-transparent">
             Concluídas
         </button>
     </div>
@@ -38,6 +38,12 @@
                 }
 
                 $ativa = (bool) $rotina->status;
+                $estado = match ($rotina->estado) {
+                    'pendente' => 'Pendente',
+                    'em_andamento' => 'Em andamento',
+                    'concluida' => 'Concluída',
+                    default => $ativa ? 'Ativa' : 'Inativa',
+                };
                 $detalhes = [
                     'tarefa' => $rotina->tarefa ?: 'Tarefa',
                     'horario' => $rotina->horario,
@@ -45,11 +51,17 @@
                     'morador' => $rotina->morador ?: 'Não informado',
                     'obs' => $rotina->obs,
                     'ativa' => $ativa,
+                    'estado' => $estado,
+                    'sla' => $rotina->sla_execucao,
+                    'prazo' => $rotina->prazo_execucao,
+                    'acao' => $rotina->acao_execucao,
                     'icone' => $icone,
                 ];
             @endphp
 
-            <div onclick="abrirModalDetalhes({{ \Illuminate\Support\Js::from($detalhes) }})"
+            <div data-estado-rotina="{{ $rotina->estado ?? '' }}" role="button" tabindex="0"
+                 onclick="abrirModalDetalhes({{ \Illuminate\Support\Js::from($detalhes) }})"
+                 onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.click(); }"
                  class="flex items-center justify-between p-4 border border-amber-200/80 rounded-2xl bg-white shadow-sm hover:shadow-md hover:border-slate-400 transition cursor-pointer">
                 <div class="flex items-center gap-4">
                     <div class="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center text-3xl">
@@ -80,7 +92,7 @@
                 </div>
                 <div class="flex items-center gap-4">
                     <span class="px-3 py-1 text-xs font-medium rounded-full {{ $ativa ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">
-                        {{ $ativa ? 'Ativa' : 'Inativa' }}
+                        {{ $estado }}
                     </span>
                     <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
@@ -93,6 +105,7 @@
                 <p class="text-xs text-gray-400 mt-1">Adicione novas tarefas através do modal de cadastro.</p>
             </div>
         @endforelse
+        <p id="rotinasAbaVazia" class="hidden text-center py-8 text-sm text-gray-500">Nenhuma execução nesta situação.</p>
     </div>
 </div>
 
@@ -102,12 +115,23 @@
     function mudarAba(botaoClicado) {
         const botoes = document.querySelectorAll('.aba-btn');
         botoes.forEach(btn => {
+            btn.setAttribute('aria-pressed', String(btn === botaoClicado));
             btn.classList.remove('border-emerald-800', 'font-semibold', 'text-emerald-900');
             btn.classList.add('text-gray-500', 'font-medium', 'border-transparent');
         });
 
         botaoClicado.classList.remove('text-gray-500', 'font-medium', 'border-transparent');
         botaoClicado.classList.add('border-emerald-800', 'font-semibold', 'text-emerald-900');
+
+        const estado = botaoClicado.dataset.estado;
+        const rotinas = document.querySelectorAll('[data-estado-rotina]');
+        let visiveis = 0;
+        rotinas.forEach(rotina => {
+            const visivel = estado === '' || rotina.dataset.estadoRotina === estado;
+            rotina.style.display = visivel ? '' : 'none';
+            visiveis += Number(visivel);
+        });
+        document.getElementById('rotinasAbaVazia').classList.toggle('hidden', estado === '' || visiveis > 0);
     }
 </script>
 @endsection

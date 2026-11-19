@@ -7,6 +7,7 @@ use App\Models\GrupoAcesso;
 use App\Models\User;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -29,6 +30,8 @@ class UsuarioControllerTest extends TestCase
         $resposta->assertOk()
             ->assertSeeText(['Ana Silva', 'ana-silva', 'Grupo de Acesso', 'Unidade Jardim', 'Enfermagem'])
             ->assertSee('name="photo"', false)
+            ->assertSee('id="statusUsuario" name="status"', false)
+            ->assertSeeInOrder(['<option value="1">Ativo</option>', '<option value="0">Inativo</option>'], false)
             ->assertDontSee(['name="group"', 'name="profile"'], false);
         $this->assertSame(1, substr_count($resposta->getContent(), 'name="id_grupo_acesso"'));
     }
@@ -81,10 +84,12 @@ class UsuarioControllerTest extends TestCase
         $this->actingAs($gerente)->from(route('usuarios.index'))->post(route('users.store'), [
             'username' => 'registro-invalido',
             'password' => 'senha-de-teste',
+            'status' => 'indefinido',
             'id_grupo_acesso' => 999,
             'empresas' => [999],
         ])->assertRedirectToRoute('usuarios.index')->assertSessionHasErrors([
             'usuario' => 'Informe o nome completo.',
+            'status' => 'Selecione a situação Ativo ou Inativo.',
             'id_grupo_acesso' => 'Selecione um grupo de acesso cadastrado.',
             'empresas.0' => 'Selecione unidades cadastradas.',
         ]);
@@ -129,7 +134,6 @@ class UsuarioControllerTest extends TestCase
             'usuario' => 'Lucas Atualizado',
             'username' => 'login-diferente',
             'password' => '',
-            'status' => true,
             'id_grupo_acesso' => $grupo->getKey(),
             'empresas' => [$centro->getKey(), $sul->getKey()],
         ])->assertRedirectToRoute('usuarios.index')->assertSessionHasNoErrors();
@@ -146,6 +150,72 @@ class UsuarioControllerTest extends TestCase
         ]);
         Storage::disk('public')->assertExists($foto);
         $this->assertEqualsCanonicalizing([$centro->getKey(), $sul->getKey()], $usuario->empresas()->get()->modelKeys());
+    }
+
+    public function test_gerente_inativa_e_reativa_usuario_com_registro_na_auditoria(): void
+    {
+        $gerente = $this->gerente();
+        $usuario = $this->usuario('Lucas Exemplo', 'lucas-exemplo');
+        $rota = route('users.update', $usuario->getKey());
+
+        $this->actingAs($gerente)->put($rota, ['usuario' => $usuario->usuario, 'status' => '0'])
+            ->assertRedirectToRoute('usuarios.index')->assertSessionHasNoErrors();
+        $this->assertFalse($usuario->refresh()->status);
+
+        $this->put($rota, ['usuario' => $usuario->usuario, 'status' => '1'])
+            ->assertRedirectToRoute('usuarios.index')->assertSessionHasNoErrors();
+        $this->assertTrue($usuario->refresh()->status);
+
+        $registros = DB::table('logs_auditoria')->where('tabela', 'usuarios')
+            ->where('registro_id', (string) $usuario->getKey())->orderBy('id_log')->get();
+        $this->assertSame(['Usuário inativado.', 'Usuário reativado.'], $registros->pluck('descricao')->all());
+        $this->assertSame([$gerente->getKey(), $gerente->getKey()], $registros->pluck('id_usuario')->all());
+        $this->assertFalse(json_decode($registros->first()->dados_novos, true)['status']);
+        $this->assertTrue(json_decode($registros->last()->dados_novos, true)['status']);
+    }
+
+    public function test_cadastro_aceita_status_inativo_e_conta_inativa_nao_pode_entrar(): void
+    {
+        $gerente = $this->gerente();
+
+        $this->actingAs($gerente)->post(route('users.store'), [
+            'usuario' => 'Ana Silva',
+            'username' => 'ana-silva',
+            'password' => 'senha-de-teste',
+            'status' => '0',
+        ])->assertRedirectToRoute('usuarios.index')->assertSessionHasNoErrors();
+        $this->post(route('logout'))->assertRedirectToRoute('login');
+        $this->post(route('login.autenticar'), ['username' => 'ana-silva', 'password' => 'senha-de-teste'])
+            ->assertSessionHasErrors('username');
+
+        $this->assertDatabaseHas('usuarios', ['username' => 'ana-silva', 'status' => false]);
+        $this->assertGuest();
+    }
+
+    public function test_sessao_existente_e_encerrada_se_o_usuario_foi_inativado(): void
+    {
+        $usuario = $this->usuario('Ana Silva', 'ana-silva', status: false);
+        $chaveDeSessao = Auth::guard('web')->getName();
+
+        $this->withSession([$chaveDeSessao => $usuario->getKey()])->get(route('home'))
+            ->assertRedirectToRoute('login')
+            ->assertSessionMissing($chaveDeSessao)
+            ->assertSessionHasErrors(['conta' => 'Sua conta está inativa.']);
+
+        $this->assertGuest();
+        $this->assertDatabaseHas('logs_auditoria', [
+            'rota' => 'home', 'resultado' => 'recusado', 'id_usuario' => $usuario->getKey(),
+        ]);
+    }
+
+    public function test_requisicao_json_de_usuario_inativo_e_bloqueada(): void
+    {
+        $usuario = $this->usuario('Ana Silva', 'ana-silva', status: false);
+
+        $this->actingAs($usuario)->getJson(route('processos.usuarios-por-unidade', ['id_empresa' => 1]))
+            ->assertForbidden()->assertExactJson(['message' => 'Sua conta está inativa.']);
+
+        $this->assertGuest();
     }
 
     public function test_edicao_pode_limpar_grupo_e_unidades_e_atualizar_a_senha(): void

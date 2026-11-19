@@ -189,6 +189,14 @@ class RotinaAcompanhamentoControllerTest extends TestCase
             'verificado_em' => '2026-11-18 15:00:00',
             'encaminhamentos' => '{"Gerente da Unidade":"2026-11-18T14:51:00.000000Z"}',
         ]);
+        $this->assertDatabaseHas('logs_auditoria', [
+            'tabela' => 'rotinas_verificacoes',
+            'acao' => 'VERIFICAR',
+            'registro_id' => (string) $id,
+            'id_usuario' => $gerente->getKey(),
+            'id_empresa' => $empresa,
+            'resultado' => 'sucesso',
+        ]);
         $this->assertDatabaseHas('rotinas_execucoes', [
             'id_execucao' => $id,
             'status' => 'pendente',
