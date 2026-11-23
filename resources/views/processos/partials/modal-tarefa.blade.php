@@ -136,20 +136,36 @@
         function aplicarEstiloPintura(el, emoji, hex) {
             if (!el) return;
 
+            el.textContent = emoji;
+
             el.style.color = '';
             el.style.webkitTextFillColor = '';
             el.style.filter = '';
-            el.textContent = emoji;
+            el.style.position = '';
+            el.style.overflow = '';
+
+            const overlayAnterior = el.querySelector('[data-overlay-cor]');
+            if (overlayAnterior) {
+                overlayAnterior.remove();
+            }
 
             if (!hex) {
                 return;
             }
 
-            requestAnimationFrame(() => {
-                el.style.color = hex;
-                el.style.webkitTextFillColor = hex;
-                el.style.filter = 'grayscale(100%) contrast(150%) drop-shadow(0 0 0 ' + hex + ')';
-            });
+            el.style.position = 'relative';
+            el.style.overflow = 'hidden';
+
+            const camada = document.createElement('span');
+            camada.setAttribute('data-overlay-cor', '1');
+            camada.style.position = 'absolute';
+            camada.style.inset = '0';
+            camada.style.backgroundColor = hex;
+            camada.style.mixBlendMode = 'color';
+            camada.style.pointerEvents = 'none';
+            camada.style.borderRadius = 'inherit';
+
+            el.appendChild(camada);
         }
 
         window.atualizarPreviewCorIcone = function () {
