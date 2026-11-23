@@ -44,6 +44,11 @@ Route::middleware(['auth'])->group(function () {
 });
 
 Route::middleware('auth')->group(function () {
+    Route::get('/execucoes/{id}/realizando', [ExecucoesController::class, 'realizando'])->whereNumber('id')->name('execucoes.realizando');
+    Route::get('/execucoes/{id}/foto', [ExecucoesController::class, 'foto'])->whereNumber('id')->name('execucoes.foto');
+    Route::get('/execucoes/{id}/{acao}', [ExecucoesController::class, 'formulario'])
+        ->whereNumber('id')->whereIn('acao', ['finalizar', 'nao-realizada', 'auxilio'])->name('execucoes.formulario');
+
     Route::get('/iniciar-processos', [ProcessoController::class, 'index'])->name('processos.index');
     Route::match(['get', 'post'], '/cadastros-gestao-rotinas', [ProcessoController::class, 'gestaoRotinas'])->name('processos.gestao-rotinas');
     Route::get('/api/usuarios-por-unidade', [ProcessoController::class, 'usuariosPorUnidade'])->name('processos.usuarios-por-unidade');
@@ -90,6 +95,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/execucoes/{id}/concluir', [ExecucoesController::class, 'concluir'])
         ->whereNumber('id')
         ->name('execucoes.concluir');
+
+    Route::post('/execucoes/{id}/nao-realizada', [ExecucoesController::class, 'naoRealizada'])->whereNumber('id')->name('execucoes.nao-realizada');
+    Route::post('/execucoes/{id}/auxilio', [ExecucoesController::class, 'auxilio'])->whereNumber('id')->name('execucoes.auxilio');
 });
 
 Route::middleware(['auth', 'can:acompanhar-rotinas'])

@@ -1,137 +1,188 @@
 @extends('layouts.app')
 
-@section('title', 'Rotinas - Senior Expert')
+@section('title', 'Rotinas Diárias - Senior Expert')
+
+@push('head')
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&display=swap" rel="stylesheet">
+    <style>
+        [data-caixa-rotinas] [hidden] { display: none; }
+        .rotinas-titulo { font-family: Fraunces, Georgia, serif; }
+    </style>
+@endpush
 
 @section('content')
-<div class="max-w-6xl mx-auto p-6 bg-white min-h-screen font-sans text-gray-800">
+<div data-caixa-rotinas class="mx-auto w-full max-w-3xl px-4 py-6 text-[#21394e] sm:px-6 sm:py-8">
+    <h1 class="rotinas-titulo mb-5 text-2xl font-bold sm:text-3xl">Rotinas Diárias</h1>
 
-    <div class="mb-6">
-        <h1 class="text-3xl font-bold text-slate-800 font-serif">Rotinas</h1>
-        <p class="text-sm text-gray-500 mt-1">Acompanhe e gerencie suas tarefas do dia</p>
+    <label class="mb-4 flex h-11 items-center gap-3 rounded-xl border border-[#d3ae74]/40 bg-white px-3.5 focus-within:border-[#21394e] sm:mb-5">
+        <i class="fa-solid fa-magnifying-glass text-sm text-[#64748b]" aria-hidden="true"></i>
+        <span class="sr-only">Buscar rotina</span>
+        <input id="buscaRotinas" type="search" placeholder="Buscar rotina..." class="min-w-0 flex-1 bg-transparent text-sm placeholder:text-[#64748b] focus:outline-none">
+    </label>
+
+    <div id="abasRotinas" role="tablist" aria-label="Situação das rotinas"
+         class="mb-4 flex items-center gap-4 overflow-x-auto border-b border-[#d3ae74]/40 sm:mb-6 sm:gap-8">
+        @foreach ($abas as $estado => $nome)
+            <a id="aba-rotinas-{{ $estado }}" href="{{ route('home', ['aba' => $estado]) }}"
+               role="tab" aria-controls="listaRotinas" aria-selected="{{ $aba === $estado ? 'true' : 'false' }}" tabindex="{{ $aba === $estado ? 0 : -1 }}"
+               data-aba-rotina="{{ $estado }}"
+               class="shrink-0 whitespace-nowrap border-b-2 border-transparent px-0.5 pb-2.5 pt-1 text-xs font-bold text-[#64748b] hover:text-[#21394e] focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 aria-selected:border-[#21394e] aria-selected:text-[#21394e] sm:text-sm">
+                {{ $nome }}
+            </a>
+        @endforeach
     </div>
 
-    <div class="flex items-center gap-6 border-b border-gray-200 mb-6 text-sm">
-        <button type="button" data-estado="" aria-pressed="true" onclick="mudarAba(this)" class="aba-btn pb-3 border-b-2 border-emerald-800 font-semibold text-emerald-900 transition">
-            Todas
-        </button>
-        <button type="button" data-estado="em_andamento" aria-pressed="false" onclick="mudarAba(this)" class="aba-btn pb-3 text-gray-500 hover:text-gray-700 font-medium transition border-b-2 border-transparent">
-            Em andamento
-        </button>
-        <button type="button" data-estado="concluida" aria-pressed="false" onclick="mudarAba(this)" class="aba-btn pb-3 text-gray-500 hover:text-gray-700 font-medium transition border-b-2 border-transparent">
-            Concluídas
-        </button>
-    </div>
-
-    <div class="space-y-4">
-        @forelse($rotinas as $rotina)
+    <div id="listaRotinas" role="tabpanel" aria-labelledby="aba-rotinas-{{ $aba }}" class="space-y-3">
+        @foreach ($rotinas as $rotina)
             @php
-                $icone = '📋';
-                $localLower = strtolower($rotina->local ?? '');
-                if (str_contains($localLower, 'refeitório') || str_contains($localLower, 'cozinha')) {
-                    $icone = '🍽️';
-                } elseif (str_contains($localLower, 'banheiro') || str_contains($localLower, 'higiene')) {
-                    $icone = '🛁';
-                } elseif (str_contains($localLower, 'enfermagem') || str_contains($localLower, 'quarto')) {
-                    $icone = '💊';
-                } else {
-                    $icone = '🚶';
-                }
-
-                $ativa = (bool) $rotina->status;
-                $estado = match ($rotina->estado) {
-                    'pendente' => 'Pendente',
-                    'em_andamento' => 'Em andamento',
-                    'concluida' => 'Concluída',
-                    default => $ativa ? 'Ativa' : 'Inativa',
+                $tarefa = $rotina->tarefa ?: 'Tarefa de rotina';
+                $morador = trim($rotina->morador ?? '') ?: 'Não informado';
+                $categoria = \Illuminate\Support\Str::ascii(mb_strtolower($tarefa.' '.$rotina->local));
+                $icone = match (true) {
+                    str_contains($categoria, 'refeitorio') || str_contains($categoria, 'cozinha') || str_contains($categoria, 'aliment') => '🍽️',
+                    str_contains($categoria, 'banheiro') || str_contains($categoria, 'higiene') || str_contains($categoria, 'banho') => '🛁',
+                    str_contains($categoria, 'enfermagem') || str_contains($categoria, 'medic') => '💊',
+                    default => '🚶',
                 };
-                $detalhes = [
-                    'tarefa' => $rotina->tarefa ?: 'Tarefa',
-                    'horario' => $rotina->horario,
+                [$selo, $corSelo] = match (true) {
+                    $rotina->status === 'nao_realizada' => ['Não realizada', 'bg-rose-100 text-rose-800'],
+                    $rotina->status === 'concluida' => ['Concluída', 'bg-emerald-100 text-emerald-800'],
+                    $rotina->situacao_sla === 'atrasado' => ['Em atraso', 'bg-rose-100 text-rose-800'],
+                    $rotina->situacao_sla === 'expirando' => ['Expirando', 'bg-amber-100 text-amber-800'],
+                    $rotina->status === 'em_andamento' => ['Realizando', 'bg-sky-100 text-[#21394e]'],
+                    $rotina->situacao_sla === 'noPrazo' => ['No prazo', 'bg-emerald-100 text-emerald-800'],
+                    default => ['Pendente', 'bg-slate-100 text-[#21394e]'],
+                };
+                $dados = [
+                    'tarefa' => $tarefa,
+                    'morador' => $morador,
                     'local' => $rotina->local,
-                    'morador' => $rotina->morador ?: 'Não informado',
+                    'horario' => $rotina->horario,
+                    'ferramenta' => $rotina->ferramenta,
+                    'instrucao' => $rotina->descricao,
                     'obs' => $rotina->obs,
-                    'ativa' => $ativa,
-                    'estado' => $estado,
-                    'sla' => $rotina->sla_execucao,
-                    'prazo' => $rotina->prazo_execucao,
-                    'acao' => $rotina->acao_execucao,
+                    'documentacao' => $rotina->url_documentacao,
                     'icone' => $icone,
+                    'selo' => $selo,
+                    'corSelo' => $corSelo,
+                    'prazo' => $rotina->prazo_execucao,
+                    'sla' => $rotina->status === 'nao_realizada' ? null : (\App\Services\CalculadoraSla::ROTULOS[$rotina->situacao_sla] ?? 'Sem dados de SLA'),
+                    'acao' => $rotina->acao_execucao,
+                    'auxilio' => (bool) $rotina->auxilio,
+                    'comentario' => $rotina->comentario_conclusao,
+                    'justificativa' => $rotina->justificativa_nao_realizada,
+                    'foto' => $rotina->foto_conclusao ? route('execucoes.foto', $rotina->id_execucao) : null,
                 ];
             @endphp
 
-            <div data-estado-rotina="{{ $rotina->estado ?? '' }}" role="button" tabindex="0"
-                 onclick="abrirModalDetalhes({{ \Illuminate\Support\Js::from($detalhes) }})"
-                 onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.click(); }"
-                 class="flex items-center justify-between p-4 border border-amber-200/80 rounded-2xl bg-white shadow-sm hover:shadow-md hover:border-slate-400 transition cursor-pointer">
-                <div class="flex items-center gap-4">
-                    <div class="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center text-3xl">
-                        {{ $icone }}
-                    </div>
-                    <div>
-                        <h2 class="text-lg font-bold text-slate-800">{{ $detalhes['tarefa'] }}</h2>
-                        <div class="flex items-center gap-4 text-xs text-gray-500 mt-1">
-                            <span class="flex items-center gap-1">
-                                📍 <span><strong>Onde:</strong> {{ $rotina->local }}</span>
-                            </span>
-                            <span class="flex items-center gap-1">
-                                👤 <span><strong>Morador:</strong> {{ $detalhes['morador'] }}</span>
-                            </span>
-                            @if(isset($rotina->auxilio) && $rotina->auxilio == 1)
-                                <span class="flex items-center gap-1 text-amber-700 font-medium">
-                                    ⚠️ <span>Auxílio necessário</span>
-                                </span>
-                            @endif
-                        </div>
-                        <div class="text-xs font-semibold text-gray-700 mt-1">
-                            ⏰ {{ $rotina->horario }}
-                            @if(!empty($rotina->obs))
-                                <span class="ml-2 text-gray-400 font-normal">| Obs: {{ $rotina->obs }}</span>
-                            @endif
-                        </div>
-                    </div>
-                </div>
-                <div class="flex items-center gap-4">
-                    <span class="px-3 py-1 text-xs font-medium rounded-full {{ $ativa ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600' }}">
-                        {{ $estado }}
+            <button type="button" data-estado-rotina="{{ $rotina->status }}" data-aba-execucao="{{ $rotina->aba }}" data-busca="{{ $tarefa }} {{ $rotina->local }} {{ $morador }}"
+                    @if ($aba !== 'todas' && $aba !== $rotina->aba) hidden @endif
+                    @if ($rotina->status === 'em_andamento')
+                        onclick="location.assign(@js(route('execucoes.realizando', $rotina->id_execucao)))"
+                    @else
+                        aria-haspopup="dialog" onclick="abrirModalDetalhes(@js($dados))"
+                    @endif
+                    class="group flex w-full items-center rounded-[1.25rem] border-2 border-[#d3ae74]/35 bg-white px-2.5 py-1.5 text-left shadow-sm transition-colors hover:border-[#21394e]/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 sm:px-4">
+                <span class="mr-2.5 flex h-12 w-10 shrink-0 items-center justify-center text-3xl leading-none transition-transform group-hover:scale-105 sm:mr-4 sm:h-14 sm:w-14 sm:text-[2.75rem]" aria-hidden="true">{{ $icone }}</span>
+                <span class="min-w-0 flex-1 py-1">
+                    <strong class="block truncate text-[1.05rem] leading-tight sm:text-lg" title="{{ $tarefa }}">{{ $tarefa }}</strong>
+                    <span class="mt-1 flex flex-col gap-0.5 text-xs leading-snug sm:flex-row sm:flex-wrap sm:gap-x-3.5 sm:text-sm">
+                        <span class="flex min-w-0 items-center gap-1">
+                            <i class="fa-solid fa-location-dot shrink-0 text-[#b18b50]" aria-hidden="true"></i>
+                            <span class="truncate" title="{{ $rotina->local }}"><b>Onde:</b> {{ $rotina->local }}</span>
+                        </span>
+                        <span class="flex min-w-0 items-center gap-1">
+                            <i class="fa-regular fa-user shrink-0 text-[#b18b50]" aria-hidden="true"></i>
+                            <span class="truncate" title="{{ $morador }}"><b>Morador(a):</b> {{ $morador }}</span>
+                        </span>
                     </span>
-                    <svg class="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
-                    </svg>
-                </div>
-            </div>
-        @empty
-            <div class="text-center py-12 border border-dashed border-gray-200 rounded-2xl">
-                <p class="text-sm font-medium text-gray-500">Nenhuma rotina cadastrada ainda.</p>
-                <p class="text-xs text-gray-400 mt-1">Adicione novas tarefas através do modal de cadastro.</p>
-            </div>
-        @endforelse
-        <p id="rotinasAbaVazia" class="hidden text-center py-8 text-sm text-gray-500">Nenhuma execução nesta situação.</p>
+                    <span class="mt-1 block text-[0.82rem] font-bold tabular-nums sm:text-sm" title="Horário previsto">{{ $rotina->horario }}</span>
+                </span>
+                <span class="ml-1.5 flex shrink-0 flex-col items-end justify-between self-stretch py-1 sm:ml-3">
+                    <i class="fa-solid fa-chevron-right mr-0.5 text-xs text-[#64748b]" aria-hidden="true"></i>
+                    <span class="mt-1.5 whitespace-nowrap rounded-full px-2 py-1 text-[0.65rem] font-bold sm:px-3 sm:text-xs {{ $corSelo }}">{{ $selo }}</span>
+                </span>
+            </button>
+        @endforeach
+
+        <p id="rotinasAbaVazia" role="status"
+           @if ($rotinas->contains(fn ($rotina) => $aba === 'todas' || $rotina->aba === $aba)) hidden @endif
+           class="rounded-[1.25rem] border border-dashed border-[#d3ae74]/50 px-4 py-9 text-center text-sm text-[#64748b]">
+            {{ $rotinas->isEmpty() ? 'Nenhuma rotina atribuída a você para hoje.' : 'Nenhuma rotina nesta situação.' }}
+        </p>
     </div>
 </div>
 
 @include('sla.partials.modal-detalhes-rotina')
 
 <script>
-    function mudarAba(botaoClicado) {
-        const botoes = document.querySelectorAll('.aba-btn');
-        botoes.forEach(btn => {
-            btn.setAttribute('aria-pressed', String(btn === botaoClicado));
-            btn.classList.remove('border-emerald-800', 'font-semibold', 'text-emerald-900');
-            btn.classList.add('text-gray-500', 'font-medium', 'border-transparent');
+    (() => {
+        const lista = document.getElementById('listaRotinas');
+        const abaLista = document.getElementById('abasRotinas');
+        const abas = Array.from(abaLista.querySelectorAll('[role="tab"]'));
+        const busca = document.getElementById('buscaRotinas');
+        const vazio = document.getElementById('rotinasAbaVazia');
+        const mensagemVazia = vazio.textContent.trim();
+        const normalizar = texto => texto.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+        const cartoes = Array.from(lista.querySelectorAll('[data-estado-rotina]'), elemento => ({
+            elemento,
+            estado: elemento.dataset.abaExecucao,
+            texto: normalizar(elemento.dataset.busca),
+        }));
+        let abaAtiva = abas.find(aba => aba.getAttribute('aria-selected') === 'true');
+
+        function atualizarLista() {
+            const termo = normalizar(busca.value.trim());
+            const estado = abaAtiva.dataset.abaRotina;
+            let temResultado = false;
+
+            for (const { elemento, estado: situacao, texto } of cartoes) {
+                const visivel = (estado === 'todas' || situacao === estado) && texto.includes(termo);
+                elemento.hidden = !visivel;
+                temResultado ||= visivel;
+            }
+            vazio.hidden = temResultado;
+            vazio.textContent = termo ? 'Nenhuma rotina encontrada para essa busca.' : mensagemVazia;
+        }
+
+        function selecionarAba(aba) {
+            abaAtiva.setAttribute('aria-selected', 'false');
+            abaAtiva.tabIndex = -1;
+            abaAtiva = aba;
+            aba.setAttribute('aria-selected', 'true');
+            aba.tabIndex = 0;
+            lista.setAttribute('aria-labelledby', aba.id);
+            const url = new URL(location.href);
+            url.searchParams.set('aba', aba.dataset.abaRotina);
+            history.replaceState(null, '', url);
+            atualizarLista();
+        }
+
+        for (const aba of abas) {
+            aba.addEventListener('click', evento => {
+                if (evento.ctrlKey || evento.metaKey || evento.shiftKey || evento.altKey) return;
+                evento.preventDefault();
+                selecionarAba(aba);
+            });
+        }
+
+        abaLista.addEventListener('keydown', evento => {
+            const indice = abas.indexOf(document.activeElement);
+            const destinos = {
+                ArrowLeft: (indice + abas.length - 1) % abas.length,
+                ArrowRight: (indice + 1) % abas.length,
+                Home: 0,
+                End: abas.length - 1,
+            };
+            const destino = destinos[evento.key];
+            if (indice < 0 || !Number.isInteger(destino)) return;
+            evento.preventDefault();
+            selecionarAba(abas[destino]);
+            abas[destino].focus();
         });
 
-        botaoClicado.classList.remove('text-gray-500', 'font-medium', 'border-transparent');
-        botaoClicado.classList.add('border-emerald-800', 'font-semibold', 'text-emerald-900');
-
-        const estado = botaoClicado.dataset.estado;
-        const rotinas = document.querySelectorAll('[data-estado-rotina]');
-        let visiveis = 0;
-        rotinas.forEach(rotina => {
-            const visivel = estado === '' || rotina.dataset.estadoRotina === estado;
-            rotina.style.display = visivel ? '' : 'none';
-            visiveis += Number(visivel);
-        });
-        document.getElementById('rotinasAbaVazia').classList.toggle('hidden', estado === '' || visiveis > 0);
-    }
+        busca.addEventListener('input', atualizarLista);
+        atualizarLista();
+    })();
 </script>
 @endsection

@@ -68,6 +68,16 @@ class ConsultaRotinas
         return $this->execucoes($usuario)->where('e.previsto_em', '>=', $inicio)->where('e.previsto_em', '<', $fim);
     }
 
+    public function execucoesPessoais(User $usuario, ?CarbonImmutable $dia = null): Builder
+    {
+        $consulta = $dia ? $this->execucoesDoDia($usuario, $dia) : $this->execucoes($usuario);
+
+        return $consulta->where('e.id_usuario_responsavel', $usuario->getKey())
+            ->leftJoin('ferramentas as f', 't.id_ferramenta', '=', 'f.id_ferramenta')
+            ->addSelect('r.horario', 'r.obs', 'r.auxilio', 't.descricao', 't.documentacao', 'f.ferramenta',
+                'e.comentario_conclusao', 'e.foto_conclusao', 'e.justificativa_nao_realizada');
+    }
+
     /** @return array{empresas: Collection, tarefas: Collection, locais: Collection} */
     public function catalogos(User $usuario): array
     {

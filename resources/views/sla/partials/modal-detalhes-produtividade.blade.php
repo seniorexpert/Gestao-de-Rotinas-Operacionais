@@ -26,20 +26,22 @@
                             {{ $execucao->horario }} · {{ $execucao->local_rotina ?: ($execucao->local_cadastrado ?? 'Local não informado') }} · {{ $execucao->morador ?? 'Tarefa geral' }}
                         </p>
                         <p class="mt-1 text-xs text-slate-600">
-                            {{ ['pendente' => 'Pendente', 'em_andamento' => 'Em andamento', 'concluida' => 'Concluída'][$execucao->status] }}
+                            {{ ['pendente' => 'Pendente', 'em_andamento' => 'Em andamento', 'concluida' => 'Concluída', 'nao_realizada' => 'Não realizada'][$execucao->status] }}
                             @if ($execucao->limite)
                                 · Limite em {{ $execucao->limite }}
                             @endif
                         </p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
-                        <span data-sla-execucao="{{ $execucao->situacao_sla }}" @class([
+                        @if ($execucao->status !== 'nao_realizada')
+                            <span data-sla-execucao="{{ $execucao->situacao_sla }}" @class([
                             'rounded-full px-2.5 py-1 text-xs font-semibold',
                             'bg-emerald-50 text-emerald-900' => $execucao->situacao_sla === 'noPrazo',
                             'bg-amber-50 text-amber-900' => $execucao->situacao_sla === 'expirando',
                             'bg-rose-100 text-rose-900' => $execucao->situacao_sla === 'atrasado',
                             'bg-slate-100 text-slate-700' => $execucao->situacao_sla === 'semDados',
-                        ])>{{ \App\Services\CalculadoraSla::ROTULOS[$execucao->situacao_sla] ?? 'Sem dados de SLA' }}</span>
+                            ])>{{ \App\Services\CalculadoraSla::ROTULOS[$execucao->situacao_sla] ?? 'Sem dados de SLA' }}</span>
+                        @endif
                         @if ($execucao->status === 'pendente' && $execucao->rotina_ativa)
                             <button type="button" onclick="atribuirTarefaIndividual(@js((string) $execucao->id_rotina), @js((string) $execucao->rotina_responsavel))" class="text-xs font-semibold text-slate-700 hover:underline">
                                 Atribuir

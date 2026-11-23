@@ -25,7 +25,12 @@
                 <span class="rounded-full bg-emerald-50 px-3.5 py-1 text-emerald-800">Verificada</span>
             @else
                 @include('processos.acompanhamento.selo-sla', ['situacao' => $item->sla_acompanhamento])
-                <span class="rounded-full bg-rose-50 px-3.5 py-1 text-rose-800">Atraso da tarefa · {{ $item->atraso }}</span>
+                @if (! $item->nao_realizada)
+                    <span class="rounded-full bg-rose-50 px-3.5 py-1 text-rose-800">Atraso da tarefa · {{ $item->atraso }}</span>
+                @endif
+            @endif
+            @if ($item->nao_realizada)
+                <span class="rounded-full bg-rose-50 px-3.5 py-1 text-rose-800">Não realizada</span>
             @endif
             <span class="rounded-full bg-[#f4f1ea] px-3.5 py-1 text-[#1e2d3d]">{{ $item->processo }}</span>
         </div>
@@ -33,9 +38,13 @@
         <div class="flex flex-col gap-4">
             <section aria-labelledby="tarefa-acompanhamento"
                      class="rounded-[1.25rem] border-2 border-[#b39359]/30 bg-white p-5 shadow-sm sm:rounded-3xl sm:p-6">
-                <p class="mb-3 rounded-xl bg-rose-50 px-3.5 py-2.5 text-sm font-semibold text-rose-800">
-                    A tarefa de {{ $item->colaborador }} passou do prazo.
-                </p>
+                @if ($item->nao_realizada)
+                    @include('processos.acompanhamento.motivo-nao-realizada')
+                @else
+                    <p class="mb-3 rounded-xl bg-rose-50 px-3.5 py-2.5 text-sm font-semibold text-rose-800">
+                        A tarefa de {{ $item->colaborador }} passou do prazo.
+                    </p>
+                @endif
 
                 <h2 id="tarefa-acompanhamento"
                     class="mb-3 flex items-center gap-3 border-b border-slate-100 pb-3 text-lg font-bold text-[#1e2d3d] sm:text-xl">
@@ -108,7 +117,7 @@
                     <p class="whitespace-pre-wrap break-words text-sm leading-relaxed text-[#1e2d3d]">{{ $item->acao }}</p>
                 </section>
             @else
-                <form method="POST" action="{{ route('acompanhamento.store', ['id' => $item->id_execucao, ...$filtros]) }}"
+                <form method="POST" action="{{ route('acompanhamento.store', ['id' => $item->id_execucao, 'tipo' => $item->nao_realizada ? 'nao_realizada' : null, ...$filtros]) }}"
                       class="flex flex-col gap-2">
                     @csrf
                     <label for="acao-realizada" class="text-sm font-bold text-[#1e2d3d] sm:text-base">Qual ação foi realizada?</label>

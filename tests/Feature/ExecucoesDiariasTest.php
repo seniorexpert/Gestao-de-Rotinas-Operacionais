@@ -6,7 +6,9 @@ use App\Models\Empresa;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class ExecucoesDiariasTest extends TestCase
@@ -104,13 +106,16 @@ class ExecucoesDiariasTest extends TestCase
 
         $this->actingAs($usuario)->get(route('home'))->assertOk();
         $id = DB::table('rotinas_execucoes')->where('id_rotina', $rotina)->value('id_execucao');
-        $this->from(route('home'))->post(route('execucoes.iniciar', $id))->assertRedirectToRoute('home');
+        $this->from(route('home'))->post(route('execucoes.iniciar', $id), ['fluxo_diario' => '1'])->assertRedirectToRoute('execucoes.realizando', $id);
 
         $this->assertDatabaseHas('rotinas_execucoes', [
             'id_execucao' => $id, 'status' => 'em_andamento',
             'iniciado_em' => '2026-11-19 12:00:00', 'prazo_em' => '2026-11-19 12:01:30',
         ]);
-        $this->get(route('home'))->assertOk()->assertViewHas('rotinas', fn ($registros) => $registros->sole()->acao_execucao['url'] === route('execucoes.concluir', $id));
+        $this->get(route('execucoes.realizando', $id))->assertOk()
+            ->assertSeeTextInOrder(['Realizando', 'Quando', '09:00'])
+            ->assertDontSee('09:00 –')
+            ->assertSeeTextInOrder(['Finalizar Tarefa', 'Não Pode Ser Realizada', 'Solicitar Auxílio']);
 
         $this->travelTo($agora->addSeconds(45));
         $this->get(route('monitoramento.index'))->assertOk()
@@ -120,6 +125,64 @@ class ExecucoesDiariasTest extends TestCase
         $this->from(route('home'))->post(route('execucoes.concluir', $id))->assertRedirectToRoute('home');
         $this->get(route('monitoramento.index'))->assertOk()->assertSeeText('1 de 1 concluídas')
             ->assertViewHas('execucoes', fn ($registros) => $registros->sole()->situacao_sla === 'atrasado');
+    }
+
+    public function test_finalizacao_guarda_comentario_e_foto_privada_para_o_responsavel(): void
+    {
+        Storage::fake('local');
+        $this->travelTo(CarbonImmutable::parse('2026-11-19 12:00:00', 'UTC'));
+        $unidade = Empresa::create(['empresa' => 'Unidade Santana']);
+        $usuario = $this->usuario('ana', $unidade);
+        $colega = $this->usuario('bia', $unidade);
+        $rotina = $this->rotina($usuario, $unidade, $this->tarefa('Higiene pessoal'), '08:55:00');
+        $this->artisan('rotinas:gerar-execucoes')->assertSuccessful();
+        $id = DB::table('rotinas_execucoes')->where('id_rotina', $rotina)->value('id_execucao');
+        $formulario = route('execucoes.formulario', [$id, 'finalizar']);
+
+        $this->actingAs($usuario)->get($formulario)->assertNotFound();
+        $this->post(route('execucoes.iniciar', $id))->assertSessionHasNoErrors();
+        $this->get($formulario)->assertOk()->assertSeeTextInOrder(['Finalizar Tarefa', 'Comentário', 'Confirmar Envio']);
+        $this->actingAs($colega)->get($formulario)->assertNotFound();
+
+        $foto = UploadedFile::fake()->createWithContent('registro.png', base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7ckAAAAASUVORK5CYII='));
+        $this->actingAs($usuario)->from($formulario)->post(route('execucoes.concluir', $id), [
+            'fluxo_diario' => '1', 'comentario' => 'Assistência registrada.', 'foto' => $foto,
+        ])->assertSessionHasNoErrors()->assertRedirectToRoute('home', ['aba' => 'concluida']);
+
+        $caminho = DB::table('rotinas_execucoes')->where('id_execucao', $id)->value('foto_conclusao');
+        Storage::disk('local')->assertExists($caminho);
+        $this->assertDatabaseHas('rotinas_execucoes', ['id_execucao' => $id, 'status' => 'concluida', 'comentario_conclusao' => 'Assistência registrada.']);
+        $this->get(route('execucoes.foto', $id))->assertDownload();
+        $this->actingAs($colega)->get(route('execucoes.foto', $id))->assertNotFound();
+    }
+
+    public function test_auxilio_preserva_execucao_e_nao_realizada_encerra_com_justificativa(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-19 12:00:00', 'UTC'));
+        $unidade = Empresa::create(['empresa' => 'Unidade Santana']);
+        $usuario = $this->usuario('ana', $unidade);
+        $rotina = $this->rotina($usuario, $unidade, $this->tarefa('Acompanhar morador'), '09:00:00');
+        $this->artisan('rotinas:gerar-execucoes')->assertSuccessful();
+        $id = DB::table('rotinas_execucoes')->where('id_rotina', $rotina)->value('id_execucao');
+        $this->actingAs($usuario)->post(route('execucoes.iniciar', $id), ['fluxo_diario' => '1'])
+            ->assertRedirectToRoute('execucoes.realizando', $id);
+        $this->get(route('execucoes.formulario', [$id, 'auxilio']))->assertOk()->assertSeeText('Enviar Solicitação');
+        $this->post(route('execucoes.auxilio', $id), ['justificativa' => 'Preciso de outro colaborador.'])
+            ->assertRedirectToRoute('execucoes.realizando', $id);
+        $this->assertDatabaseHas('logs_auditoria', ['registro_id' => (string) $id, 'acao' => 'SOLICITAR_AUXILIO', 'id_empresa' => $unidade->getKey()]);
+        $this->assertDatabaseHas('rotinas_execucoes', ['id_execucao' => $id, 'status' => 'em_andamento', 'concluido_em' => null]);
+
+        $formulario = route('execucoes.formulario', [$id, 'nao-realizada']);
+        $this->get($formulario)->assertOk()->assertSeeText('Confirmar Motivo');
+        $this->from($formulario)->post(route('execucoes.nao-realizada', $id))->assertSessionHasErrors('justificativa');
+        $this->post(route('execucoes.nao-realizada', $id), ['justificativa' => 'Morador ausente.'])
+            ->assertRedirectToRoute('home', ['aba' => 'concluida']);
+        $this->assertDatabaseHas('rotinas_execucoes', [
+            'id_execucao' => $id, 'status' => 'nao_realizada', 'justificativa_nao_realizada' => 'Morador ausente.',
+        ]);
+        $this->get(route('home', ['aba' => 'concluida']))->assertOk()->assertSeeText('Não realizada');
+        $this->get(route('monitoramento.index'))->assertOk()->assertSeeText(['Não realizadas', '0 de 1 concluídas']);
+        $this->get($formulario)->assertNotFound();
     }
 
     public function test_reatribuicao_atualiza_o_responsavel_pendente_e_preserva_a_execucao_iniciada(): void

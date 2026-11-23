@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -16,8 +17,9 @@ class HomeControllerTest extends TestCase
         $this->get(route('home'))->assertRedirectToRoute('login');
     }
 
-    public function test_login_abre_as_rotinas_da_unidade_e_exibe_o_atalho_de_acompanhamento(): void
+    public function test_login_abre_as_rotinas_do_responsavel_e_exibe_o_atalho_de_acompanhamento(): void
     {
+        $this->travelTo(CarbonImmutable::parse('2026-11-18 14:00:00', 'UTC'));
         $unidade = DB::table('empresas')->insertGetId(['empresa' => 'Unidade Centro'], 'id_empresa');
         $outraUnidade = DB::table('empresas')->insertGetId(['empresa' => 'Unidade Norte'], 'id_empresa');
         $grupo = DB::table('grupos_acesso')->insertGetId(['grupo_acesso' => 'Gerente Geral'], 'id_grupo_acesso');
@@ -31,6 +33,17 @@ class HomeControllerTest extends TestCase
         DB::table('empresa_usuario')->insert([
             'id_empresa' => $unidade,
             'id_usuario' => $gerente,
+            'empresa_nome' => 'Unidade Centro',
+        ]);
+
+        $colega = DB::table('usuarios')->insertGetId([
+            'usuario' => 'Ana Exemplo',
+            'username' => 'ana-exemplo',
+            'password' => Hash::make('senha-de-teste'),
+        ], 'id_usuario');
+        DB::table('empresa_usuario')->insert([
+            'id_empresa' => $unidade,
+            'id_usuario' => $colega,
             'empresa_nome' => 'Unidade Centro',
         ]);
 
@@ -48,6 +61,8 @@ class HomeControllerTest extends TestCase
             [...$rotina, 'id_tarefa' => $this->tarefa('Organizar o quarto'), 'horario' => '09:15:00', 'status' => false],
             [...$rotina, 'id_tarefa' => $this->tarefa('Tarefa de outra unidade'), 'horario' => '08:00:00', 'status' => true,
                 'id_empresa' => $outraUnidade],
+            [...$rotina, 'id_tarefa' => $this->tarefa('Tarefa de outro colaborador'), 'horario' => '10:00:00', 'status' => true,
+                'id_usuario' => $colega],
         ]);
 
         $this->followingRedirects()->post('/login', [
@@ -58,12 +73,32 @@ class HomeControllerTest extends TestCase
             ->assertViewIs('home')
             ->assertSeeTextInOrder(['Rotinas Diárias', 'Rotina de Acompanhamento', 'Centro de Monitoramento'])
             ->assertSee('href="'.route('acompanhamento.index').'"', false)
-            ->assertSeeTextInOrder(['Organizar o quarto', 'Sala de Estar', '09:15', 'Inativa', 'Acompanhar o lanche'])
-            ->assertDontSeeText('Tarefa de outra unidade');
+            ->assertSeeTextInOrder(['Pendentes', 'Em andamento', 'Concluídas', 'Todas'])
+            ->assertViewHas('aba', 'pendente')
+            ->assertSeeTextInOrder(['Acompanhar o lanche', 'Sala de Estar', '15:30', 'No prazo'])
+            ->assertDontSee('15:30 – 16:00')
+            ->assertDontSee('Organizar o quarto')
+            ->assertDontSee('Tarefa de outra unidade')
+            ->assertDontSee('Tarefa de outro colaborador');
+
+        $execucao = DB::table('rotinas_execucoes')->where('id_usuario_responsavel', $gerente)->sole();
+        DB::table('rotinas')->where('id_rotina', $execucao->id_rotina)->update(['id_usuario' => $colega]);
+        DB::table('rotinas_execucoes')->where('id_execucao', $execucao->id_execucao)->update([
+            'status' => 'em_andamento', 'iniciado_em' => '2026-11-18 13:50:00', 'prazo_em' => '2026-11-18 14:20:00',
+        ]);
+
+        $this->get(route('home', ['aba' => 'todas', 'id_usuario' => $colega]))
+            ->assertOk()
+            ->assertViewHas('aba', 'todas')
+            ->assertViewHas('rotinas', fn ($rotinas) => (int) $rotinas->sole()->id_execucao === (int) $execucao->id_execucao)
+            ->assertSeeText('Realizando')
+            ->assertDontSee('Tarefa de outro colaborador');
     }
 
     private function tarefa(string $nome): int
     {
-        return DB::table('tarefas')->insertGetId(['tarefa' => $nome, 'status' => true], 'id_tarefa');
+        return DB::table('tarefas')->insertGetId([
+            'tarefa' => $nome, 'status' => true, 'tempo_realizar_tarefa' => '00:30:00',
+        ], 'id_tarefa');
     }
 }

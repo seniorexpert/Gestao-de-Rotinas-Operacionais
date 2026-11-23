@@ -21,12 +21,13 @@
                     <p class="mt-1 text-sm text-slate-600">{{ $data }} · Horário de Brasília</p>
                 </div>
             </div>
-            <dl class="grid gap-3 sm:grid-cols-4">
+            <dl class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                 @foreach ([
                     'Previstas' => $execucoes->count(),
                     'Pendentes' => $execucoes->where('status', 'pendente')->count(),
                     'Em andamento' => $execucoes->where('status', 'em_andamento')->count(),
                     'Concluídas' => $execucoes->where('status', 'concluida')->count(),
+                    'Não realizadas' => $execucoes->where('status', 'nao_realizada')->count(),
                 ] as $nome => $total)
                     <div class="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
                         <dt class="text-sm text-slate-600">{{ $nome }}</dt>

@@ -31,6 +31,8 @@ class RegistrarAtividadeHttp
         'rotinas.atribuir' => ['UPDATE', 'rotinas', 'Atribuição de rotinas'],
         'execucoes.iniciar' => ['INICIAR', 'rotinas_execucoes', 'Início de execução'],
         'execucoes.concluir' => ['CONCLUIR', 'rotinas_execucoes', 'Conclusão de execução'],
+        'execucoes.nao-realizada' => ['NAO_REALIZAR', 'rotinas_execucoes', 'Tarefa não realizada'],
+        'execucoes.auxilio' => ['SOLICITAR_AUXILIO', 'rotinas_execucoes', 'Solicitação de auxílio'],
         'acompanhamento.index' => ['CONSULTAR', 'rotinas_execucoes', 'Consulta do acompanhamento de rotinas'],
         'acompanhamento.store' => ['VERIFICAR', 'rotinas_verificacoes', 'Verificação no acompanhamento'],
         'tarefas.store' => ['SALVAR', 'tarefas', 'Gravação de tarefa'],
@@ -85,7 +87,8 @@ class RegistrarAtividadeHttp
         }
 
         if ($resultado === 'sucesso' && in_array($rota, [
-            'execucoes.iniciar', 'execucoes.concluir', 'acompanhamento.store', 'users.update', 'rotinas.atribuir',
+            'execucoes.iniciar', 'execucoes.concluir', 'execucoes.nao-realizada', 'execucoes.auxilio',
+            'acompanhamento.store', 'users.update', 'rotinas.atribuir',
         ], true)) {
             $resultado = 'sem_alteracao';
         }

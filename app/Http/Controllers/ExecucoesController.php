@@ -4,16 +4,57 @@ namespace App\Http\Controllers;
 
 use App\Services\AuditoriaService;
 use App\Services\CalculadoraSla;
+use App\Services\ConsultaRotinas;
+use App\Services\EscalonamentoAcompanhamento;
+use App\Services\ExecucoesDiarias;
 use Carbon\Carbon;
+use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
+use Throwable;
 
 class ExecucoesController extends Controller
 {
-    public function __construct(private CalculadoraSla $sla) {}
+    public function __construct(
+        private CalculadoraSla $sla,
+        private ConsultaRotinas $rotinas,
+        private EscalonamentoAcompanhamento $escalonamento,
+    ) {}
 
-    public function iniciar(Request $request, int $id)
+    public function realizando(Request $request, int $id): View
+    {
+        $execucao = $this->consultarExecucao($request, $id);
+        abort_unless($execucao->status === 'em_andamento' && $execucao->iniciado_em, 404);
+        $prazo = filled($execucao->prazo_em)
+            ? Carbon::parse($execucao->prazo_em, 'UTC')->setTimezone(ExecucoesDiarias::FUSO)->format('d/m H:i:s')
+            : null;
+        $documentacao = $execucao->documentacao ? Storage::disk('public')->url($execucao->documentacao) : null;
+
+        return view('execucoes.realizando', compact('execucao', 'prazo', 'documentacao'));
+    }
+
+    public function formulario(Request $request, int $id, string $acao): View
+    {
+        $execucao = $this->consultarExecucao($request, $id);
+        abort_unless($execucao->status === 'em_andamento' && $execucao->iniciado_em, 404);
+
+        return view('execucoes.formulario', compact('execucao', 'acao'));
+    }
+
+    public function foto(Request $request, int $id): StreamedResponse
+    {
+        $execucao = $this->consultarExecucao($request, $id);
+        $disco = Storage::disk('local');
+        abort_unless($execucao->foto_conclusao && $disco->exists($execucao->foto_conclusao), 404);
+
+        return $disco->download($execucao->foto_conclusao);
+    }
+
+    public function iniciar(Request $request, int $id): RedirectResponse
     {
         DB::transaction(function () use ($request, $id) {
             $execucao = $this->buscarExecucaoAutorizada($request, $id);
@@ -64,53 +105,140 @@ class ExecucoesController extends Controller
             ]);
         });
 
-        return back()->with('success', 'Execução em andamento.');
+        return $request->boolean('fluxo_diario')
+            ? to_route('execucoes.realizando', $id)
+            : back()->with('success', 'Execução em andamento.');
     }
 
-    public function concluir(Request $request, int $id)
+    public function concluir(Request $request, int $id): RedirectResponse
     {
-        DB::transaction(function () use ($request, $id) {
-            $execucao = $this->buscarExecucaoAutorizada($request, $id);
+        $foto = null;
+        try {
+            DB::transaction(function () use ($request, $id, &$foto): void {
+                $execucao = $this->buscarExecucaoAutorizada($request, $id);
 
-            // Uma repetição não altera a conclusão já registrada.
-            if ($execucao->status === 'concluida') {
+                if ($execucao->status === 'concluida') {
+                    return;
+                }
+
+                $encerramento = $this->encerramento($request, $execucao);
+                $dados = $request->validate([
+                    'comentario' => ['nullable', 'string', 'max:2000'],
+                    'foto' => ['nullable', 'image', 'max:2048'],
+                ], [
+                    'comentario.max' => 'Escreva um comentário de até 2.000 caracteres.',
+                    'foto.image' => 'Selecione um arquivo de imagem.',
+                    'foto.max' => 'A foto deve ter até 2 MB.',
+                    'foto.uploaded' => 'Não foi possível receber a foto. Envie uma imagem de até 2 MB.',
+                ]);
+
+                $foto = ($dados['foto'] ?? null)?->store('fotos-execucoes', 'local');
+                if ($foto === false) {
+                    throw ValidationException::withMessages(['foto' => 'A foto não pôde ser salva.']);
+                }
+
+                $this->registrarMudanca($execucao, 'CONCLUIR', 'Execução concluída', [
+                    ...$encerramento,
+                    'status' => 'concluida',
+                    'comentario_conclusao' => $dados['comentario'] ?? null,
+                    'foto_conclusao' => $foto,
+                ]);
+            });
+        } catch (Throwable $erro) {
+            if ($foto) {
+                Storage::disk('local')->delete($foto);
+            }
+
+            throw $erro;
+        }
+
+        $destino = $request->boolean('fluxo_diario') ? to_route('home', ['aba' => 'concluida']) : back();
+
+        return $destino->with('success', 'Execução concluída com sucesso.');
+    }
+
+    public function naoRealizada(Request $request, int $id): RedirectResponse
+    {
+        DB::transaction(function () use ($request, $id): void {
+            $execucao = $this->buscarExecucaoAutorizada($request, $id);
+            if ($execucao->status === 'nao_realizada') {
                 return;
             }
 
-            if (
-                $execucao->status !== 'em_andamento'
-                || ! $execucao->iniciado_em
-            ) {
-                throw ValidationException::withMessages([
-                    'execucao' => 'Inicie a execução antes de concluir.',
-                ]);
-            }
-
-            if (
-                $execucao->concluido_em
-                || (int) $execucao->duracao_prevista_segundos <= 0
-            ) {
-                throw ValidationException::withMessages([
-                    'execucao' => 'Revise a duração e as datas desta execução.',
-                ]);
-            }
-
-            $agora = now();
-
-            if ($agora->lessThan(Carbon::parse($execucao->iniciado_em))) {
-                throw ValidationException::withMessages([
-                    'execucao' => 'A conclusão não pode ser anterior ao início.',
-                ]);
-            }
-
-            $this->registrarMudanca($execucao, 'CONCLUIR', 'Execução concluída', [
-                'status' => 'concluida',
-                'concluido_em' => $agora,
-                'id_usuario_conclusao' => $request->user()->getAuthIdentifier(),
+            $encerramento = $this->encerramento($request, $execucao);
+            $this->registrarMudanca($execucao, 'NAO_REALIZAR', 'Execução encerrada como não realizada', [
+                ...$encerramento,
+                'status' => 'nao_realizada',
+                'justificativa_nao_realizada' => $this->justificativa($request),
             ]);
+
+            $caixa = $this->escalonamento->superiorDoGrupo($request->user()->grupoAcesso?->grupo_acesso);
+            if ($caixa !== null) {
+                DB::table('rotinas_acomp_nao_realizadas')->insert([
+                    'id_execucao' => $id,
+                    'caixa' => $caixa,
+                    'recebido_em' => $encerramento['concluido_em'],
+                ]);
+            }
         });
 
-        return back()->with('success', 'Execução concluída com sucesso.');
+        return to_route('home', ['aba' => 'concluida'])->with('success', 'Justificativa registrada. Tarefa encerrada como não realizada.');
+    }
+
+    public function auxilio(Request $request, int $id): RedirectResponse
+    {
+        DB::transaction(function () use ($request, $id): void {
+            $execucao = $this->buscarExecucaoAutorizada($request, $id);
+            $this->validarEmAndamento($execucao);
+
+            AuditoriaService::registrar(
+                'SOLICITAR_AUXILIO', 'rotinas_execucoes', (string) $id,
+                dadosNovos: ['justificativa' => $this->justificativa($request)],
+                descricao: 'Solicitação de auxílio',
+                idEmpresa: (int) $execucao->id_empresa,
+                idRotina: (int) $execucao->id_rotina,
+            );
+        });
+
+        return to_route('execucoes.realizando', $id)->with('success', 'Solicitação de auxílio registrada nos Logs de Rotinas.');
+    }
+
+    private function justificativa(Request $request): string
+    {
+        return $request->validate(['justificativa' => ['required', 'string', 'max:2000']], [
+            'justificativa.required' => 'Informe a justificativa.',
+            'justificativa.max' => 'Escreva uma justificativa de até 2.000 caracteres.',
+        ])['justificativa'];
+    }
+
+    private function consultarExecucao(Request $request, int $id): object
+    {
+        $execucao = $this->rotinas->execucoesPessoais($request->user())->where('e.id_execucao', $id)->first();
+        abort_unless($execucao, 404);
+
+        $execucao->horario = $execucao->horario ? substr($execucao->horario, 0, 5) : 'Não informado';
+        $execucao->local = trim($execucao->local_rotina ?? '') ?: (trim($execucao->local_cadastrado ?? '') ?: 'Não informado');
+
+        return $execucao;
+    }
+
+    private function validarEmAndamento(object $execucao): void
+    {
+        if ($execucao->status !== 'em_andamento' || ! $execucao->iniciado_em || $execucao->concluido_em) {
+            throw ValidationException::withMessages(['execucao' => 'Esta ação exige uma tarefa em andamento.']);
+        }
+    }
+
+    /** @return array{concluido_em: Carbon, id_usuario_conclusao: int} */
+    private function encerramento(Request $request, object $execucao): array
+    {
+        $this->validarEmAndamento($execucao);
+        $agora = now('UTC');
+        if ((int) $execucao->duracao_prevista_segundos <= 0 || $agora->lessThan(Carbon::parse($execucao->iniciado_em, 'UTC'))) {
+            throw ValidationException::withMessages(['execucao' => 'Revise a duração e as datas desta execução.']);
+        }
+
+        return ['concluido_em' => $agora, 'id_usuario_conclusao' => (int) $request->user()->getAuthIdentifier()];
     }
 
     /** @param array<string, mixed> $alteracoes */

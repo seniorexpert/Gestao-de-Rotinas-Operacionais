@@ -33,7 +33,7 @@ class MonitoramentoController extends Controller
             'r.local', 'l.local as local_cadastrado', 'u.usuario', 't.tarefa',
         ]);
         $execucoes = $this->consultaRotinas->execucoesDoDia($usuario, $agora)
-            ->whereIn('e.status', ['pendente', 'em_andamento', 'concluida'])
+            ->whereIn('e.status', ['pendente', 'em_andamento', 'concluida', 'nao_realizada'])
             ->orderBy('e.previsto_em')->orderBy('e.id_execucao')->get();
 
         foreach ($execucoes as $execucao) {
@@ -41,6 +41,10 @@ class MonitoramentoController extends Controller
                 ->setTimezone(ExecucoesDiarias::FUSO)->format('H:i');
             $execucao->limite = null;
             $execucao->situacao_sla = 'semDados';
+            if ($execucao->status === 'nao_realizada') {
+                continue;
+            }
+
             try {
                 $resultado = $this->sla->calcular($execucao, $agora);
                 $execucao->situacao_sla = $resultado['sla_atual'];

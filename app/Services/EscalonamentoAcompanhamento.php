@@ -46,19 +46,22 @@ class EscalonamentoAcompanhamento
         };
     }
 
+    public function superiorDoGrupo(?string $grupo): ?string
+    {
+        return match ($this->normalizarGrupo($grupo)) {
+            'cuidador', 'cuidadores', 'farmacia' => self::ENFERMAGEM,
+            'estoque', 'manutencao', 'auxiliar de limpeza', 'auxiliar de cozinha' => self::COORDENADOR,
+            'coordenacao', 'coordenador', 'enfermagem' => self::GERENTE_DA_UNIDADE,
+            'gerente', 'gerente da unidade', 'gerente de unidade', 'gerente unidade' => self::GERENTE_GERAL,
+            default => null,
+        };
+    }
+
     /** @return array{atraso_segundos: int, recebimentos: array<string, CarbonImmutable>}|null */
     public function encaminhar(object $execucao, CarbonImmutable $agora): ?array
     {
-        $destinos = match ($this->normalizarGrupo($execucao->grupo_origem)) {
-            'cuidador', 'cuidadores', 'farmacia' => [self::ENFERMAGEM],
-            'estoque', 'manutencao', 'auxiliar de limpeza', 'auxiliar de cozinha' => [self::COORDENADOR],
-            'coordenacao', 'coordenador' => [self::COORDENADOR, self::GERENTE_DA_UNIDADE],
-            'enfermagem' => [self::GERENTE_DA_UNIDADE],
-            'gerente', 'gerente da unidade', 'gerente de unidade', 'gerente unidade' => [self::GERENTE_GERAL],
-            default => [],
-        };
-
-        if ($destinos === []) {
+        $superior = $this->superiorDoGrupo($execucao->grupo_origem);
+        if ($superior === null) {
             return null;
         }
 
@@ -72,11 +75,26 @@ class EscalonamentoAcompanhamento
             return null;
         }
 
+        $destinos = in_array($this->normalizarGrupo($execucao->grupo_origem), ['coordenacao', 'coordenador'], true)
+            ? [self::COORDENADOR, $superior]
+            : [$superior];
+
+        return [
+            'atraso_segundos' => $atraso['segundos'],
+            'recebimentos' => $this->recebimentos($destinos, $atraso['vencido_em'], $agora),
+        ];
+    }
+
+    /**
+     * @param  list<string>  $destinos
+     * @return array<string, CarbonImmutable>
+     */
+    public function recebimentos(array $destinos, CarbonImmutable $entrada, CarbonImmutable $agora): array
+    {
         $recebimentos = [];
 
         foreach ($destinos as $caixa) {
-            $recebidoEm = $atraso['vencido_em'];
-
+            $recebidoEm = $entrada;
             while ($caixa !== null && $recebidoEm->lessThanOrEqualTo($agora)) {
                 if (! isset($recebimentos[$caixa]) || $recebidoEm->lessThan($recebimentos[$caixa])) {
                     $recebimentos[$caixa] = $recebidoEm;
@@ -87,10 +105,7 @@ class EscalonamentoAcompanhamento
             }
         }
 
-        return [
-            'atraso_segundos' => $atraso['segundos'],
-            'recebimentos' => $recebimentos,
-        ];
+        return $recebimentos;
     }
 
     public function limite(CarbonImmutable $recebidoEm): CarbonImmutable

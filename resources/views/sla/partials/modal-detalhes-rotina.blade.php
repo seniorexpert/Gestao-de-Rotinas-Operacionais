@@ -1,100 +1,124 @@
-<div id="modalDetalhesRotina" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl max-w-xl w-full p-8 relative shadow-2xl max-h-[90vh] flex flex-col">
-        
-        <button type="button" onclick="fecharModalDetalhes()" class="absolute top-6 right-6 text-gray-400 hover:text-gray-700 focus:outline-none">
-            ✕
-        </button>
+<dialog id="modalDetalhesRotina" aria-labelledby="rotinasTituloDetalhes"
+        class="m-auto max-h-[92vh] w-[calc(100%_-_1.5rem)] max-w-xl overflow-y-auto rounded-[1.25rem] bg-[#fcfbf8] p-4 text-[#21394e] shadow-xl backdrop:bg-slate-950/45 sm:p-6">
+    <button type="button" onclick="this.closest('dialog').close()"
+            class="mb-3 inline-flex items-center gap-2 rounded-lg px-1 py-1.5 text-sm font-bold hover:underline focus-visible:outline focus-visible:outline-2">
+        <i class="fa-solid fa-arrow-left text-xs" aria-hidden="true"></i>
+        Voltar
+    </button>
 
-        <div class="flex-shrink-0 mb-6">
-            <span id="modalBadgeStatus" class="inline-block px-3 py-1 text-xs font-medium bg-amber-100 text-amber-800 rounded-full mb-3">Ativa</span>
-            <h2 class="text-3xl font-bold text-[#1e2d3d] font-serif">Detalhes da tarefa</h2>
-        </div>
+    <h2 id="rotinasTituloDetalhes" class="rotinas-titulo mb-3 text-2xl font-bold sm:text-[1.85rem]">Detalhes da Tarefa</h2>
+    <div class="mb-4"><span id="modalBadgeStatus"></span></div>
 
-        <div class="space-y-6 sans-text overflow-y-auto flex-1 pr-1">
-            <div class="border border-gray-200 rounded-3xl p-6 bg-white shadow-sm space-y-6">
-                <div class="flex items-center gap-4">
-                    <div id="modalIconeDiv" class="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center text-3xl">
-                        📋
-                    </div>
-                    <h3 id="modalTituloTarefa" class="text-2xl font-bold text-[#1e2d3d]">Nome da Tarefa</h3>
-                </div>
-
-                <div class="grid grid-cols-2 gap-4 border-t border-gray-100 pt-4">
-                    <div>
-                        <span class="text-xs text-gray-400 block mb-1">Quando</span>
-                        <span id="modalHorario" class="text-sm font-bold text-[#1e2d3d]">--:--</span>
-                    </div>
-                    <div>
-                        <span class="text-xs text-gray-400 block mb-1">Onde</span>
-                        <span id="modalLocal" class="text-sm font-bold text-[#1e2d3d]">--</span>
-                    </div>
-                </div>
-
-                <div id="modalSlaExecucao" class="hidden border-t border-gray-100 pt-4">
-                    <span class="block text-xs text-gray-500">SLA da etapa</span>
-                    <strong id="modalSituacaoSla" class="text-sm text-slate-800"></strong>
-                    <span id="modalPrazoExecucao" class="mt-1 block text-xs text-gray-600"></span>
-                </div>
-
-                <div class="border-t border-gray-100 pt-4">
-                    <span class="text-xs text-gray-400 block mb-1">Morador</span>
-                    <span id="modalMorador" class="text-sm font-bold text-[#1e2d3d]">--</span>
-                </div>
+    <div class="mb-3 rounded-[1.25rem] border-2 border-[#d3ae74]/35 bg-white p-4 shadow-sm sm:p-5">
+        <h3 class="mb-3 flex items-center gap-2.5 border-b border-slate-100 pb-3 text-lg font-bold sm:text-xl">
+            <span id="modalIconeDiv" class="text-2xl leading-none" aria-hidden="true"></span>
+            <span id="modalTituloTarefa"></span>
+        </h3>
+        <dl class="grid grid-cols-[auto_1fr] gap-x-5 gap-y-4 sm:gap-x-7">
+            <div>
+                <dt class="mb-1 text-xs text-[#64748b]">Quando</dt>
+                <dd id="modalHorario" class="text-sm font-bold sm:text-base"></dd>
             </div>
-
-            <div class="border border-gray-200 rounded-3xl p-6 bg-white shadow-sm space-y-3">
-                <h4 class="text-sm font-bold text-[#1e2d3d]">Instrução de trabalho / Observação</h4>
-                <p id="modalObs" class="text-sm text-gray-600">Nenhuma observação informada.</p>
+            <div>
+                <dt class="mb-1 text-xs text-[#64748b]">Onde</dt>
+                <dd id="modalLocal" class="break-words text-sm font-bold sm:text-base"></dd>
             </div>
-        </div>
-
-        <form id="modalFooterAcoes" method="POST" class="hidden pt-6 border-t border-gray-100 mt-4">
-            @csrf
-            <button id="modalExecutarTarefa" type="submit" disabled class="w-full py-3.5 rounded-2xl bg-[#1e2d3d] text-white hover:bg-opacity-90 text-sm font-bold transition text-center"></button>
-        </form>
-
+            <div class="col-span-2">
+                <dt class="mb-1 text-xs text-[#64748b]">Morador</dt>
+                <dd id="modalMorador" class="break-words text-sm font-bold sm:text-base"></dd>
+            </div>
+            <div id="modalFerramentas" class="col-span-2 hidden border-t border-slate-100 pt-3">
+                <dt class="mb-2 text-xs text-[#64748b]">Ferramentas / Materiais</dt>
+                <dd id="modalFerramenta" class="w-fit rounded-xl border border-[#d3ae74]/35 bg-[#fcfbf8] px-3 py-1.5 text-sm font-semibold"></dd>
+            </div>
+        </dl>
     </div>
-</div>
+
+    <div id="modalOrientacoes" class="mb-3 hidden space-y-3 rounded-[1.25rem] border-2 border-[#d3ae74]/35 bg-white p-4 shadow-sm sm:p-5">
+        <div id="modalInstrucaoBloco">
+            <h3 class="mb-1 text-sm font-bold">Instrução de trabalho</h3>
+            <p id="modalInstrucao" class="whitespace-pre-wrap break-words text-sm text-slate-600"></p>
+        </div>
+        <div id="modalObsBloco">
+            <h3 class="mb-1 text-sm font-bold">Observações</h3>
+            <p id="modalObs" class="whitespace-pre-wrap break-words text-sm text-slate-600"></p>
+        </div>
+        <a id="modalDocumentacao" class="inline-flex items-center gap-2 rounded-lg text-sm font-semibold underline underline-offset-2">
+            <i class="fa-regular fa-file-lines" aria-hidden="true"></i>
+            Ver documentação
+        </a>
+        <p id="modalAuxilio" class="text-sm font-semibold text-amber-800">Auxílio previsto para esta tarefa.</p>
+    </div>
+
+    <div id="modalSlaExecucao" class="flex flex-wrap items-baseline justify-between gap-1 px-1 py-2 text-xs text-[#64748b]">
+        <p>SLA da etapa <strong id="modalSituacaoSla" class="ml-1 text-[#21394e]"></strong></p>
+        <p id="modalPrazoExecucao"></p>
+    </div>
+
+    <div id="modalResultado" class="mb-3 hidden space-y-2 rounded-[1.25rem] border-2 border-[#d3ae74]/35 bg-white p-4 shadow-sm sm:p-5">
+        <h3 id="modalTituloResultado" class="text-sm font-bold"></h3>
+        <p id="modalTextoResultado" class="whitespace-pre-wrap break-words text-sm text-slate-600"></p>
+        <a id="modalFoto" class="block text-sm font-semibold underline underline-offset-2">Baixar foto da conclusão</a>
+    </div>
+
+    <form id="modalFooterAcoes" method="POST" class="mt-3 hidden">
+        @csrf
+        <input type="hidden" name="fluxo_diario" value="1">
+        <button id="modalExecutarTarefa" type="submit" disabled
+                class="w-full rounded-xl bg-[#2d5a27] px-4 py-3.5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#23471f] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"></button>
+    </form>
+</dialog>
 
 <script>
     function abrirModalDetalhes(data) {
-        document.getElementById('modalIconeDiv').textContent = data.icone;
-        document.getElementById('modalTituloTarefa').textContent = data.tarefa;
-        document.getElementById('modalHorario').textContent = data.horario;
-        document.getElementById('modalLocal').textContent = data.local;
-        document.getElementById('modalMorador').textContent = data.morador;
-        document.getElementById('modalObs').textContent = data.obs ? data.obs : 'Respeitar orientações individuais cadastradas para esta rotina.';
+        const modal = document.getElementById('modalDetalhesRotina');
+        const campo = id => modal.querySelector('#' + id);
+        const preencher = (id, valor) => { campo(id).textContent = valor ?? ''; };
 
-        const badge = document.getElementById('modalBadgeStatus');
-        badge.textContent = data.estado;
-        badge.className = 'inline-block px-3 py-1 text-xs font-medium rounded-full mb-3 '
-            + (data.ativa ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600');
+        preencher('modalIconeDiv', data.icone);
+        preencher('modalTituloTarefa', data.tarefa);
+        preencher('modalHorario', data.horario);
+        preencher('modalLocal', data.local);
+        preencher('modalMorador', data.morador);
+        preencher('modalFerramenta', data.ferramenta);
+        preencher('modalInstrucao', data.instrucao);
+        preencher('modalObs', data.obs);
+        preencher('modalSituacaoSla', data.sla);
+        preencher('modalPrazoExecucao', data.prazo ? 'Limite em ' + data.prazo : '');
+        campo('modalSlaExecucao').classList.toggle('hidden', !data.sla);
 
-        document.getElementById('modalSlaExecucao').classList.toggle('hidden', !data.sla);
-        document.getElementById('modalSituacaoSla').textContent = data.sla ?? '';
-        document.getElementById('modalPrazoExecucao').textContent = data.prazo ? 'Limite em ' + data.prazo : '';
+        campo('modalFerramentas').classList.toggle('hidden', !data.ferramenta);
+        campo('modalOrientacoes').classList.toggle('hidden', !(data.instrucao || data.obs || data.documentacao || data.auxilio));
+        campo('modalInstrucaoBloco').classList.toggle('hidden', !data.instrucao);
+        campo('modalObsBloco').classList.toggle('hidden', !data.obs);
+        campo('modalAuxilio').classList.toggle('hidden', !data.auxilio);
+        const documento = campo('modalDocumentacao');
+        documento.classList.toggle('hidden', !data.documentacao);
+        documento.removeAttribute('href');
+        if (data.documentacao) documento.href = data.documentacao;
 
-        const formulario = document.getElementById('modalFooterAcoes');
-        const botao = document.getElementById('modalExecutarTarefa');
+        const resultado = data.justificativa || data.comentario;
+        campo('modalResultado').classList.toggle('hidden', !(resultado || data.foto));
+        preencher('modalTituloResultado', data.justificativa ? 'Justificativa' : 'Conclusão');
+        preencher('modalTextoResultado', resultado);
+        campo('modalTextoResultado').classList.toggle('hidden', !resultado);
+        const foto = campo('modalFoto');
+        foto.classList.toggle('hidden', !data.foto);
+        foto.removeAttribute('href');
+        if (data.foto) foto.href = data.foto;
+
+        const selo = campo('modalBadgeStatus');
+        selo.textContent = data.selo;
+        selo.className = 'inline-block rounded-full px-3.5 py-1 text-xs font-bold ' + data.corSelo;
+
+        const formulario = campo('modalFooterAcoes');
+        const botao = campo('modalExecutarTarefa');
         formulario.classList.toggle('hidden', !data.acao);
         formulario.removeAttribute('action');
         botao.textContent = data.acao?.rotulo ?? '';
         botao.disabled = !data.acao;
+        if (data.acao) formulario.action = data.acao.url;
 
-        if (data.acao) {
-            formulario.action = data.acao.url;
-        }
-
-        const modal = document.getElementById('modalDetalhesRotina');
-        if (modal) {
-            modal.classList.remove('hidden');
-        }
-    }
-
-    function fecharModalDetalhes() {
-        const modal = document.getElementById('modalDetalhesRotina');
-        if (modal) {
-            modal.classList.add('hidden');
-        }
+        modal.showModal();
     }
 </script>

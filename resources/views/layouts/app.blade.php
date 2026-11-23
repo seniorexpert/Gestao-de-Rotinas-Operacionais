@@ -523,7 +523,7 @@
         </header>
 
         <main>
-            @if (request()->routeIs('home', 'processos.*', 'monitoramento.index', 'relatorios.rotinas', 'relatorios.tarefas', 'relatorios.locais', 'relatorios.ferramentas'))
+            @if (request()->routeIs('home', 'execucoes.realizando', 'processos.*', 'monitoramento.index', 'relatorios.rotinas', 'relatorios.tarefas', 'relatorios.locais', 'relatorios.ferramentas'))
                 @if (session('success'))
                     <p class="mx-auto mt-4 max-w-6xl rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
                         {{ session('success') }}

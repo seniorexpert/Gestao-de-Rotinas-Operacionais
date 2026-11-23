@@ -299,7 +299,7 @@ class RotinaAcompanhamentoControllerTest extends TestCase
             ->assertOk()
             ->assertSeeText('Hidratação mais antiga')
             ->assertDontSeeText('Hidratação 24')
-            ->assertViewHas('totais', ['pendentes' => 26, 'verificadas' => 0]);
+            ->assertViewHas('totais', ['pendentes' => 26, 'verificadas' => 0, 'nao_realizadas' => 0]);
     }
 
     #[TestWith(['Cuidadores', 'Enfermagem'])]
@@ -427,6 +427,98 @@ class RotinaAcompanhamentoControllerTest extends TestCase
 
         $this->actingAs($gerenteGeral)->get(route('acompanhamento.index', ['item' => $id]))
             ->assertNotFound();
+    }
+
+    #[TestWith(['Cuidador', 'Enfermagem'])]
+    #[TestWith(['Farmácia', 'Enfermagem'])]
+    #[TestWith(['Estoque', 'Coordenador'])]
+    #[TestWith(['Manutenção', 'Coordenador'])]
+    #[TestWith(['Auxiliar de Limpeza', 'Coordenador'])]
+    #[TestWith(['Auxiliar de Cozinha', 'Coordenador'])]
+    #[TestWith(['Enfermagem', 'Gerente da Unidade'])]
+    #[TestWith(['Coordenador', 'Gerente da Unidade'])]
+    #[TestWith(['Gerente da Unidade', 'Gerente Geral'])]
+    public function test_nao_realizacao_entra_imediatamente_na_caixa_do_superior(string $origem, string $destino): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $colaborador = $this->usuario('João Silva', $origem, $empresa);
+        $superior = $this->usuario('Rita Souza', $destino, $empresa);
+        $id = $this->execucaoEmAndamento($colaborador, $empresa);
+        $justificativa = 'Material indisponível <verificar estoque>';
+
+        $this->actingAs($colaborador)->post(route('execucoes.nao-realizada', $id), ['justificativa' => $justificativa])
+            ->assertSessionHasNoErrors()->assertRedirectToRoute('home', ['aba' => 'concluida']);
+        $this->post(route('execucoes.nao-realizada', $id), ['justificativa' => 'Não sobrescrever'])->assertRedirect();
+        $this->assertDatabaseCount('rotinas_acomp_nao_realizadas', 1);
+        $this->assertDatabaseHas('rotinas_acomp_nao_realizadas', [
+            'id_execucao' => $id, 'caixa' => $destino, 'recebido_em' => '2026-11-18 15:00:00', 'verificado_em' => null,
+        ]);
+
+        $this->actingAs($superior)->get(route('acompanhamento.index', ['aba' => 'nao_realizadas']))
+            ->assertOk()
+            ->assertSeeTextInOrder(['Pendentes', 'Verificadas', 'Tarefas Não Realizadas'])
+            ->assertSeeText(['Hidratação', 'Acompanhamento · No prazo']);
+        $this->get(route('acompanhamento.index', ['aba' => 'nao_realizadas', 'item' => $id]))
+            ->assertOk()
+            ->assertSeeTextInOrder(['O Colaborador João Silva não conseguiu realizar a tarefa Hidratação. Justificativa:', $justificativa, 'Sala de Estar'])
+            ->assertDontSee($justificativa, false);
+    }
+
+    public function test_nao_realizada_conta_o_sla_da_entrada_e_respeita_caixa_e_unidade(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $colaborador = $this->usuario('João Silva', 'Cuidador', $empresa);
+        $enfermagem = $this->usuario('Rita Souza', 'Enfermagem', $empresa);
+        $gerente = $this->usuario('Marcos Reis', 'Gerente da Unidade', $empresa);
+        $outraUnidade = $this->usuario('Ana Prado', 'Enfermagem', $this->empresa('Unidade Norte'));
+        $id = $this->execucaoEmAndamento($colaborador, $empresa);
+        $this->actingAs($colaborador)->post(route('execucoes.nao-realizada', $id), ['justificativa' => 'Morador ausente'])->assertRedirect();
+        $detalhe = route('acompanhamento.index', ['aba' => 'nao_realizadas', 'item' => $id]);
+
+        $this->actingAs($outraUnidade)->get($detalhe)->assertNotFound();
+        $this->travelTo(CarbonImmutable::parse('2026-11-18 15:14:59', 'UTC'));
+        $this->actingAs($enfermagem)->get($detalhe)->assertOk()->assertSeeText(['Acompanhamento · No prazo', '18/11/2026 12:30']);
+        $this->travelTo(CarbonImmutable::parse('2026-11-18 15:15:00', 'UTC'));
+        $this->get($detalhe)->assertOk()->assertSeeText('Acompanhamento · Expirando');
+        $this->travelTo(CarbonImmutable::parse('2026-11-18 15:29:59', 'UTC'));
+        $this->actingAs($gerente)->get($detalhe)->assertNotFound();
+
+        $this->travelTo(CarbonImmutable::parse('2026-11-18 15:30:00', 'UTC'));
+        $this->actingAs($enfermagem)->get($detalhe)->assertOk()->assertSeeText('Acompanhamento · Atrasada');
+        $this->actingAs($gerente)->get($detalhe)->assertOk()->assertSeeText(['Acompanhamento · No prazo', '18/11/2026 13:00']);
+    }
+
+    public function test_verificacao_de_nao_realizada_preserva_o_historico_de_atraso_da_mesma_execucao(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $colaborador = $this->usuario('João Silva', 'Cuidador', $empresa);
+        $enfermagem = $this->usuario('Rita Souza', 'Enfermagem', $empresa);
+        $gerente = $this->usuario('Marcos Reis', 'Gerente da Unidade', $empresa);
+        $id = $this->execucaoEmAndamento($colaborador, $empresa);
+        $this->actingAs($enfermagem)->post(route('acompanhamento.store', $id), ['acao' => 'Cobrei o início da rotina'])->assertSessionHasNoErrors();
+        $this->actingAs($colaborador)->post(route('execucoes.nao-realizada', $id), ['justificativa' => 'Morador ausente'])->assertSessionHasNoErrors();
+        $this->actingAs($enfermagem)->post(route('acompanhamento.store', $id), [
+            'aba' => 'nao_realizadas', 'tipo' => 'nao_realizada', 'acao' => 'Combinei um novo atendimento',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('rotinas_verificacoes', ['id_execucao' => $id, 'acao' => 'Cobrei o início da rotina']);
+        $this->assertDatabaseHas('rotinas_acomp_nao_realizadas', ['id_execucao' => $id, 'acao' => 'Combinei um novo atendimento']);
+        $this->get(route('acompanhamento.index', ['aba' => 'nao_realizadas']))->assertOk()->assertDontSeeText('Hidratação');
+        $this->get(route('acompanhamento.index', ['aba' => 'verificadas', 'item' => $id, 'tipo' => 'nao_realizada']))
+            ->assertOk()->assertSeeText(['Morador ausente', 'Combinei um novo atendimento']);
+
+        $this->travelTo(CarbonImmutable::parse('2026-11-18 15:30:00', 'UTC'));
+        $this->actingAs($gerente)->get(route('acompanhamento.index', ['aba' => 'nao_realizadas', 'item' => $id]))->assertNotFound();
+    }
+
+    private function execucaoEmAndamento(User $colaborador, int $empresa): int
+    {
+        return $this->execucao('Hidratação', $colaborador, $empresa, [
+            'status' => 'em_andamento',
+            'iniciado_em' => '2026-11-18 14:54:00',
+            'prazo_em' => '2026-11-18 14:59:00',
+            'duracao_prevista_segundos' => 300,
+        ]);
     }
 
     private function empresa(string $nome): int

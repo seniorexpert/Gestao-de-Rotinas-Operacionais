@@ -5,14 +5,20 @@ namespace App\Http\Controllers;
 use App\Services\CalculadoraSla;
 use App\Services\ConsultaRotinas;
 use App\Services\ExecucoesDiarias;
-use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
 
 class HomeController extends Controller
 {
+    private const ABAS = [
+        'pendente' => 'Pendentes',
+        'em_andamento' => 'Em andamento',
+        'concluida' => 'Concluídas',
+        'todas' => 'Todas',
+    ];
+
     public function __construct(
         private ConsultaRotinas $consultaRotinas,
         private ExecucoesDiarias $execucoesDiarias,
@@ -23,66 +29,42 @@ class HomeController extends Controller
     {
         $usuario = $request->user();
         $agora = now()->toImmutable();
-        $empresas = $this->consultaRotinas->empresas($usuario);
-        $this->execucoesDiarias->gerar($agora, $empresas);
-        $execucoes = $this->consultaRotinas->execucoesDoDia($usuario, $agora)
-            ->whereIn('e.status', ['pendente', 'em_andamento', 'concluida'])
-            ->orderBy('e.previsto_em')->get()->groupBy('id_rotina');
+        $abas = self::ABAS;
+        $aba = $request->query('aba');
+        $aba = is_string($aba) && isset($abas[$aba]) ? $aba : 'pendente';
 
-        $rotinas = DB::table('rotinas as r')
-            ->leftJoin('tarefas as t', 'r.id_tarefa', '=', 't.id_tarefa')
-            ->leftJoin('locais as l', 'r.id_local', '=', 'l.id_local')
-            ->whereIn('r.id_empresa', $empresas)
-            ->orderBy('r.horario')
-            ->orderBy('r.id_rotina')
-            ->get([
-                'r.id_rotina',
-                't.tarefa',
-                'r.horario',
-                'r.morador',
-                'r.local as local_rotina',
-                'l.local as local_cadastrado',
-                'r.auxilio',
-                'r.obs',
-                'r.status',
-            ]);
+        $this->execucoesDiarias->gerar($agora, $this->consultaRotinas->empresas($usuario));
+        $rotinas = $this->consultaRotinas->execucoesPessoais($usuario, $agora)
+            ->whereIn('e.status', ['pendente', 'em_andamento', 'concluida', 'nao_realizada'])
+            ->orderBy('e.previsto_em')->orderBy('e.id_execucao')->get();
 
         foreach ($rotinas as $rotina) {
             $rotina->local = trim($rotina->local_rotina ?? '') ?: (trim($rotina->local_cadastrado ?? '') ?: 'Não informado');
-            $rotina->horario = substr($rotina->horario, 0, 5);
-            $itens = $execucoes->get($rotina->id_rotina);
-            $execucao = $itens?->firstWhere('status', 'em_andamento') ?? $itens?->firstWhere('status', 'pendente') ?? $itens?->first();
-            $rotina->estado = $execucao?->status;
-            $rotina->acao_execucao = null;
-            $rotina->sla_execucao = null;
+            $rotina->horario = $rotina->horario ? substr($rotina->horario, 0, 5) : 'Não informado';
+            $rotina->aba = $rotina->status === 'nao_realizada' ? 'concluida' : $rotina->status;
+            $rotina->url_documentacao = $rotina->documentacao ? Storage::disk('public')->url($rotina->documentacao) : null;
+            $rotina->situacao_sla = null;
             $rotina->prazo_execucao = null;
+            $rotina->acao_execucao = match (true) {
+                $rotina->status === 'pendente' && (bool) $rotina->rotina_ativa => [
+                    'url' => route('execucoes.iniciar', $rotina->id_execucao), 'rotulo' => 'Iniciar tarefa',
+                ],
+                default => null,
+            };
 
-            if ($execucao === null) {
+            if ($rotina->status === 'nao_realizada') {
                 continue;
             }
 
-            $rotina->horario = CarbonImmutable::parse($execucao->previsto_em, 'UTC')->setTimezone(ExecucoesDiarias::FUSO)->format('H:i');
-            if ((int) $execucao->id_usuario_responsavel === (int) $usuario->getKey()) {
-                $rotina->acao_execucao = match (true) {
-                    $execucao->status === 'pendente' && (bool) $rotina->status => [
-                        'url' => route('execucoes.iniciar', $execucao->id_execucao), 'rotulo' => 'Iniciar tarefa',
-                    ],
-                    $execucao->status === 'em_andamento' => [
-                        'url' => route('execucoes.concluir', $execucao->id_execucao), 'rotulo' => 'Finalizar tarefa',
-                    ],
-                    default => null,
-                };
-            }
-
             try {
-                $resultado = $this->sla->calcular($execucao, $agora);
-                $rotina->sla_execucao = CalculadoraSla::ROTULOS[$resultado['sla_atual']];
+                $resultado = $this->sla->calcular($rotina, $agora);
+                $rotina->situacao_sla = $resultado['sla_atual'];
                 $rotina->prazo_execucao = $resultado['prazo_em']->setTimezone(ExecucoesDiarias::FUSO)->format('d/m H:i:s');
             } catch (InvalidArgumentException) {
-                $rotina->sla_execucao = 'Sem dados de SLA';
+                // As execuções permanecem visíveis quando há dados incompletos de SLA.
             }
         }
 
-        return view('home', compact('rotinas'));
+        return view('home', compact('rotinas', 'abas', 'aba'));
     }
 }

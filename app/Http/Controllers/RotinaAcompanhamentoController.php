@@ -25,7 +25,10 @@ class RotinaAcompanhamentoController extends Controller
     private const ABAS = [
         'pendentes' => 'Pendentes',
         'verificadas' => 'Verificadas',
+        'nao_realizadas' => 'Tarefas Não Realizadas',
     ];
+
+    private const NAO_REALIZADAS = 'rotinas_acomp_nao_realizadas';
 
     private const ITENS_POR_PAGINA = 24;
 
@@ -49,10 +52,9 @@ class RotinaAcompanhamentoController extends Controller
         abort_if($caixa === null, 403);
         $this->execucoesDiarias->gerar($agora, $this->rotinas->empresas($usuario));
 
-        $consulta = $this->itens($usuario);
-
         if (isset($filtros['item'])) {
-            $item = $consulta
+            $naoRealizada = isset($filtros['tipo']) || ($filtros['aba'] ?? null) === 'nao_realizadas';
+            $item = $this->itens($usuario, $naoRealizada)
                 ->leftJoin('usuarios as gerente', 'v.id_usuario_verificacao', '=', 'gerente.id_usuario')
                 ->addSelect('v.acao', 'gerente.usuario as verificado_por')
                 ->where('e.id_execucao', (int) $filtros['item'])
@@ -84,7 +86,7 @@ class RotinaAcompanhamentoController extends Controller
 
         $aba = $filtros['aba'] ?? 'pendentes';
         $parametros = ['aba' => $aba, 'busca' => $filtros['busca'] ?? null];
-        $execucoes = $consulta
+        $atrasos = $this->itens($usuario)
             ->where(function (Builder $query) use ($agora) {
                 $query->whereNotNull('v.id_execucao')
                     ->orWhere(fn (Builder $pendentes) => $pendentes
@@ -92,9 +94,11 @@ class RotinaAcompanhamentoController extends Controller
                         ->where(fn (Builder $horarios) => $horarios
                             ->where('e.previsto_em', '<=', $agora)
                             ->orWhere('e.iniciado_em', '<=', $agora)));
-            })
-            ->orderByDesc('e.previsto_em')
-            ->orderByDesc('e.id_execucao')
+            });
+        $naoRealizadas = $this->itens($usuario, true)->where('v.recebido_em', '<=', $agora);
+        $execucoes = DB::query()->fromSub($atrasos->unionAll($naoRealizadas), 'fila')
+            ->orderByDesc('entrada')
+            ->orderByDesc('id_execucao')
             ->cursor();
 
         $totais = array_fill_keys(array_keys(self::ABAS), 0);
@@ -161,6 +165,7 @@ class RotinaAcompanhamentoController extends Controller
         abort_if($caixa === null, 403);
 
         DB::transaction(function () use ($usuario, $caixa, $id, $dados) {
+            $naoRealizada = isset($dados['tipo']) || ($dados['aba'] ?? null) === 'nao_realizadas';
             $execucao = $this->execucoesDaUnidade($usuario)
                 ->where('e.id_execucao', $id)
                 ->lockForUpdate()
@@ -168,20 +173,27 @@ class RotinaAcompanhamentoController extends Controller
 
             abort_unless($execucao, 404);
 
-            $verificacao = DB::table('rotinas_verificacoes')->where('id_execucao', $id)->first();
+            $tabela = $naoRealizada ? self::NAO_REALIZADAS : 'rotinas_verificacoes';
+            $registro = DB::table($tabela)->where('id_execucao', $id)->first();
+            abort_if($naoRealizada && ($execucao->status !== 'nao_realizada' || ! $registro), 404);
 
-            if ($verificacao) {
-                abort_unless($this->podeConsultarVerificacao($verificacao, $caixa, $usuario), 404);
+            if ($registro?->verificado_em !== null) {
+                abort_unless($this->podeConsultarVerificacao($registro, $caixa, $usuario), 404);
 
                 return;
             }
 
+            $execucao->nao_realizada = $naoRealizada;
+            if ($naoRealizada) {
+                $execucao->caixa_inicial = $registro->caixa;
+                $execucao->entrada = $registro->recebido_em;
+            }
+
             $agora = now()->toImmutable();
-            $envio = $this->escalonamento->encaminhar($execucao, $agora);
+            $envio = $this->encaminharItem($execucao, $agora);
             abort_unless(isset($envio['recebimentos'][$caixa]), 404);
 
-            DB::table('rotinas_verificacoes')->insert([
-                'id_execucao' => $id,
+            $verificacao = [
                 'id_usuario_verificacao' => $usuario->getKey(),
                 'acao' => $dados['acao'],
                 'verificado_em' => $agora,
@@ -189,10 +201,16 @@ class RotinaAcompanhamentoController extends Controller
                     fn (CarbonImmutable $recebidoEm): string => $recebidoEm->toISOString(),
                     $envio['recebimentos'],
                 ), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
-            ]);
+            ];
+
+            if ($naoRealizada) {
+                DB::table($tabela)->where('id_execucao', $id)->update($verificacao);
+            } else {
+                DB::table($tabela)->insert(['id_execucao' => $id, ...$verificacao]);
+            }
 
             AuditoriaService::registrar(
-                'VERIFICAR', 'rotinas_verificacoes', (string) $id,
+                'VERIFICAR', $tabela, (string) $id,
                 dadosNovos: ['id_execucao' => $id, 'caixa' => $caixa, 'verificado_em' => $agora],
                 descricao: 'Verificação concluída no acompanhamento',
                 idEmpresa: (int) $execucao->id_empresa,
@@ -207,13 +225,14 @@ class RotinaAcompanhamentoController extends Controller
         ])->with('success', 'Verificação concluída.');
     }
 
-    /** @return array{aba: array, busca: array, page: array} */
+    /** @return array{aba: array, busca: array, page: array, tipo: array} */
     private function regrasDosFiltros(): array
     {
         return [
             'aba' => ['nullable', Rule::in(array_keys(self::ABAS))],
             'busca' => ['nullable', 'string', 'max:150'],
             'page' => ['nullable', 'integer', 'min:1'],
+            'tipo' => ['nullable', Rule::in(['nao_realizada'])],
         ];
     }
 
@@ -245,22 +264,31 @@ class RotinaAcompanhamentoController extends Controller
             ]);
     }
 
-    private function itens(User $usuario): Builder
+    private function itens(User $usuario, bool $naoRealizada = false): Builder
     {
-        return $this->execucoesDaUnidade($usuario)
+        $consulta = $this->execucoesDaUnidade($usuario)
             ->leftJoin('tarefas as t', 'r.id_tarefa', '=', 't.id_tarefa')
             ->leftJoin('locais as l', 'r.id_local', '=', 'l.id_local')
-            ->leftJoin('rotinas_verificacoes as v', 'e.id_execucao', '=', 'v.id_execucao')
             ->addSelect([
                 't.tarefa',
                 'r.morador',
                 'r.local as local_rotina',
                 'l.local as local_cadastrado',
                 'r.auxilio',
+                'e.justificativa_nao_realizada',
                 'v.verificado_em',
                 'v.id_usuario_verificacao',
                 'v.encaminhamentos',
             ]);
+
+        if ($naoRealizada) {
+            return $consulta->join(self::NAO_REALIZADAS.' as v', 'e.id_execucao', '=', 'v.id_execucao')
+                ->where('e.status', 'nao_realizada')
+                ->selectRaw('1 as nao_realizada, v.caixa as caixa_inicial, v.recebido_em as entrada');
+        }
+
+        return $consulta->leftJoin('rotinas_verificacoes as v', 'e.id_execucao', '=', 'v.id_execucao')
+            ->selectRaw('0 as nao_realizada, CAST(NULL AS VARCHAR(40)) as caixa_inicial, e.previsto_em as entrada');
     }
 
     private function prepararItem(stdClass $item, CarbonImmutable $agora, string $caixa, User $usuario): bool
@@ -271,7 +299,7 @@ class RotinaAcompanhamentoController extends Controller
             return $this->podeConsultarVerificacao($item, $caixa, $usuario);
         }
 
-        $envio = $this->escalonamento->encaminhar($item, $agora);
+        $envio = $this->encaminharItem($item, $agora);
         $recebidoEm = $envio['recebimentos'][$caixa] ?? null;
 
         if ($recebidoEm === null) {
@@ -284,6 +312,21 @@ class RotinaAcompanhamentoController extends Controller
         $item->sla_acompanhamento = $this->escalonamento->situacao($recebidoEm, $agora);
 
         return true;
+    }
+
+    /** @return array{atraso_segundos: ?int, recebimentos: array<string, CarbonImmutable>}|null */
+    private function encaminharItem(stdClass $item, CarbonImmutable $agora): ?array
+    {
+        if (! $item->nao_realizada) {
+            return $this->escalonamento->encaminhar($item, $agora);
+        }
+
+        return [
+            'atraso_segundos' => null,
+            'recebimentos' => $this->escalonamento->recebimentos(
+                [$item->caixa_inicial], CarbonImmutable::parse($item->entrada, 'UTC'), $agora,
+            ),
+        ];
     }
 
     private function podeConsultarVerificacao(stdClass $verificacao, string $caixa, User $usuario): bool
@@ -306,7 +349,11 @@ class RotinaAcompanhamentoController extends Controller
 
     private function abaDoItem(stdClass $item): string
     {
-        return $item->verificado_em === null ? 'pendentes' : 'verificadas';
+        return match (true) {
+            $item->verificado_em !== null => 'verificadas',
+            (bool) $item->nao_realizada => 'nao_realizadas',
+            default => 'pendentes',
+        };
     }
 
     private function correspondeBusca(stdClass $item, string $termo): bool
@@ -317,6 +364,7 @@ class RotinaAcompanhamentoController extends Controller
             $item->morador,
             $this->local($item),
             $this->processo($item),
+            $item->nao_realizada ? $item->justificativa_nao_realizada : null,
         ]);
 
         return str_contains(Str::lower(Str::ascii($texto)), $termo);
@@ -329,7 +377,7 @@ class RotinaAcompanhamentoController extends Controller
 
     private function processo(stdClass $item): string
     {
-        return $item->auxilio ? 'Solicitação de Auxílio' : 'Rotinas Diárias';
+        return $item->auxilio && ! $item->nao_realizada ? 'Solicitação de Auxílio' : 'Rotinas Diárias';
     }
 
     private function formatarItem(stdClass $item): stdClass
