@@ -34,7 +34,7 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/tarefas', [RelatorioController::class, 'tarefas'])->name('tarefas');
         Route::get('/ferramentas', [RelatorioController::class, 'ferramentas'])->name('ferramentas');
         Route::get('/locais', [RelatorioController::class, 'locais'])->name('locais');
-        Route::get('/rotinas-finalizadas', [RelatorioController::class, 'rotinasFinalizadas'])->name('rotinas');
+        Route::get('/rotinas-finalizadas', [RelatorioController::class, 'rotinasFinalizadas'])->name('rotinas-finalizadas');
         Route::get('/logs-rotinas', [AuditoriaController::class, 'index'])->name('logs-rotinas');
         Route::get('/logs-rotinas/{id}', [AuditoriaController::class, 'detalhes'])->whereNumber('id')->name('logs.detalhes');
         Route::get('/estatisticas', [EstatisticasController::class, 'index'])->name('estatisticas');
