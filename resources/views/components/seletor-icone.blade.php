@@ -199,6 +199,8 @@
                         btn.addEventListener('click', () => atualizarSelecao(item.emoji));
                         janela.appendChild(btn);
                     });
+
+                    container.dispatchEvent(new CustomEvent('cor-icone:aplicar', { bubbles: true }));
                 }
 
                 function rolarParaSelecionado() {
