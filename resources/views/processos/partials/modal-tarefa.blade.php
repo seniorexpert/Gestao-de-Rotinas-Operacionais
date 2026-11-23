@@ -1,4 +1,4 @@
-<div id="taskModal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+<div id="taskModal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
     <div class="bg-white rounded-3xl max-w-xl w-full p-8 relative shadow-2xl max-h-[90vh] flex flex-col">
         <button type="button" onclick="closeModal('taskModal')" class="absolute top-6 right-6 text-gray-400 hover:text-gray-700 focus:outline-none">
             <i class="fa-solid fa-xmark text-xl"></i>
