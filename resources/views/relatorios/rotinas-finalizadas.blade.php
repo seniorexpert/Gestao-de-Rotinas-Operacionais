@@ -47,9 +47,6 @@
                         <th class="py-4 px-6">Colaborador(a)</th>
                         <th class="py-4 px-6 w-44">Unidade</th>
                         <th class="py-4 px-6 w-44">Horários</th>
-                        <th class="py-4 px-6 w-32">Tarefas</th>
-                        <th class="py-4 px-6 w-32">Situação</th>
-                        <th class="py-4 px-6 w-28 text-right">Ação</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-100 text-sm">
@@ -73,22 +70,6 @@
                                 @else
                                     {{ $rotina->horario_inicio ?? '—' }}
                                 @endif
-                            </td>
-                            <td class="py-4 px-6">
-                                <span class="inline-flex items-center rounded-full bg-[#f4f1ea] px-3 py-1 text-xs font-bold text-[#1b2a38]">
-                                    {{ $rotina->total_tarefas == 1 ? '1 tarefa' : "{$rotina->total_tarefas} tarefas" }}
-                                </span>
-                            </td>
-                            <td class="py-4 px-6">
-                                <span class="px-3 py-1 rounded-full text-xs font-bold {{ isset($rotina->status_rotina) && $rotina->status_rotina == 1 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' }}">
-                                    {{ isset($rotina->status_rotina) && $rotina->status_rotina == 1 ? 'Ativa' : 'Inativa' }}
-                                </span>
-                            </td>
-                            <td class="py-4 px-6 text-right">
-                                <button type="button" onclick="openModal('modalDetalhesRotina')" class="inline-flex items-center space-x-1 text-sm font-semibold text-gray-700 hover:text-gray-900 transition">
-                                    <span>Editar</span>
-                                    <i class="fa-solid fa-chevron-right text-xs"></i>
-                                </button>
                             </td>
                         </tr>
                     @empty
