@@ -25,17 +25,26 @@
     <div class="space-y-4">
         @forelse($rotinas as $rotina)
             @php
-                $icone = '📋';
-                $localLower = strtolower($rotina->local ?? '');
-                if (str_contains($localLower, 'refeitório') || str_contains($localLower, 'cozinha')) {
-                    $icone = '🍽️';
-                } elseif (str_contains($localLower, 'banheiro') || str_contains($localLower, 'higiene')) {
-                    $icone = '🛁';
-                } elseif (str_contains($localLower, 'enfermagem') || str_contains($localLower, 'quarto')) {
-                    $icone = '💊';
+                $iconeSalvo = trim((string) ($rotina->icone ?? ''));
+                if ($iconeSalvo !== '') {
+                    $icone = $iconeSalvo;
                 } else {
-                    $icone = '🚶';
+                    $localLower = mb_strtolower($rotina->local ?? '', 'UTF-8');
+                    if (str_contains($localLower, 'refeitório') || str_contains($localLower, 'cozinha')) {
+                        $icone = '🍽️';
+                    } elseif (str_contains($localLower, 'banheiro') || str_contains($localLower, 'higiene')) {
+                        $icone = '🛁';
+                    } elseif (str_contains($localLower, 'enfermagem') || str_contains($localLower, 'quarto')) {
+                        $icone = '💊';
+                    } else {
+                        $icone = '🚶';
+                    }
                 }
+
+                $corIcone = trim((string) ($rotina->cor_icone ?? 'original'));
+                $hexCor = ($corIcone !== '' && $corIcone !== 'original' && preg_match('/^#[0-9a-fA-F]{3,8}$/', $corIcone))
+                    ? $corIcone
+                    : null;
 
                 $ativa = (bool) $rotina->status;
                 $estado = match ($rotina->estado) {
@@ -56,6 +65,8 @@
                     'prazo' => $rotina->prazo_execucao,
                     'acao' => $rotina->acao_execucao,
                     'icone' => $icone,
+                    'cor_icone' => $corIcone ?: 'original',
+                    'hex_cor' => $hexCor,
                 ];
             @endphp
 
@@ -64,7 +75,10 @@
                  onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.click(); }"
                  class="flex items-center justify-between p-4 border border-amber-200/80 rounded-2xl bg-white shadow-sm hover:shadow-md hover:border-slate-400 transition cursor-pointer">
                 <div class="flex items-center gap-4">
-                    <div class="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center text-3xl">
+                    <div data-rotina-icone-box
+                         data-icone="{{ $icone }}"
+                         data-hex-cor="{{ $hexCor ?? '' }}"
+                         class="w-14 h-14 rounded-2xl bg-gray-50 flex items-center justify-center text-3xl">
                         {{ $icone }}
                     </div>
                     <div>
@@ -112,6 +126,46 @@
 @include('sla.partials.modal-detalhes-rotina')
 
 <script>
+    function aplicarCorElementoRotina(el, emoji, hex) {
+        if (!el) return;
+
+        el.textContent = emoji;
+        el.style.color = '';
+        el.style.webkitTextFillColor = '';
+        el.style.filter = '';
+        el.style.position = '';
+        el.style.overflow = '';
+
+        const overlayAnterior = el.querySelector('[data-overlay-cor]');
+        if (overlayAnterior) {
+            overlayAnterior.remove();
+        }
+
+        if (!hex) return;
+
+        el.style.position = 'relative';
+        el.style.overflow = 'hidden';
+
+        const camada = document.createElement('span');
+        camada.setAttribute('data-overlay-cor', '1');
+        camada.style.position = 'absolute';
+        camada.style.inset = '0';
+        camada.style.backgroundColor = hex;
+        camada.style.mixBlendMode = 'color';
+        camada.style.pointerEvents = 'none';
+        camada.style.borderRadius = 'inherit';
+
+        el.appendChild(camada);
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('[data-rotina-icone-box]').forEach((box) => {
+            const emoji = box.dataset.icone || '📋';
+            const hex = box.dataset.hexCor || '';
+            aplicarCorElementoRotina(box, emoji, hex);
+        });
+    });
+
     function mudarAba(botaoClicado) {
         const botoes = document.querySelectorAll('.aba-btn');
         botoes.forEach(btn => {
