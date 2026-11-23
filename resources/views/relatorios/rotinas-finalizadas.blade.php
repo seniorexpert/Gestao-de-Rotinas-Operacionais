@@ -13,7 +13,7 @@
     </div>
 
     <div class="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-gray-200 mb-6">
-        <form method="GET" action="{{ route('relatorios.rotinas') }}" class="flex flex-col sm:flex-row items-end gap-3">
+        <form method="GET" action="{{ route('relatorios.rotinas-finalizadas') }}" class="flex flex-col sm:flex-row items-end gap-3">
             <div class="w-full">
                 <label class="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Colaborador(a)</label>
                 <div class="relative w-full">
@@ -31,7 +31,7 @@
                 <button type="submit" class="w-full sm:w-auto bg-[#1b2a38] hover:bg-[#111c26] text-white px-5 py-3 rounded-xl font-medium text-sm transition">
                     Filtrar
                 </button>
-                <a href="{{ route('relatorios.rotinas') }}" class="w-full sm:w-auto bg-gray-100 hover:bg-gray-200 text-gray-700 px-5 py-3 rounded-xl font-medium text-sm transition text-center">
+                <a href="{{ route('relatorios.rotinas-finalizadas') }}" class="w-full sm:w-auto bg-gray-100 hover:bg-gray-200 text-gray-700 px-5 py-3 rounded-xl font-medium text-sm transition text-center">
                     Limpar
                 </a>
             </div>
