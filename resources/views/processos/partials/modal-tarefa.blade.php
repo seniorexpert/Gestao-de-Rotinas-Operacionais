@@ -11,7 +11,7 @@
 
         <form action="{{ route('tarefas.store') }}" method="POST" enctype="multipart/form-data" class="space-y-6 sans-text overflow-y-auto flex-1 pr-1">
             @csrf
-            
+
             <input type="hidden" name="id" id="tarefa_id">
 
             <div>
@@ -43,6 +43,43 @@
                         <option value="{{ $ferramenta->id_ferramenta }}">{{ $ferramenta->ferramenta }}</option>
                     @endforeach
                 </select>
+            </div>
+
+            <div>
+                <x-seletor-icone name="icone" value="📋" />
+            </div>
+
+            @php
+                $coresIcone = [
+                    'original' => ['label' => 'Cores originais', 'hex' => null],
+                    '#1e2d3d'   => ['label' => 'Azul escuro', 'hex' => '#1e2d3d'],
+                    '#2563eb'   => ['label' => 'Azul', 'hex' => '#2563eb'],
+                    '#16a34a'   => ['label' => 'Verde', 'hex' => '#16a34a'],
+                    '#dc2626'   => ['label' => 'Vermelho', 'hex' => '#dc2626'],
+                    '#ea580c'   => ['label' => 'Laranja', 'hex' => '#ea580c'],
+                    '#9333ea'   => ['label' => 'Roxo', 'hex' => '#9333ea'],
+                    '#4b5563'   => ['label' => 'Cinza', 'hex' => '#4b5563'],
+                ];
+            @endphp
+            <div x-data="{ cor: 'original' }">
+                <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Cor do ícone</label>
+                <input type="hidden" name="cor_icone" id="cor_icone" :value="cor">
+                <div class="flex flex-wrap items-center gap-2.5">
+                    @foreach ($coresIcone as $valorCor => $infoCor)
+                        <button
+                            type="button"
+                            @click="cor = '{{ $valorCor }}'"
+                            title="{{ $infoCor['label'] }}"
+                            :class="cor === '{{ $valorCor }}' ? 'ring-2 ring-[#1e2d3d] ring-offset-2 border-[#1e2d3d]' : 'border-gray-300'"
+                            class="h-8 w-8 rounded-full border flex items-center justify-center transition cursor-pointer"
+                            style="{{ $infoCor['hex'] ? 'background-color: ' . $infoCor['hex'] . ';' : 'background-color: #f9fafb;' }}"
+                        >
+                            @if (!$infoCor['hex'])
+                                <span class="text-[10px] font-bold text-gray-600">Org</span>
+                            @endif
+                        </button>
+                    @endforeach
+                </div>
             </div>
 
             <div>

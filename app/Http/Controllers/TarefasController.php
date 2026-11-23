@@ -16,6 +16,8 @@ class TarefasController extends Controller
         $dados = $request->validate([
             'id' => 'nullable|integer|exists:tarefas,id_tarefa',
             'nome_tarefa' => 'required|string|max:100',
+            'cor_icone' => 'required|string|max:32',
+            'cor_icone' => 'required|string|max:20',
             'tempo_tarefa' => 'required|numeric|min:0.01|max:1439.99',
             'status_tarefa' => 'required|in:Ativa,Inativa',
             'id_ferramenta' => 'nullable|integer|exists:ferramentas,id_ferramenta',
