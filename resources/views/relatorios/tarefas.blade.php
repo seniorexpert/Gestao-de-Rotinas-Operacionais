@@ -40,40 +40,53 @@
                 </thead>
                 <tbody class="divide-y divide-gray-100 text-sm">
                     @forelse($tarefas as $tarefa)
-                    {{-- debug: {{ $tarefa->id_tarefa }} | {{ $tarefa->icone }} | {{ $tarefa->cor_icone }} --}}
                         @php
-    [$horas, $minutos, $segundos] = array_pad(explode(':', $tarefa->tempo_realizar_tarefa ?? ''), 3, 0);
-    $iconeRaw = $tarefa->icone ?? '';
-    $iconeTarefa = trim((string) $iconeRaw) !== '' ? trim((string) $iconeRaw) : '📋';
-    $corIconeTarefa = trim((string) ($tarefa->cor_icone ?? '')) ?: 'original';
-    $hexCorTarefa = ($corIconeTarefa !== 'original' && preg_match('/^#[0-9a-fA-F]{3,8}$/', $corIconeTarefa))
-        ? $corIconeTarefa
-        : null;
+                            [$horas, $minutos, $segundos] = array_pad(explode(':', $tarefa->tempo_realizar_tarefa ?? ''), 3, 0);
+                            $iconeRaw = $tarefa->icone ?? '';
+                            $iconeTarefa = trim((string) $iconeRaw) !== '' ? trim((string) $iconeRaw) : '📋';
+                            $corIconeTarefa = trim((string) ($tarefa->cor_icone ?? '')) ?: 'original';
+                            $hexCorTarefa = ($corIconeTarefa !== 'original' && preg_match('/^#[0-9a-fA-F]{3,8}$/', $corIconeTarefa))
+                                ? $corIconeTarefa
+                                : null;
 
-    $dadosEdicao = [
-        'id' => $tarefa->id_tarefa,
-        'nome' => $tarefa->tarefa,
-        'tempo' => ((int) $horas * 3600 + (int) $minutos * 60 + (int) $segundos) / 60,
-        'status' => $tarefa->status ? 'Ativa' : 'Inativa',
-        'descricao' => $tarefa->descricao,
-        'id_ferramenta' => $tarefa->id_ferramenta,
-        'icone' => $iconeTarefa,
-        'cor_icone' => $corIconeTarefa,
-    ];
-@endphp
-<tr class="linha-tarefa hover:bg-gray-50/60 transition">
-    <td class="py-4 px-6 font-medium text-gray-500">#{{ $tarefa->id_tarefa }}</td>
-    <td class="py-4 px-6">
-        <div class="flex items-center space-x-3">
-            <span
-                class="h-9 w-9 rounded-xl bg-[#fcfbf9] border border-amber-200/70 flex items-center justify-center text-xl leading-none shrink-0"
-                @if($hexCorTarefa)
-                    style="color: {{ $hexCorTarefa }}; filter: grayscale(100%) contrast(150%) drop-shadow(0 0 0 {{ $hexCorTarefa }});"
-                @endif
-            >{{ $iconeTarefa }}</span>
-            <span class="font-bold text-gray-800 uppercase">{{ $tarefa->tarefa ?? 'Sem nome' }}</span>
-        </div>
-    </td>
+                            $svgMascara = null;
+                            if ($hexCorTarefa) {
+                                $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
+                                     . '<text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-size="52">'
+                                     . htmlspecialchars($iconeTarefa, ENT_XML1 | ENT_QUOTES, 'UTF-8')
+                                     . '</text></svg>';
+                                $svgMascara = 'url("data:image/svg+xml,' . rawurlencode($svg) . '")';
+                            }
+
+                            $dadosEdicao = [
+                                'id' => $tarefa->id_tarefa,
+                                'nome' => $tarefa->tarefa,
+                                'tempo' => ((int) $horas * 3600 + (int) $minutos * 60 + (int) $segundos) / 60,
+                                'status' => $tarefa->status ? 'Ativa' : 'Inativa',
+                                'descricao' => $tarefa->descricao,
+                                'id_ferramenta' => $tarefa->id_ferramenta,
+                                'icone' => $iconeTarefa,
+                                'cor_icone' => $corIconeTarefa,
+                            ];
+                        @endphp
+                        <tr class="linha-tarefa hover:bg-gray-50/60 transition">
+                            <td class="py-4 px-6 font-medium text-gray-500">#{{ $tarefa->id_tarefa }}</td>
+                            <td class="py-4 px-6">
+                                <div class="flex items-center space-x-3">
+                                    <span class="h-9 w-9 rounded-xl bg-[#fcfbf9] border border-amber-200/70 flex items-center justify-center shrink-0">
+                                        @if ($svgMascara)
+                                            <span
+                                                class="inline-block h-6 w-6"
+                                                style="background-color: {{ $hexCorTarefa }}; -webkit-mask: {{ $svgMascara }} center / contain no-repeat; mask: {{ $svgMascara }} center / contain no-repeat;"
+                                                title="{{ $iconeTarefa }}"
+                                            ></span>
+                                        @else
+                                            <span class="text-xl leading-none">{{ $iconeTarefa }}</span>
+                                        @endif
+                                    </span>
+                                    <span class="font-bold text-gray-800 uppercase">{{ $tarefa->tarefa ?? 'Sem nome' }}</span>
+                                </div>
+                            </td>
                             <td class="py-4 px-6 text-gray-500">
                                 {{ $tarefa->tempo_realizar_tarefa ? substr($tarefa->tempo_realizar_tarefa, 0, 8) : 'Não informada' }}
                             </td>
@@ -123,35 +136,6 @@
     const itensPorPagina = 10; 
     let paginaAtual = 1;
     let linhasFiltradas = [];
-
-    function aplicarPinturaIconeTabela(el, emoji, hex) {
-        if (!el) return;
-
-        el.textContent = emoji;
-        el.style.position = '';
-        el.style.overflow = '';
-
-        const overlayAnterior = el.querySelector('[data-overlay-cor]');
-        if (overlayAnterior) {
-            overlayAnterior.remove();
-        }
-
-        if (!hex) return;
-
-        el.style.position = 'relative';
-        el.style.overflow = 'hidden';
-
-        const camada = document.createElement('span');
-        camada.setAttribute('data-overlay-cor', '1');
-        camada.style.position = 'absolute';
-        camada.style.inset = '0';
-        camada.style.backgroundColor = hex;
-        camada.style.mixBlendMode = 'color';
-        camada.style.pointerEvents = 'none';
-        camada.style.borderRadius = 'inherit';
-
-        el.appendChild(camada);
-    }
 
     function sincronizarModalTarefa(icone, corIcone) {
         const emoji = icone || '📋';
@@ -279,9 +263,6 @@
     });
 
     document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('[data-tabela-icone-box]').forEach((box) => {
-            aplicarPinturaIconeTabela(box, box.dataset.icone || '📋', box.dataset.hexCor || '');
-        });
         atualizarTabela();
     });
 </script>
