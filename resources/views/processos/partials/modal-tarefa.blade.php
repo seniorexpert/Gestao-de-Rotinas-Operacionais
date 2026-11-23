@@ -62,48 +62,31 @@
                 ];
             @endphp
 
-            <div x-data="{
-                cor: 'original',
-                cores: @js($coresIcone),
-                get corAtual() {
-                    return this.cores[this.cor] || this.cores['original'];
-                },
-                aplicarCorNoSeletor() {
-                    const modal = document.getElementById('taskModal');
-                    if (!modal) return;
-                    const preview = modal.querySelector('[data-icone-preview]');
-                    const botoes = modal.querySelectorAll('[data-janela] button');
-                    const hex = this.corAtual.hex;
-
-                    const estilo = hex
-                        ? `color: ${hex}; filter: grayscale(100%) contrast(140%) drop-shadow(0 0 0 ${hex});`
-                        : 'color: inherit; filter: none;';
-
-                    if (preview) preview.setAttribute('style', estilo);
-                    botoes.forEach((btn) => btn.setAttribute('style', estilo));
-                }
-            }" x-init="$watch('cor', () => aplicarCorNoSeletor())">
+            <div id="blocoCorIcone">
                 <div class="mb-2 flex items-center justify-between gap-2">
                     <label class="block text-xs font-bold tracking-wider text-[#1e2d3d] uppercase">Cor do ícone</label>
-                    <span class="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-xs font-semibold text-gray-700">
-                        <span
-                            class="h-2.5 w-2.5 rounded-full border border-gray-300"
-                            :style="corAtual.hex ? `background-color: ${corAtual.hex}` : 'background: linear-gradient(135deg, #ef4444, #22c55e, #3b82f6)'"
-                        ></span>
-                        <span x-text="corAtual.label"></span>
-                    </span>
+
+                    <!-- Badge com ícone pintado + nome da cor selecionada -->
+                    <div class="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-[#fcfbf9] px-3 py-1">
+                        <span id="previewCorIcone" class="relative inline-flex h-6 w-6 items-center justify-center text-lg leading-none">
+                            <span id="previewCorIconeEmoji">📋</span>
+                        </span>
+                        <span id="labelCorIcone" class="text-xs font-bold text-[#1e2d3d]">Cores originais</span>
+                    </div>
                 </div>
 
-                <input type="hidden" name="cor_icone" id="cor_icone" :value="cor">
+                <input type="hidden" name="cor_icone" id="cor_icone" value="original">
 
                 <div class="flex flex-wrap items-center gap-2.5">
                     @foreach ($coresIcone as $valorCor => $infoCor)
                         <button
                             type="button"
-                            @click="cor = '{{ $valorCor }}'"
+                            data-cor-btn="{{ $valorCor }}"
+                            data-cor-label="{{ $infoCor['label'] }}"
+                            data-cor-hex="{{ $infoCor['hex'] ?? '' }}"
                             title="{{ $infoCor['label'] }}"
-                            :class="cor === '{{ $valorCor }}' ? 'ring-2 ring-[#1e2d3d] ring-offset-2 border-[#1e2d3d]' : 'border-gray-300'"
-                            class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border transition"
+                            onclick="selecionarCorIcone('{{ $valorCor }}')"
+                            class="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-gray-300 transition ring-2 ring-[#1e2d3d] ring-offset-2"
                             style="{{ $infoCor['hex'] ? 'background-color: ' . $infoCor['hex'] . ';' : 'background-color: #f9fafb;' }}"
                         >
                             @if (!$infoCor['hex'])
@@ -131,3 +114,101 @@
         </form>
     </div>
 </div>
+
+<script>
+    (function () {
+    const CORES_MAP = {
+        'original': { label: 'Cores originais', hex: null },
+        '#1e2d3d':  { label: 'Azul escuro',    hex: '#1e2d3d' },
+        '#2563eb':  { label: 'Azul',           hex: '#2563eb' },
+        '#16a34a':  { label: 'Verde',          hex: '#16a34a' },
+        '#dc2626':  { label: 'Vermelho',       hex: '#dc2626' },
+        '#ea580c':  { label: 'Laranja',        hex: '#ea580c' },
+        '#9333ea':  { label: 'Roxo',           hex: '#9333ea' },
+        '#4b5563':  { label: 'Cinza',          hex: '#4b5563' },
+    };
+
+    function getEmojiAtual() {
+        const input = document.querySelector('#taskModal [data-icone-input]');
+        return (input && input.value) ? input.value : '📋';
+    }
+
+    function aplicarEstiloPintura(el, emoji, hex) {
+        if (!el) return;
+        if (!hex) {
+            el.style.color = '';
+            el.style.webkitTextFillColor = '';
+            el.style.filter = '';
+            el.textContent = emoji;
+            return;
+        }
+        el.textContent = emoji;
+        el.style.color = hex;
+        el.style.webkitTextFillColor = hex;
+        el.style.filter = 'grayscale(100%) contrast(1000%)';
+    }
+
+    window.atualizarPreviewCorIcone = function () {
+        const corAtual = document.getElementById('cor_icone')?.value || 'original';
+        const info = CORES_MAP[corAtual] || CORES_MAP['original'];
+        const emoji = getEmojiAtual();
+
+        const labelEl = document.getElementById('labelCorIcone');
+        const emojiEl = document.getElementById('previewCorIconeEmoji');
+
+        if (labelEl) labelEl.textContent = info.label;
+        aplicarEstiloPintura(emojiEl, emoji, info.hex);
+
+        const previewTopo = document.querySelector('#taskModal [data-icone-preview]');
+        aplicarEstiloPintura(previewTopo, emoji, info.hex);
+
+        document.querySelectorAll('#taskModal [data-janela] button').forEach((btn) => {
+            aplicarEstiloPintura(btn, btn.textContent, info.hex);
+        });
+    };
+
+    window.selecionarCorIcone = function (valorCor) {
+        const inputCor = document.getElementById('cor_icone');
+        if (inputCor) inputCor.value = valorCor;
+
+        document.querySelectorAll('[data-cor-btn]').forEach((btn) => {
+            const ativo = btn.getAttribute('data-cor-btn') === valorCor;
+            btn.classList.toggle('ring-2', ativo);
+            btn.classList.toggle('ring-[#1e2d3d]', ativo);
+            btn.classList.toggle('ring-offset-2', ativo);
+            btn.classList.toggle('border-[#1e2d3d]', ativo);
+            btn.classList.toggle('border-gray-300', !ativo);
+        });
+
+        window.atualizarPreviewCorIcone();
+    };
+
+    document.addEventListener('change', function (e) {
+        if (e.target && e.target.matches('#taskModal [data-icone-input]')) {
+            window.atualizarPreviewCorIcone();
+        }
+    });
+
+    document.addEventListener('cor-icone:aplicar', function () {
+        window.atualizarPreviewCorIcone();
+    });
+
+    const modal = document.getElementById('taskModal');
+    if (modal) {
+        const observer = new MutationObserver(() => {
+            const visivel = !modal.classList.contains('hidden') && getComputedStyle(modal).display !== 'none';
+            if (visivel) {
+                modal.style.display = 'flex';
+                modal.style.alignItems = 'center';
+                modal.style.justifyContent = 'center';
+                window.atualizarPreviewCorIcone();
+            }
+        });
+        observer.observe(modal, { attributes: true, attributeFilter: ['class', 'style'] });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        window.selecionarCorIcone('original');
+    });
+})();
+</script>
