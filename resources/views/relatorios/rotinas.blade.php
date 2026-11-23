@@ -10,10 +10,12 @@
             <h1 class="text-3xl font-bold text-gray-900 tracking-tight">Relatório de Rotinas</h1>
             <p class="text-sm text-gray-500 mt-1">Visualize, busque e gerencie as rotinas de colaboradores cadastradas</p>
         </div>
+        @can('editar-modulo', 'rotinas')
         <a href="#" onclick="abrirModal('rotinaModal')" class="inline-flex items-center justify-center space-x-2 bg-[#1b2a38] hover:bg-[#111c26] text-white px-5 py-3 rounded-xl font-medium text-sm transition shrink-0">
             <i class="fa-solid fa-plus"></i>
             <span>Novo registro</span>
         </a>
+        @endcan
     </div>
 
     <div class="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-gray-200 mb-6">
@@ -89,10 +91,12 @@
                                 </span>
                             </td>
                             <td class="py-4 px-6 text-right">
+                                @can('editar-modulo', 'rotinas')
                                 <button type="button" onclick="openModal('modalDetalhesRotina')" class="inline-flex items-center space-x-1 text-sm font-semibold text-gray-700 hover:text-gray-900 transition">
                                     <span>Editar</span>
                                     <i class="fa-solid fa-chevron-right text-xs"></i>
                                 </button>
+                                @endcan
                             </td>
                         </tr>
                     @empty
@@ -109,9 +113,11 @@
 
 </div>
 
+@can('editar-modulo', 'rotinas')
 @include('processos.partials.modal-rotina')
 @include('processos.partials.modal-tarefa-rotina')
 @include('processos.partials.modal-detalhes-rotinas')
+@endcan
 
 @endsection
 

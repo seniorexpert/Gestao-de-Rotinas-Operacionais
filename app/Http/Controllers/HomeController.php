@@ -5,7 +5,9 @@ namespace App\Http\Controllers;
 use App\Services\CalculadoraSla;
 use App\Services\ConsultaRotinas;
 use App\Services\ExecucoesDiarias;
+use App\Services\PermissoesAcesso;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use InvalidArgumentException;
@@ -25,9 +27,21 @@ class HomeController extends Controller
         private CalculadoraSla $sla,
     ) {}
 
+    public function entrada(Request $request): View|RedirectResponse
+    {
+        foreach (PermissoesAcesso::MODULOS as $modulo => $dados) {
+            if ($request->user()->can('visualizar-modulo', $modulo)) {
+                return to_route($dados['rota']);
+            }
+        }
+
+        return view('auth.sem-modulos');
+    }
+
     public function index(Request $request): View
     {
         $usuario = $request->user();
+        $editar = $usuario->can('editar-modulo', 'rotinas_diarias');
         $agora = now()->toImmutable();
         $abas = self::ABAS;
         $aba = $request->query('aba');
@@ -46,7 +60,7 @@ class HomeController extends Controller
             $rotina->situacao_sla = null;
             $rotina->prazo_execucao = null;
             $rotina->acao_execucao = match (true) {
-                $rotina->status === 'pendente' && (bool) $rotina->rotina_ativa => [
+                $editar && $rotina->status === 'pendente' && (bool) $rotina->rotina_ativa => [
                     'url' => route('execucoes.iniciar', $rotina->id_execucao), 'rotulo' => 'Iniciar tarefa',
                 ],
                 default => null,

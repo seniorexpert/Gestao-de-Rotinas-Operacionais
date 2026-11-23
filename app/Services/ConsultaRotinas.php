@@ -13,6 +13,10 @@ class ConsultaRotinas
 {
     public function empresas(User $usuario): Builder
     {
+        if ($usuario->isAdmin()) {
+            return DB::table('empresas')->select('id_empresa');
+        }
+
         return DB::table('empresa_usuario')
             ->select('id_empresa')
             ->where('id_usuario', $usuario->getKey());
@@ -72,7 +76,7 @@ class ConsultaRotinas
     {
         $consulta = $dia ? $this->execucoesDoDia($usuario, $dia) : $this->execucoes($usuario);
 
-        return $consulta->where('e.id_usuario_responsavel', $usuario->getKey())
+        return $consulta->when(! $usuario->isAdmin(), fn (Builder $consulta) => $consulta->where('e.id_usuario_responsavel', $usuario->getKey()))
             ->leftJoin('ferramentas as f', 't.id_ferramenta', '=', 'f.id_ferramenta')
             ->addSelect('r.horario', 'r.obs', 'r.auxilio', 't.descricao', 't.documentacao', 't.icone', 't.cor_icone', 'f.ferramenta',
                 'e.comentario_conclusao', 'e.foto_conclusao', 'e.justificativa_nao_realizada');

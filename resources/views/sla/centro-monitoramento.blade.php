@@ -6,11 +6,13 @@
 <div class="mx-auto max-w-7xl px-4 py-8 text-slate-800 sm:px-6">
     <div class="mb-7 flex flex-wrap items-center justify-between gap-4">
         <h1 class="font-serif text-3xl font-bold">Centro de Monitoramento</h1>
+        @can('editar-modulo', 'monitoramento')
         <button type="button" onclick="abrirModalAtribuir()"
             class="inline-flex items-center gap-2 rounded-xl bg-[#1e293b] px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700">
             <i class="fa-solid fa-arrow-right-arrow-left" aria-hidden="true"></i>
             Atribuir tarefa
         </button>
+        @endcan
     </div>
 
     <div id="painelMonitoramento">
@@ -95,13 +97,15 @@
     </div>
 </div>
 
-@include('sla.partials.modal-atribuir-tarefa')
+@can('editar-modulo', 'monitoramento')
+    @include('sla.partials.modal-atribuir-tarefa')
+@endcan
 @include('sla.partials.modal-detalhes-produtividade')
 
 <script>
     (() => {
         let atualizando = false;
-        const modais = ['modalAtribuirTarefa', 'modalDetalhesProdutividade'].map(id => document.getElementById(id));
+        const modais = ['modalAtribuirTarefa', 'modalDetalhesProdutividade'].map(id => document.getElementById(id)).filter(Boolean);
         const modalAberto = () => modais.some(modal => !modal.classList.contains('hidden'));
 
         setInterval(async () => {

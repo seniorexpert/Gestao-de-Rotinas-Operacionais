@@ -12,6 +12,8 @@ class User extends Authenticatable
 {
     use HasFactory, Notifiable;
 
+    public const LOGIN_ADMIN = 'admin';
+
     protected $table = 'usuarios';
 
     protected $primaryKey = 'id_usuario';
@@ -37,6 +39,11 @@ class User extends Authenticatable
             'password' => 'hashed',
             'status' => 'boolean',
         ];
+    }
+
+    public function isAdmin(): bool
+    {
+        return strcasecmp(trim((string) $this->username), self::LOGIN_ADMIN) === 0;
     }
 
     public function empresas(): BelongsToMany

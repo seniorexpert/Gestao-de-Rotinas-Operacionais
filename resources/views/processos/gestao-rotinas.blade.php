@@ -29,76 +29,52 @@
         <h1 class="text-3xl font-bold text-[#1e2d3d] mb-1">Cadastros de Gestão de Rotinas</h1>
         <p class="sans-text text-gray-500 mb-8">Gerencie rotinas, tarefas, ferramentas e locais com eficiência e organização.</p>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        @php
+            $cadastros = [
+                'rotinas' => ['Rotinas', 'fa-calendar-days', 'relatorios.rotinas', 'rotinaModal'],
+                'tarefas' => ['Tarefas', 'fa-list-check', 'relatorios.tarefas', 'taskModal'],
+                'ferramentas' => ['Ferramentas', 'fa-wrench', 'relatorios.ferramentas', 'ferramentaModal'],
+                'locais' => ['Locais', 'fa-location-dot', 'relatorios.locais', 'localModal'],
+            ];
+            $editarProcessos = auth()->user()->can('editar-modulo', 'processos');
+            $cadastros = array_filter($cadastros, fn ($modulo) => auth()->user()->can('visualizar-modulo', $modulo), ARRAY_FILTER_USE_KEY);
+        @endphp
 
-            <button type="button" onclick="openModal('rotinaModal')" class="group bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 flex items-center justify-between text-left w-full">
-                <div class="flex items-center gap-5">
-                    <div class="w-16 h-16 rounded-full bg-[#f4f1ea] text-[#1e2d3d] group-hover:bg-[#1e2d3d] group-hover:text-white transition-colors duration-300 flex items-center justify-center shrink-0">
-                        <i class="fa-regular fa-calendar-days text-2xl"></i>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold text-[#1e2d3d]">Rotinas</h3>
-                        <p class="sans-text text-gray-500 text-xs mt-1">Criar, consultar e editar rotinas, horários e colaboradores</p>
-                    </div>
-                </div>
-                <div class="w-8 h-8 rounded-full bg-[#f4f1ea] text-gray-400 group-hover:bg-[#1e2d3d] group-hover:text-white flex items-center justify-center shrink-0 ml-4 group-hover:translate-x-1 transition-transform">
-                    <i class="fa-solid fa-chevron-right text-xs"></i>
-                </div>
-            </button>
-
-            <button type="button" onclick="openModal('taskModal')" class="group bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 flex items-center justify-between text-left w-full">
-                <div class="flex items-center gap-5">
-                    <div class="w-16 h-16 rounded-full bg-[#f4f1ea] text-[#1e2d3d] group-hover:bg-[#1e2d3d] group-hover:text-white transition-colors duration-300 flex items-center justify-center shrink-0">
-                        <i class="fa-regular fa-clipboard text-2xl"></i>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold text-[#1e2d3d]">Tarefas</h3>
-                        <p class="sans-text text-gray-500 text-xs mt-1">Cadastrar instruções, tempo de duração e recursos utilizados</p>
-                    </div>
-                </div>
-                <div class="w-8 h-8 rounded-full bg-[#f4f1ea] text-gray-400 group-hover:bg-[#1e2d3d] group-hover:text-white flex items-center justify-center shrink-0 ml-4 group-hover:translate-x-1 transition-transform">
-                    <i class="fa-solid fa-chevron-right text-xs"></i>
-                </div>
-            </button>
-
-            <button type="button" onclick="openModal('ferramentaModal')" class="group bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 flex items-center justify-between text-left w-full">
-                <div class="flex items-center gap-5">
-                    <div class="w-16 h-16 rounded-full bg-[#f4f1ea] text-[#1e2d3d] group-hover:bg-[#1e2d3d] group-hover:text-white transition-colors duration-300 flex items-center justify-center shrink-0">
-                        <i class="fa-solid fa-gear text-2xl"></i>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold text-[#1e2d3d]">Ferramentas</h3>
-                        <p class="sans-text text-gray-500 text-xs mt-1">Gerenciar equipamentos e ferramentas de apoio às tarefas</p>
-                    </div>
-                </div>
-                <div class="w-8 h-8 rounded-full bg-[#f4f1ea] text-gray-400 group-hover:bg-[#1e2d3d] group-hover:text-white flex items-center justify-center shrink-0 ml-4 group-hover:translate-x-1 transition-transform">
-                    <i class="fa-solid fa-chevron-right text-xs"></i>
-                </div>
-            </button>
-
-            <button type="button" onclick="openModal('localModal')" class="group bg-white p-6 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 flex items-center justify-between text-left w-full">
-                <div class="flex items-center gap-5">
-                    <div class="w-16 h-16 rounded-full bg-[#f4f1ea] text-[#1e2d3d] group-hover:bg-[#1e2d3d] group-hover:text-white transition-colors duration-300 flex items-center justify-center shrink-0">
-                        <i class="fa-solid fa-location-dot text-2xl"></i>
-                    </div>
-                    <div>
-                        <h3 class="text-xl font-bold text-[#1e2d3d]">Local</h3>
-                        <p class="sans-text text-gray-500 text-xs mt-1">Cadastrar e gerenciar os ambientes de realização das tarefas</p>
-                    </div>
-                </div>
-                <div class="w-8 h-8 rounded-full bg-[#f4f1ea] text-gray-400 group-hover:bg-[#1e2d3d] group-hover:text-white flex items-center justify-center shrink-0 ml-4 group-hover:translate-x-1 transition-transform">
-                    <i class="fa-solid fa-chevron-right text-xs"></i>
-                </div>
-            </button>
-
+        <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+            @forelse ($cadastros as $modulo => [$nome, $icone, $rota, $modal])
+                @php($editar = $editarProcessos && auth()->user()->can('editar-modulo', $modulo))
+                <a href="{{ route($rota) }}" @if ($editar) onclick="event.preventDefault(); openModal(@js($modal))" @endif
+                   class="group flex w-full items-center gap-5 rounded-3xl border border-gray-100 bg-white p-6 text-left shadow-sm transition hover:shadow-md">
+                    <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#f4f1ea] text-lg" aria-hidden="true">
+                        <i class="fa-solid {{ $icone }}"></i>
+                    </span>
+                    <span class="min-w-0 flex-1">
+                        <strong class="block text-xl">{{ $nome }}</strong>
+                        <span class="sans-text mt-1 block text-xs text-slate-600">{{ $editar ? 'Cadastrar' : 'Consultar' }}</span>
+                    </span>
+                    <i class="fa-solid fa-chevron-right text-xs text-[#886934]" aria-hidden="true"></i>
+                </a>
+            @empty
+                <p class="sans-text col-span-full text-sm text-slate-600">Nenhum cadastro está disponível para o seu usuário.</p>
+            @endforelse
         </div>
     </div>
 
-    @include('processos.partials.modal-tarefa')
-    @include('processos.partials.modal-ferramenta')
-    @include('processos.partials.modal-local')
-    @include('processos.partials.modal-rotina')
-    @include('processos.partials.modal-tarefa-rotina')
+    @if ($editarProcessos)
+        @can('editar-modulo', 'tarefas')
+            @include('processos.partials.modal-tarefa')
+        @endcan
+        @can('editar-modulo', 'ferramentas')
+            @include('processos.partials.modal-ferramenta')
+        @endcan
+        @can('editar-modulo', 'locais')
+            @include('processos.partials.modal-local')
+        @endcan
+        @can('editar-modulo', 'rotinas')
+            @include('processos.partials.modal-rotina')
+            @include('processos.partials.modal-tarefa-rotina')
+        @endcan
+    @endif
 
     <script>
         function openModal(modalId) {

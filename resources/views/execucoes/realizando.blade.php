@@ -65,6 +65,7 @@
         <p class="mb-4 text-sm text-[#64748b]">Limite para finalizar <strong class="font-semibold text-[#21394e]">{{ $prazo }}</strong></p>
     @endif
 
+    @can('editar-modulo', 'rotinas_diarias')
     <div class="grid gap-2.5">
         @foreach ([
             'finalizar' => ['Finalizar Tarefa', 'bg-[#2d5a27] hover:bg-[#23471f]'],
@@ -74,5 +75,6 @@
             <a href="{{ route('execucoes.formulario', [$execucao->id_execucao, $acao]) }}" class="rounded-xl px-3 py-3.5 text-center text-sm font-bold text-white shadow-sm transition-colors {{ $cor }}">{{ $nome }}</a>
         @endforeach
     </div>
+    @endcan
 </div>
 @endsection

@@ -37,6 +37,8 @@ class AuditoriaController extends Controller
         'requisicoes' => 'Navegação',
         'usuarios' => 'Usuários',
         'empresa_usuario' => 'Vínculos de unidade',
+        'permissoes_grupos_acesso' => 'Permissões de grupos',
+        'permissoes_usuarios' => 'Permissões individuais',
         'tarefas' => 'Tarefas',
         'locais' => 'Locais',
         'ferramentas' => 'Ferramentas',
@@ -89,7 +91,7 @@ class AuditoriaController extends Controller
     public function index(Request $request): View
     {
         $usuario = $request->user();
-        $visaoGeral = $usuario->can('gerenciar-usuarios');
+        $visaoGeral = $usuario->can('auditoria-geral');
         $filtros = $this->filtros($request);
         $logs = $this->projetar($this->filtrar($this->consulta($usuario, $visaoGeral), $filtros))
             ->orderByDesc('a.id_log')->paginate(25)->appends($filtros)
@@ -111,7 +113,7 @@ class AuditoriaController extends Controller
     public function detalhes(Request $request, int $id): View
     {
         $usuario = $request->user();
-        $visaoGeral = $usuario->can('gerenciar-usuarios');
+        $visaoGeral = $usuario->can('auditoria-geral');
         $log = $this->buscarLog($usuario, $visaoGeral, $id);
         abort_unless($log, 404);
 
@@ -138,7 +140,7 @@ class AuditoriaController extends Controller
     public function apiDetalhes(Request $request, int $id): JsonResponse
     {
         $usuario = $request->user();
-        $log = $this->buscarLog($usuario, $usuario->can('gerenciar-usuarios'), $id);
+        $log = $this->buscarLog($usuario, $usuario->can('auditoria-geral'), $id);
 
         return $log ? response()->json(Arr::only((array) $log, [
             'id', 'created_at', 'data_evento', 'tarefa', 'detalhe_tarefa', 'colaborador_original',
@@ -151,7 +153,7 @@ class AuditoriaController extends Controller
         $usuario = $request->user();
         $filtros = $this->filtros($request);
         $ultimoId = DB::table('logs_auditoria')->max('id_log') ?? 0;
-        $logs = $this->projetar($this->filtrar($this->consulta($usuario, $usuario->can('gerenciar-usuarios')), $filtros))
+        $logs = $this->projetar($this->filtrar($this->consulta($usuario, $usuario->can('auditoria-geral')), $filtros))
             ->where('a.id_log', '<=', $ultimoId)->lazyByIdDesc(250, 'a.id_log', 'id');
 
         return response()->streamDownload(function () use ($logs) {

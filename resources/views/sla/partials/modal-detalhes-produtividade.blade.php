@@ -42,7 +42,7 @@
                             'bg-slate-100 text-slate-700' => $execucao->situacao_sla === 'semDados',
                             ])>{{ \App\Services\CalculadoraSla::ROTULOS[$execucao->situacao_sla] ?? 'Sem dados de SLA' }}</span>
                         @endif
-                        @if ($execucao->status === 'pendente' && $execucao->rotina_ativa)
+                        @if ($execucao->status === 'pendente' && $execucao->rotina_ativa && auth()->user()->can('editar-modulo', 'monitoramento'))
                             <button type="button" onclick="atribuirTarefaIndividual(@js((string) $execucao->id_rotina), @js((string) $execucao->rotina_responsavel))" class="text-xs font-semibold text-slate-700 hover:underline">
                                 Atribuir
                             </button>
@@ -56,9 +56,11 @@
             <button type="button" onclick="fecharModalDetalhesProd()" class="w-1/2 py-3.5 rounded-2xl border border-gray-300 text-slate-800 hover:bg-gray-50 text-sm font-bold transition text-center">
                 Fechar
             </button>
+            @can('editar-modulo', 'monitoramento')
             <button type="button" onclick="abrirAtribuirComColaborador()" class="w-1/2 py-3.5 rounded-2xl bg-[#1e293b] text-white hover:bg-slate-700 text-sm font-bold transition text-center">
                 ⇄ Atribuir tarefa
             </button>
+            @endcan
         </div>
 
     </div>

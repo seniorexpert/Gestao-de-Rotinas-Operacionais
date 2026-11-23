@@ -47,6 +47,7 @@
                 </div>
             </a>
 
+            @if (auth()->user()->can('editar-modulo', 'processos') && auth()->user()->can('editar-modulo', 'rotinas'))
             <a href="#" onclick="openModal('modalRotinaEmergencial')" 
             class="group bg-white p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between h-64 cursor-pointer">
                 <div>
@@ -66,6 +67,7 @@
                     ACESSAR <i class="fa-solid fa-arrow-right transition-transform group-hover:translate-x-1"></i>
                 </div>
             </a>
+            @endif
 
         </div>
     </div>
@@ -93,6 +95,8 @@
 </html>
 @endsection
 
-@include('processos.partials.modal-rotina-emergencial')
-@include('processos.partials.modal-tarefa-rotina-emergencial')
+@if (auth()->user()->can('editar-modulo', 'processos') && auth()->user()->can('editar-modulo', 'rotinas'))
+    @include('processos.partials.modal-rotina-emergencial')
+    @include('processos.partials.modal-tarefa-rotina-emergencial')
+@endif
 

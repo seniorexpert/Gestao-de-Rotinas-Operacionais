@@ -286,19 +286,23 @@
     
     @php
         $sidebarUser = Auth::user();
+        $inicio = $sidebarUser?->can('visualizar-modulo', 'rotinas_diarias') ? route('home') : route('dashboard');
         $sidebarReports = [
             'Cadastros' => [
-                ['Relatório de Rotinas', 'relatorios.rotinas', 'calendar-days'],
-                ['Relatório de Tarefas', 'relatorios.tarefas', 'list-checks'],
-                ['Relatório de Ferramentas', 'relatorios.ferramentas', 'wrench'],
-                ['Relatório de Locais', 'relatorios.locais', 'map-pin'],
+                ['Relatório de Rotinas', 'relatorios.rotinas', 'calendar-days', 'rotinas'],
+                ['Relatório de Tarefas', 'relatorios.tarefas', 'list-checks', 'tarefas'],
+                ['Relatório de Ferramentas', 'relatorios.ferramentas', 'wrench', 'ferramentas'],
+                ['Relatório de Locais', 'relatorios.locais', 'map-pin', 'locais'],
             ],
             'Históricos e Análise' => [
-                ['Relatório de Rotinas Finalizadas', 'relatorios.rotinas-finalizadas', 'clipboard-check'],
-                ['Relatório de Rotinas Excel', 'relatorios.excel', 'file-spreadsheet'],
-                [$sidebarUser?->can('gerenciar-usuarios') ? 'Logs e Auditoria' : 'Logs de Rotinas', 'relatorios.logs-rotinas', 'scroll-text'],
+                ['Relatório de Rotinas Finalizadas', 'relatorios.rotinas-finalizadas', 'clipboard-check', 'rotinas_finalizadas'],
+                ['Relatório de Rotinas Excel', 'relatorios.excel', 'file-spreadsheet', 'rotinas_excel'],
+                [$sidebarUser?->can('auditoria-geral') ? 'Logs e Auditoria' : 'Logs de Rotinas', 'relatorios.logs-rotinas', 'scroll-text', 'auditoria'],
             ],
         ];
+        $sidebarReports = collect($sidebarReports)
+            ->map(fn ($links) => array_filter($links, fn ($link) => $sidebarUser?->can('visualizar-modulo', $link[3])))
+            ->filter()->all();
     @endphp
 
     <aside id="sidebar" class="senior-sidebar -translate-x-full" aria-label="Menu lateral">
@@ -358,7 +362,7 @@
         </svg>
 
         <div class="senior-sidebar__header">
-            <a class="senior-sidebar__brand" href="{{ route('home') }}">
+            <a class="senior-sidebar__brand" href="{{ $inicio }}">
                 <img src="{{ asset('images/Logo_Senior_Expert_azul.png') }}" alt="Senior Expert">
             </a>
             <button type="button" id="closeSidebar" class="senior-sidebar__close" aria-label="Fechar menu lateral">
@@ -369,33 +373,42 @@
         </div>
 
         <nav class="senior-sidebar__nav" aria-label="Navegação principal">
+            @can('visualizar-modulo', 'rotinas_diarias')
             <a class="senior-sidebar__item" href="{{ route('home') }}" @if (request()->routeIs('home')) aria-current="page" @endif>
                 <svg class="senior-sidebar__icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#senior-menu-clipboard-list"/></svg>
                 <span>Rotinas Diárias</span>
             </a>
+            @endcan
 
-            @can('acompanhar-rotinas')
+            @can('visualizar-modulo', 'acompanhamento')
                 <a class="senior-sidebar__item" href="{{ route('acompanhamento.index') }}" @if (request()->routeIs('acompanhamento.*')) aria-current="page" @endif>
                     <svg class="senior-sidebar__icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#senior-menu-clipboard-check"/></svg>
                     <span>Rotina de Acompanhamento</span>
                 </a>
             @endcan
 
+            @can('visualizar-modulo', 'monitoramento')
             <a class="senior-sidebar__item" href="{{ route('monitoramento.index') }}" @if (request()->routeIs('monitoramento.*')) aria-current="page" @endif>
                 <svg class="senior-sidebar__icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#senior-menu-activity"/></svg>
                 <span>Centro de Monitoramento</span>
             </a>
+            @endcan
 
+            @can('visualizar-modulo', 'processos')
             <a class="senior-sidebar__item" href="{{ route('processos.index') }}" @if (request()->routeIs('processos.*')) aria-current="page" @endif>
                 <svg class="senior-sidebar__icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#senior-menu-circle-play"/></svg>
                 <span>Iniciar Processos</span>
             </a>
+            @endcan
 
+            @can('visualizar-modulo', 'estatisticas')
             <a class="senior-sidebar__item" href="{{ route('relatorios.estatisticas') }}" @if (request()->routeIs('relatorios.estatisticas')) aria-current="page" @endif>
                 <svg class="senior-sidebar__icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#senior-menu-pie-chart"/></svg>
                 <span>Estatísticas</span>
             </a>
+            @endcan
 
+            @if ($sidebarReports !== [])
             <button type="button" id="toggleRelatorios" class="senior-sidebar__item senior-sidebar__reports-toggle" aria-controls="relatoriosMenu" aria-expanded="true">
                 <svg class="senior-sidebar__icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#senior-menu-chart-column"/></svg>
                 <span>Relatórios</span>
@@ -428,6 +441,14 @@
                     </div>
                 @endforeach
             </div>
+            @endif
+
+            @can('administrar-permissoes')
+                <a class="senior-sidebar__item" href="{{ route('permissoes.index') }}" @if (request()->routeIs('permissoes.*')) aria-current="page" @endif>
+                    <i class="fa-solid fa-shield-halved senior-sidebar__icon" aria-hidden="true"></i>
+                    <span>Permissões de Acesso</span>
+                </a>
+            @endcan
         </nav>
 
         <nav class="senior-sidebar__utility" aria-label="Ajuda e conta">
@@ -475,7 +496,7 @@
             </div>
 
             <div class="absolute left-1/2 transform -translate-x-1/2 max-w-[120px] sm:max-w-none">
-                <a href="{{ url('/home') }}">
+                <a href="{{ $inicio }}">
                     <img src="{{ asset('images/Logo_Senior_Expert_azul.png') }}" alt="Senior Expert" class="h-8 sm:h-10 w-auto object-contain">
                 </a>
             </div>
@@ -502,7 +523,7 @@
                                 <span>Área do usuário</span>
                             </a>
 
-                            @can('gerenciar-usuarios')
+                            @can('visualizar-modulo', 'usuarios')
                                 <a href="{{ route('usuarios.index') }}" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2 transition">
                                     <i class="fa-solid fa-users"></i>
                                     <span>Gestão de acessos</span>
@@ -593,7 +614,7 @@
         const relatoriosMenu = document.getElementById('relatoriosMenu');
         const relatoriosChevron = document.getElementById('relatoriosChevron');
 
-        toggleRelatorios.addEventListener('click', function () {
+        toggleRelatorios?.addEventListener('click', function () {
             const expanded = !relatoriosMenu.classList.toggle('hidden');
             toggleRelatorios.setAttribute('aria-expanded', String(expanded));
             relatoriosChevron.classList.toggle('rotate-180', !expanded);

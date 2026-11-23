@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\GrupoAcesso;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Str;
@@ -35,9 +36,12 @@ class EscalonamentoAcompanhamento
 
     public function caixaDoUsuario(User $usuario): ?string
     {
-        $grupo = $usuario->grupoAcesso;
+        return $usuario->status ? $this->caixaDoGrupo($usuario->grupoAcesso) : null;
+    }
 
-        if (! $usuario->status || ! $grupo?->status) {
+    public function caixaDoGrupo(?GrupoAcesso $grupo): ?string
+    {
+        if (! $grupo?->status) {
             return null;
         }
 

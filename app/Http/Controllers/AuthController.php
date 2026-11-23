@@ -23,7 +23,7 @@ class AuthController extends Controller
         if (Auth::attempt([...$credentials, 'status' => true])) {
             $request->session()->regenerate();
 
-            return redirect()->intended('home');
+            return redirect()->intended(route(Auth::user()->can('visualizar-modulo', 'rotinas_diarias') ? 'home' : 'dashboard'));
         }
 
         $request->attributes->set(AuditoriaService::RESULTADO_HTTP, 'recusado');

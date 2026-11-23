@@ -13,10 +13,15 @@
         </p>
     @endif
 
+    @can('editar-modulo', 'usuarios')
     <button type="button" id="adicionarUsuario" class="mb-6 inline-flex items-center gap-2 px-4 py-2 border border-gray-900 rounded-lg text-sm font-medium text-gray-900 hover:bg-gray-50 transition">
         <i class="fa-solid fa-plus text-xs" aria-hidden="true"></i>
         Adicionar
     </button>
+    @endcan
+    @can('administrar-permissoes')
+        <a href="{{ route('permissoes.index') }}" class="mb-6 inline-flex items-center gap-2 rounded-lg border border-[#b39359]/50 px-4 py-2 text-sm font-semibold hover:bg-[#f4f1ea]">Permissões de Acesso</a>
+    @endcan
 
     <div class="border-b border-gray-200 mb-6 flex gap-8">
         <button type="button" data-secao="usuarios" aria-controls="usuarios" aria-pressed="true"
@@ -77,12 +82,14 @@
                         ])>{{ $usuario->status ? 'Ativo' : 'Inativo' }}</span>
                     </div>
 
+                    @if (auth()->user()->can('editar-modulo', 'usuarios') && (!$usuario->isAdmin() || auth()->user()->isAdmin()))
                     <button type="button" data-usuario-id="{{ $usuario->getKey() }}"
                         data-editar-usuario="{{ json_encode($dadosEdicao, JSON_THROW_ON_ERROR) }}"
                         class="w-full mt-6 py-2 border border-gray-200 rounded-lg text-xs font-medium text-gray-700 hover:bg-gray-50 transition flex items-center justify-center gap-1.5">
                         <i class="fa-solid fa-pen text-[10px]" aria-hidden="true"></i>
                         Editar
                     </button>
+                    @endif
                 </article>
             @empty
                 <p class="text-sm text-gray-500">Nenhum usuário cadastrado.</p>
@@ -117,7 +124,9 @@
     </section>
 </div>
 
-@include('auth.partials.user-modal')
+@can('editar-modulo', 'usuarios')
+    @include('auth.partials.user-modal')
+@endcan
 
 <script>
     const buscaAcessos = document.getElementById('buscaAcessos');

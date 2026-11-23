@@ -18,7 +18,7 @@
             style="font-family: 'Fraunces', Georgia, serif;">
             Verificação da Tarefa
         </h1>
-        <p class="mb-3 text-sm text-slate-600">Caixa · {{ $caixa }}</p>
+        <p class="mb-3 text-sm text-slate-600">Caixa · {{ $item->caixa_responsavel ?? $caixa }}</p>
 
         <div class="mb-4 flex flex-wrap gap-2 text-xs font-bold">
             @if ($item->verificado_em)
@@ -116,7 +116,7 @@
                     <p class="mb-1 text-xs font-bold text-[#1e2d3d]">Ação realizada</p>
                     <p class="whitespace-pre-wrap break-words text-sm leading-relaxed text-[#1e2d3d]">{{ $item->acao }}</p>
                 </section>
-            @else
+            @elseif (auth()->user()->can('editar-modulo', 'acompanhamento'))
                 <form method="POST" action="{{ route('acompanhamento.store', ['id' => $item->id_item, 'tipo' => $item->tipo === 'atraso' ? null : $item->tipo, ...$filtros]) }}"
                       class="flex flex-col gap-2">
                     @csrf

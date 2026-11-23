@@ -19,10 +19,12 @@
                 </span>
                 <input type="text" id="filtroNomeTarefa" placeholder="Buscar pelo nome..." class="w-full pl-11 pr-4 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition">
             </div>
+            @can('editar-modulo', 'tarefas')
             <a href="#" onclick="event.preventDefault(); abrirModalNovo('taskModal')" class="w-full sm:w-auto inline-flex items-center justify-center space-x-2 bg-[#1b2a38] hover:bg-[#111c26] text-white px-5 py-3 rounded-xl font-medium text-sm transition shrink-0">
                 <i class="fa-solid fa-plus"></i>
                 <span>Novo registro</span>
             </a>
+            @endcan
         </div>
     </div>
 
@@ -94,12 +96,14 @@
                                 {{ $tarefa->ferramenta ?? '—' }}
                             </td>
                             <td class="py-4 px-6 text-right">
+                                @can('editar-modulo', 'tarefas')
                                 <button type="button"
                                     onclick="abrirModalEdicao(@js($dadosEdicao))"
                                     class="inline-flex items-center space-x-1 text-sm font-semibold text-gray-700 hover:text-gray-900 transition">
                                     <span>Editar</span>
                                     <i class="fa-solid fa-chevron-right text-xs"></i>
                                 </button>
+                                @endcan
                             </td>
                         </tr>
                     @empty
@@ -130,7 +134,9 @@
 
 </div>
 
+@can('editar-modulo', 'tarefas')
 @include('processos.partials.modal-tarefa')
+@endcan
 
 <script>
     const itensPorPagina = 10; 

@@ -475,7 +475,8 @@
                                             </dl>
                                         </details>
 
-                                        @if ((string) $execucao->id_usuario_responsavel === (string) auth()->id())
+                                        @if (auth()->user()->can('editar-modulo', 'rotinas_diarias')
+                                            && (auth()->user()->isAdmin() || (string) $execucao->id_usuario_responsavel === (string) auth()->id()))
                                             @if ($execucao->status === 'pendente')
                                                 <form method="POST" action="{{ route('execucoes.iniciar', $execucao->id_execucao) }}">
                                                     @csrf

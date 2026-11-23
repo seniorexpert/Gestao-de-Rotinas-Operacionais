@@ -17,9 +17,12 @@ class RotinasController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
+        $usuario = $request->user();
+        $empresa = $usuario->isAdmin()
+            ? Rule::exists('empresas', 'id_empresa')
+            : Rule::exists('empresa_usuario', 'id_empresa')->where('id_usuario', $usuario->getKey());
         $dados = $request->validate([
-            'id_empresa' => ['bail', 'required', 'integer', Rule::exists('empresa_usuario', 'id_empresa')
-                ->where('id_usuario', $request->user()->getAuthIdentifier())],
+            'id_empresa' => ['bail', 'required', 'integer', $empresa],
             'colaborador_id' => ['bail', 'required', 'integer', Rule::exists('empresa_usuario', 'id_usuario')
                 ->where('id_empresa', $request->integer('id_empresa'))],
             'status_rotina' => ['nullable', 'in:Ativa,Inativa'],

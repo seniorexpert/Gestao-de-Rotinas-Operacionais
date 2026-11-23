@@ -59,8 +59,8 @@ class RotinaAcompanhamentoController extends Controller
         $busca = $filtros['busca'] ?? '';
         $agora = now()->toImmutable();
         $usuario = $request->user();
-        $caixa = $this->escalonamento->caixaDoUsuario($usuario);
-        abort_if($caixa === null, 403);
+        $caixa = $usuario->isAdmin() ? null : $this->escalonamento->caixaDoUsuario($usuario);
+        $nomeCaixa = $caixa ?? ($usuario->isAdmin() ? 'Todas as caixas' : 'Caixas das suas unidades');
         $this->execucoesDiarias->gerar($agora, $this->rotinas->empresas($usuario));
 
         if (isset($filtros['item'])) {
@@ -86,7 +86,7 @@ class RotinaAcompanhamentoController extends Controller
             return view('processos.acompanhamento.detalhes', [
                 'item' => $this->formatarItem($item),
                 'auxiliares' => $auxiliares,
-                'caixa' => $caixa,
+                'caixa' => $nomeCaixa,
                 'filtros' => [
                     'aba' => $filtros['aba'] ?? $this->abaDoItem($item),
                     'busca' => $filtros['busca'] ?? null,
@@ -156,7 +156,7 @@ class RotinaAcompanhamentoController extends Controller
         return view('processos.acompanhamento.index', [
             'abas' => self::ABAS,
             'aba' => $aba,
-            'caixa' => $caixa,
+            'caixa' => $nomeCaixa,
             'busca' => $busca,
             'totais' => $totais,
             'itens' => $itens,
@@ -175,8 +175,7 @@ class RotinaAcompanhamentoController extends Controller
             'acao.max' => 'A ação realizada deve ter até 2.000 caracteres.',
         ]);
         $usuario = $request->user();
-        $caixa = $this->escalonamento->caixaDoUsuario($usuario);
-        abort_if($caixa === null, 403);
+        $caixa = $usuario->isAdmin() ? null : $this->escalonamento->caixaDoUsuario($usuario);
 
         $tipo = $this->tipoDoItem($dados);
         DB::transaction(function () use ($usuario, $caixa, $id, $dados, $tipo) {
@@ -211,7 +210,8 @@ class RotinaAcompanhamentoController extends Controller
 
             $agora = now()->toImmutable();
             $envio = $this->encaminharItem($execucao, $agora);
-            abort_unless(isset($envio['recebimentos'][$caixa]), 404);
+            $destino = $caixa ?? array_key_first($envio['recebimentos'] ?? []);
+            abort_unless(isset($envio['recebimentos'][$destino]), 404);
 
             $verificacao = [
                 'id_usuario_verificacao' => $usuario->getKey(),
@@ -231,7 +231,7 @@ class RotinaAcompanhamentoController extends Controller
 
             AuditoriaService::registrar(
                 'VERIFICAR', $tabela, (string) $id,
-                dadosNovos: ['id_execucao' => $idExecucao, 'caixa' => $caixa, 'verificado_em' => $agora],
+                dadosNovos: ['id_execucao' => $idExecucao, 'caixa' => $destino, 'verificado_em' => $agora],
                 descricao: 'Verificação concluída no acompanhamento',
                 idEmpresa: (int) $execucao->id_empresa,
                 idRotina: (int) $execucao->id_rotina,
@@ -273,9 +273,7 @@ class RotinaAcompanhamentoController extends Controller
                 ->on('e.id_empresa', '=', 'r.id_empresa'))
             ->leftJoin('usuarios as u', 'e.id_usuario_responsavel', '=', 'u.id_usuario')
             ->leftJoin('grupos_acesso as g', 'u.id_grupo_acesso', '=', 'g.id_grupo_acesso')
-            ->whereIn('e.id_empresa', DB::table('empresa_usuario')
-                ->select('id_empresa')
-                ->where('id_usuario', $usuario->getKey()))
+            ->whereIn('e.id_empresa', $this->rotinas->empresas($usuario))
             ->select([
                 'e.id_execucao',
                 'e.id_rotina',
@@ -322,7 +320,7 @@ class RotinaAcompanhamentoController extends Controller
                 ->selectRaw("'nao_realizada' as tipo, e.id_execucao as id_item, v.caixa as caixa_inicial, v.recebido_em as entrada, e.justificativa_nao_realizada as justificativa");
     }
 
-    private function prepararItem(stdClass $item, CarbonImmutable $agora, string $caixa, User $usuario): bool
+    private function prepararItem(stdClass $item, CarbonImmutable $agora, ?string $caixa, User $usuario): bool
     {
         $item->atraso_segundos = null;
 
@@ -331,13 +329,16 @@ class RotinaAcompanhamentoController extends Controller
         }
 
         $envio = $this->encaminharItem($item, $agora);
-        $recebidoEm = $envio['recebimentos'][$caixa] ?? null;
+        $recebimentos = $envio['recebimentos'] ?? [];
+        $destino = $caixa ?? array_key_first($recebimentos);
+        $recebidoEm = $recebimentos[$destino] ?? null;
 
         if ($recebidoEm === null) {
             return false;
         }
 
         $item->atraso_segundos = $envio['atraso_segundos'];
+        $item->caixa_responsavel = $destino;
         $item->recebido_em = $recebidoEm->timezone(ExecucoesDiarias::FUSO);
         $auxilio = $item->tipo === 'auxilio';
         $item->limite_acompanhamento = $this->escalonamento->limite($recebidoEm, $auxilio)->timezone(ExecucoesDiarias::FUSO);
@@ -361,9 +362,9 @@ class RotinaAcompanhamentoController extends Controller
         ];
     }
 
-    private function podeConsultarVerificacao(stdClass $verificacao, string $caixa, User $usuario): bool
+    private function podeConsultarVerificacao(stdClass $verificacao, ?string $caixa, User $usuario): bool
     {
-        if ((string) $verificacao->id_usuario_verificacao === (string) $usuario->getKey()) {
+        if ($caixa === null || (string) $verificacao->id_usuario_verificacao === (string) $usuario->getKey()) {
             return true;
         }
 

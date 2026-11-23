@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Services\AuditoriaService;
 use App\Services\CalculadoraSla;
 use App\Services\ConsultaRotinas;
@@ -175,7 +176,7 @@ class ExecucoesController extends Controller
                 'justificativa_nao_realizada' => $this->justificativa($request),
             ]);
 
-            $caixa = $this->escalonamento->superiorDoGrupo($request->user()->grupoAcesso?->grupo_acesso);
+            $caixa = $this->caixaDoResponsavel($request->user(), $execucao);
             if ($caixa !== null) {
                 DB::table('rotinas_acomp_nao_realizadas')->insert([
                     'id_execucao' => $id,
@@ -196,7 +197,7 @@ class ExecucoesController extends Controller
             $justificativa = $this->justificativa($request);
             $dados = $request->validate(['protocolo' => ['nullable', 'uuid']]);
             $protocolo = Str::lower($dados['protocolo'] ?? (string) Str::uuid());
-            $caixa = $this->escalonamento->superiorDoGrupo($request->user()->grupoAcesso?->grupo_acesso);
+            $caixa = $this->caixaDoResponsavel($request->user(), $execucao);
             $registro = ['justificativa' => $justificativa];
 
             if ($caixa !== null) {
@@ -291,17 +292,12 @@ class ExecucoesController extends Controller
         Request $request,
         int $id
     ): object {
-        $usuarioId = $request->user()->getAuthIdentifier();
+        $usuario = $request->user();
 
         $execucao = DB::table('rotinas_execucoes')
             ->where('id_execucao', $id)
-            ->where('id_usuario_responsavel', $usuarioId)
-            ->whereIn(
-                'id_empresa',
-                DB::table('empresa_usuario')
-                    ->select('id_empresa')
-                    ->where('id_usuario', $usuarioId)
-            )
+            ->when(! $usuario->isAdmin(), fn ($consulta) => $consulta->where('id_usuario_responsavel', $usuario->getKey()))
+            ->whereIn('id_empresa', $this->rotinas->empresas($usuario))
             ->lockForUpdate()
             ->first();
 
@@ -312,5 +308,14 @@ class ExecucoesController extends Controller
         );
 
         return $execucao;
+    }
+
+    private function caixaDoResponsavel(User $usuario, object $execucao): ?string
+    {
+        $responsavel = (int) $usuario->getKey() === (int) $execucao->id_usuario_responsavel
+            ? $usuario
+            : User::with('grupoAcesso')->find($execucao->id_usuario_responsavel);
+
+        return $this->escalonamento->superiorDoGrupo($responsavel?->grupoAcesso?->grupo_acesso);
     }
 }

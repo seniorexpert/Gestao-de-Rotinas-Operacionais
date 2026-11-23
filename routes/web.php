@@ -9,6 +9,7 @@ use App\Http\Controllers\ForgotPasswordController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LocaisController;
 use App\Http\Controllers\MonitoramentoController;
+use App\Http\Controllers\PermissaoAcessoController;
 use App\Http\Controllers\ProcessoController;
 use App\Http\Controllers\RelatorioController;
 use App\Http\Controllers\RotinaAcompanhamentoController;
@@ -25,46 +26,59 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/mudar-senha', [ForgotPasswordController::class, 'edit'])->name('password.edit.custom');
     Route::post('/mudar-senha', [ForgotPasswordController::class, 'update'])->name('password.update.custom');
 
-    Route::get('/home', [HomeController::class, 'index'])->name('home');
+    Route::get('/home', [HomeController::class, 'index'])->can('visualizar-modulo', "'rotinas_diarias'")->name('home');
+    Route::get('/dashboard', [HomeController::class, 'entrada'])->name('dashboard');
 
     Route::prefix('relatorios')->name('relatorios.')->group(function () {
-        Route::get('/rotinas', [RelatorioController::class, 'rotinas'])->name('rotinas');
-        Route::get('/rotinas-excel', [RelatorioController::class, 'rotinasExcel'])->name('excel');
-        Route::get('/rotinas-exportar-csv', [RelatorioController::class, 'exportarExcel'])->name('excel.exportar');
-        Route::get('/tarefas', [RelatorioController::class, 'tarefas'])->name('tarefas');
-        Route::get('/ferramentas', [RelatorioController::class, 'ferramentas'])->name('ferramentas');
-        Route::get('/locais', [RelatorioController::class, 'locais'])->name('locais');
-        Route::get('/rotinas-finalizadas', [RelatorioController::class, 'rotinasFinalizadas'])->name('rotinas-finalizadas');
-        Route::get('/logs-rotinas', [AuditoriaController::class, 'index'])->name('logs-rotinas');
-        Route::get('/logs-rotinas/{id}', [AuditoriaController::class, 'detalhes'])->whereNumber('id')->name('logs.detalhes');
-        Route::get('/estatisticas', [EstatisticasController::class, 'index'])->name('estatisticas');
-        Route::get('/relatorios/api-log-detalhes/{id}', [AuditoriaController::class, 'apiDetalhes'])->whereNumber('id')->name('logs.detalhes.legado');
-        Route::get('/logs-rotinas-excel', [AuditoriaController::class, 'exportar'])->name('logs.excel.exportar');
+        Route::get('/rotinas', [RelatorioController::class, 'rotinas'])->can('visualizar-modulo', "'rotinas'")->name('rotinas');
+        Route::get('/rotinas-excel', [RelatorioController::class, 'rotinasExcel'])->can('visualizar-modulo', "'rotinas_excel'")->name('excel');
+        Route::get('/rotinas-exportar-csv', [RelatorioController::class, 'exportarExcel'])->can('visualizar-modulo', "'rotinas_excel'")->name('excel.exportar');
+        Route::get('/tarefas', [RelatorioController::class, 'tarefas'])->can('visualizar-modulo', "'tarefas'")->name('tarefas');
+        Route::get('/ferramentas', [RelatorioController::class, 'ferramentas'])->can('visualizar-modulo', "'ferramentas'")->name('ferramentas');
+        Route::get('/locais', [RelatorioController::class, 'locais'])->can('visualizar-modulo', "'locais'")->name('locais');
+        Route::get('/rotinas-finalizadas', [RelatorioController::class, 'rotinasFinalizadas'])->can('visualizar-modulo', "'rotinas_finalizadas'")->name('rotinas-finalizadas');
+        Route::get('/estatisticas', [EstatisticasController::class, 'index'])->can('visualizar-modulo', "'estatisticas'")->name('estatisticas');
+        Route::middleware("can:visualizar-modulo,'auditoria'")->group(function () {
+            Route::get('/logs-rotinas', [AuditoriaController::class, 'index'])->name('logs-rotinas');
+            Route::get('/logs-rotinas/{id}', [AuditoriaController::class, 'detalhes'])->whereNumber('id')->name('logs.detalhes');
+            Route::get('/relatorios/api-log-detalhes/{id}', [AuditoriaController::class, 'apiDetalhes'])->whereNumber('id')->name('logs.detalhes.legado');
+            Route::get('/logs-rotinas-excel', [AuditoriaController::class, 'exportar'])->name('logs.excel.exportar');
+        });
     });
 });
 
 Route::middleware('auth')->group(function () {
-    Route::get('/execucoes/{id}/realizando', [ExecucoesController::class, 'realizando'])->whereNumber('id')->name('execucoes.realizando');
-    Route::get('/execucoes/{id}/foto', [ExecucoesController::class, 'foto'])->whereNumber('id')->name('execucoes.foto');
+    Route::get('/execucoes/{id}/realizando', [ExecucoesController::class, 'realizando'])->whereNumber('id')
+        ->can('visualizar-modulo', "'rotinas_diarias'")->name('execucoes.realizando');
+    Route::get('/execucoes/{id}/foto', [ExecucoesController::class, 'foto'])->whereNumber('id')
+        ->can('visualizar-modulo', "'rotinas_diarias'")->name('execucoes.foto');
     Route::get('/execucoes/{id}/{acao}', [ExecucoesController::class, 'formulario'])
-        ->whereNumber('id')->whereIn('acao', ['finalizar', 'nao-realizada', 'auxilio'])->name('execucoes.formulario');
+        ->whereNumber('id')->whereIn('acao', ['finalizar', 'nao-realizada', 'auxilio'])
+        ->can('editar-modulo', "'rotinas_diarias'")->name('execucoes.formulario');
 
-    Route::get('/iniciar-processos', [ProcessoController::class, 'index'])->name('processos.index');
-    Route::match(['get', 'post'], '/cadastros-gestao-rotinas', [ProcessoController::class, 'gestaoRotinas'])->name('processos.gestao-rotinas');
-    Route::get('/api/usuarios-por-unidade', [ProcessoController::class, 'usuariosPorUnidade'])->name('processos.usuarios-por-unidade');
-    Route::get('/centro-monitoramento', [MonitoramentoController::class, 'index'])->name('monitoramento.index');
-    Route::post('/rotinas/atribuir', [MonitoramentoController::class, 'atribuir'])->name('rotinas.atribuir');
-    Route::post('/rotinas/salvar', [RotinasController::class, 'store'])->name('rotinas.store');
-    Route::post('/rotinas-emergenciais', [RotinasEmergenciaisController::class, 'store'])->name('rotinas.emergenciais.store');
-    Route::post('/ferramentas', [FerramentasController::class, 'store'])->name('ferramentas.store');
-    Route::post('/tarefas', [TarefasController::class, 'store'])->name('tarefas.store');
-    Route::post('/locais', [LocaisController::class, 'store'])->name('locais.store');
+    Route::get('/iniciar-processos', [ProcessoController::class, 'index'])->can('visualizar-modulo', "'processos'")->name('processos.index');
+    Route::match(['get', 'post'], '/cadastros-gestao-rotinas', [ProcessoController::class, 'gestaoRotinas'])
+        ->can('visualizar-modulo', "'processos'")->name('processos.gestao-rotinas');
+    Route::get('/api/usuarios-por-unidade', [ProcessoController::class, 'usuariosPorUnidade'])->can('consultar-colaboradores')->name('processos.usuarios-por-unidade');
+    Route::get('/centro-monitoramento', [MonitoramentoController::class, 'index'])->can('visualizar-modulo', "'monitoramento'")->name('monitoramento.index');
+    Route::post('/rotinas/atribuir', [MonitoramentoController::class, 'atribuir'])->can('editar-modulo', "'monitoramento'")->name('rotinas.atribuir');
+    Route::post('/rotinas/salvar', [RotinasController::class, 'store'])->can('editar-modulo', "'rotinas'")->name('rotinas.store');
+    Route::post('/rotinas-emergenciais', [RotinasEmergenciaisController::class, 'store'])
+        ->can('editar-modulo', "'processos'")->can('editar-modulo', "'rotinas'")->name('rotinas.emergenciais.store');
+    Route::post('/ferramentas', [FerramentasController::class, 'store'])->can('editar-modulo', "'ferramentas'")->name('ferramentas.store');
+    Route::post('/tarefas', [TarefasController::class, 'store'])->can('editar-modulo', "'tarefas'")->name('tarefas.store');
+    Route::post('/locais', [LocaisController::class, 'store'])->can('editar-modulo', "'locais'")->name('locais.store');
 });
 
-Route::middleware(['auth', 'can:gerenciar-usuarios'])->group(function () {
-    Route::get('/usuarios', [UsuarioController::class, 'index'])->name('usuarios.index');
-    Route::post('/usuarios', [UsuarioController::class, 'store'])->name('users.store');
-    Route::put('/usuarios/{id}', [UsuarioController::class, 'update'])->whereNumber('id')->name('users.update');
+Route::middleware('auth')->group(function () {
+    Route::get('/usuarios', [UsuarioController::class, 'index'])->can('visualizar-modulo', "'usuarios'")->name('usuarios.index');
+    Route::post('/usuarios', [UsuarioController::class, 'store'])->can('editar-modulo', "'usuarios'")->name('users.store');
+    Route::put('/usuarios/{id}', [UsuarioController::class, 'update'])->whereNumber('id')->can('editar-modulo', "'usuarios'")->name('users.update');
+});
+
+Route::middleware(['auth', 'can:administrar-permissoes'])->prefix('permissoes-acesso')->name('permissoes.')->group(function () {
+    Route::get('/', [PermissaoAcessoController::class, 'index'])->name('index');
+    Route::put('/{tipo}/{id}', [PermissaoAcessoController::class, 'update'])->whereIn('tipo', ['grupo', 'usuario'])->whereNumber('id')->name('update');
 });
 
 Route::post('/logout', function (Request $request) {
@@ -79,15 +93,11 @@ Route::post('/logout', function (Request $request) {
 Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.autenticar');
 
-Route::get('/dashboard', function () {
-    return 'Bem-vindo ao painel!';
-})->middleware('auth')->name('dashboard');
-
 Route::get('/', function () {
     return view('welcome');
 })->name('inicio');
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', "can:editar-modulo,'rotinas_diarias'"])->group(function () {
     Route::post('/execucoes/{id}/iniciar', [ExecucoesController::class, 'iniciar'])
         ->whereNumber('id')
         ->name('execucoes.iniciar');
@@ -100,12 +110,13 @@ Route::middleware('auth')->group(function () {
     Route::post('/execucoes/{id}/auxilio', [ExecucoesController::class, 'auxilio'])->whereNumber('id')->name('execucoes.auxilio');
 });
 
-Route::middleware(['auth', 'can:acompanhar-rotinas'])
+Route::middleware('auth')
     ->prefix('rotina-acompanhamento')
     ->name('acompanhamento.')
     ->group(function () {
-        Route::get('/', [RotinaAcompanhamentoController::class, 'index'])->name('index');
+        Route::get('/', [RotinaAcompanhamentoController::class, 'index'])->can('visualizar-modulo', "'acompanhamento'")->name('index');
         Route::post('/{id}/verificar', [RotinaAcompanhamentoController::class, 'store'])
             ->whereNumber('id')
+            ->can('editar-modulo', "'acompanhamento'")
             ->name('store');
     });
