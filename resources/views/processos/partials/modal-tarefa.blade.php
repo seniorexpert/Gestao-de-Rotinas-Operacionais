@@ -117,98 +117,102 @@
 
 <script>
     (function () {
-    const CORES_MAP = {
-        'original': { label: 'Cores originais', hex: null },
-        '#1e2d3d':  { label: 'Azul escuro',    hex: '#1e2d3d' },
-        '#2563eb':  { label: 'Azul',           hex: '#2563eb' },
-        '#16a34a':  { label: 'Verde',          hex: '#16a34a' },
-        '#dc2626':  { label: 'Vermelho',       hex: '#dc2626' },
-        '#ea580c':  { label: 'Laranja',        hex: '#ea580c' },
-        '#9333ea':  { label: 'Roxo',           hex: '#9333ea' },
-        '#4b5563':  { label: 'Cinza',          hex: '#4b5563' },
-    };
+        const CORES_MAP = {
+            'original': { label: 'Cores originais', hex: null },
+            '#1e2d3d':  { label: 'Azul escuro',    hex: '#1e2d3d' },
+            '#2563eb':  { label: 'Azul',           hex: '#2563eb' },
+            '#16a34a':  { label: 'Verde',          hex: '#16a34a' },
+            '#dc2626':  { label: 'Vermelho',       hex: '#dc2626' },
+            '#ea580c':  { label: 'Laranja',        hex: '#ea580c' },
+            '#9333ea':  { label: 'Roxo',           hex: '#9333ea' },
+            '#4b5563':  { label: 'Cinza',          hex: '#4b5563' },
+        };
 
-    function getEmojiAtual() {
-        const input = document.querySelector('#taskModal [data-icone-input]');
-        return (input && input.value) ? input.value : '📋';
-    }
+        function getEmojiAtual() {
+            const input = document.querySelector('#taskModal [data-icone-input]');
+            return (input && input.value) ? input.value : '📋';
+        }
 
-    function aplicarEstiloPintura(el, emoji, hex) {
-        if (!el) return;
-        if (!hex) {
+        function aplicarEstiloPintura(el, emoji, hex) {
+            if (!el) return;
+
             el.style.color = '';
             el.style.webkitTextFillColor = '';
             el.style.filter = '';
             el.textContent = emoji;
-            return;
+
+            if (!hex) {
+                return;
+            }
+
+            requestAnimationFrame(() => {
+                el.style.color = hex;
+                el.style.webkitTextFillColor = hex;
+                el.style.filter = 'grayscale(100%) contrast(150%) drop-shadow(0 0 0 ' + hex + ')';
+            });
         }
-        el.textContent = emoji;
-        el.style.color = hex;
-        el.style.webkitTextFillColor = hex;
-        el.style.filter = 'grayscale(100%) contrast(1000%)';
-    }
 
-    window.atualizarPreviewCorIcone = function () {
-        const corAtual = document.getElementById('cor_icone')?.value || 'original';
-        const info = CORES_MAP[corAtual] || CORES_MAP['original'];
-        const emoji = getEmojiAtual();
+        window.atualizarPreviewCorIcone = function () {
+            const corAtual = document.getElementById('cor_icone')?.value || 'original';
+            const info = CORES_MAP[corAtual] || CORES_MAP['original'];
+            const emoji = getEmojiAtual();
 
-        const labelEl = document.getElementById('labelCorIcone');
-        const emojiEl = document.getElementById('previewCorIconeEmoji');
+            const labelEl = document.getElementById('labelCorIcone');
+            const emojiEl = document.getElementById('previewCorIconeEmoji');
 
-        if (labelEl) labelEl.textContent = info.label;
-        aplicarEstiloPintura(emojiEl, emoji, info.hex);
+            if (labelEl) labelEl.textContent = info.label;
+            aplicarEstiloPintura(emojiEl, emoji, info.hex);
 
-        const previewTopo = document.querySelector('#taskModal [data-icone-preview]');
-        aplicarEstiloPintura(previewTopo, emoji, info.hex);
+            const previewTopo = document.querySelector('#taskModal [data-icone-preview]');
+            aplicarEstiloPintura(previewTopo, emoji, info.hex);
 
-        document.querySelectorAll('#taskModal [data-janela] button').forEach((btn) => {
-            aplicarEstiloPintura(btn, btn.textContent, info.hex);
-        });
-    };
+            document.querySelectorAll('#taskModal [data-janela] button').forEach((btn) => {
+                aplicarEstiloPintura(btn, btn.textContent, info.hex);
+            });
+        };
 
-    window.selecionarCorIcone = function (valorCor) {
-        const inputCor = document.getElementById('cor_icone');
-        if (inputCor) inputCor.value = valorCor;
+        window.selecionarCorIcone = function (valorCor) {
+            const inputCor = document.getElementById('cor_icone');
+            if (inputCor) inputCor.value = valorCor;
 
-        document.querySelectorAll('[data-cor-btn]').forEach((btn) => {
-            const ativo = btn.getAttribute('data-cor-btn') === valorCor;
-            btn.classList.toggle('ring-2', ativo);
-            btn.classList.toggle('ring-[#1e2d3d]', ativo);
-            btn.classList.toggle('ring-offset-2', ativo);
-            btn.classList.toggle('border-[#1e2d3d]', ativo);
-            btn.classList.toggle('border-gray-300', !ativo);
-        });
+            document.querySelectorAll('[data-cor-btn]').forEach((btn) => {
+                const ativo = btn.getAttribute('data-cor-btn') === valorCor;
+                btn.classList.toggle('ring-2', ativo);
+                btn.classList.toggle('ring-[#1e2d3d]', ativo);
+                btn.classList.toggle('ring-offset-2', ativo);
+                btn.classList.toggle('border-[#1e2d3d]', ativo);
+                btn.classList.toggle('border-gray-300', !ativo);
+            });
 
-        window.atualizarPreviewCorIcone();
-    };
-
-    document.addEventListener('change', function (e) {
-        if (e.target && e.target.matches('#taskModal [data-icone-input]')) {
             window.atualizarPreviewCorIcone();
-        }
-    });
+        };
 
-    document.addEventListener('cor-icone:aplicar', function () {
-        window.atualizarPreviewCorIcone();
-    });
-
-    const modal = document.getElementById('taskModal');
-    if (modal) {
-        const observer = new MutationObserver(() => {
-            const visivel = !modal.classList.contains('hidden') && getComputedStyle(modal).display !== 'none';
-            if (visivel) {
-                modal.style.display = 'flex';
-                modal.style.alignItems = 'center';
-                modal.style.justifyContent = 'center';
+        document.addEventListener('change', function (e) {
+            if (e.target && e.target.matches('#taskModal [data-icone-input]')) {
                 window.atualizarPreviewCorIcone();
             }
         });
-        observer.observe(modal, { attributes: true, attributeFilter: ['class', 'style'] });
-    }
 
-    document.addEventListener('DOMContentLoaded', function () {
-        window.selecionarCorIcone('original');
-    });
-})();
+        document.addEventListener('cor-icone:aplicar', function () {
+            window.atualizarPreviewCorIcone();
+        });
+
+        const modal = document.getElementById('taskModal');
+        if (modal) {
+            const observer = new MutationObserver(() => {
+                const visivel = !modal.classList.contains('hidden') && getComputedStyle(modal).display !== 'none';
+                if (visivel) {
+                    modal.style.display = 'flex';
+                    modal.style.alignItems = 'center';
+                    modal.style.justifyContent = 'center';
+                    window.atualizarPreviewCorIcone();
+                }
+            });
+            observer.observe(modal, { attributes: true, attributeFilter: ['class', 'style'] });
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            window.selecionarCorIcone('original');
+        });
+    })();
 </script>
