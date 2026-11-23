@@ -40,38 +40,40 @@
                 </thead>
                 <tbody class="divide-y divide-gray-100 text-sm">
                     @forelse($tarefas as $tarefa)
+                    {{-- debug: {{ $tarefa->id_tarefa }} | {{ $tarefa->icone }} | {{ $tarefa->cor_icone }} --}}
                         @php
-                            [$horas, $minutos, $segundos] = array_pad(explode(':', $tarefa->tempo_realizar_tarefa ?? ''), 3, 0);
-                            $iconeTarefa = trim((string) ($tarefa->icone ?? '')) ?: '📋';
-                            $corIconeTarefa = trim((string) ($tarefa->cor_icone ?? '')) ?: 'original';
-                            $hexCorTarefa = ($corIconeTarefa !== 'original' && preg_match('/^#[0-9a-fA-F]{3,8}$/', $corIconeTarefa))
-                                ? $corIconeTarefa
-                                : null;
+    [$horas, $minutos, $segundos] = array_pad(explode(':', $tarefa->tempo_realizar_tarefa ?? ''), 3, 0);
+    $iconeRaw = $tarefa->icone ?? '';
+    $iconeTarefa = trim((string) $iconeRaw) !== '' ? trim((string) $iconeRaw) : '📋';
+    $corIconeTarefa = trim((string) ($tarefa->cor_icone ?? '')) ?: 'original';
+    $hexCorTarefa = ($corIconeTarefa !== 'original' && preg_match('/^#[0-9a-fA-F]{3,8}$/', $corIconeTarefa))
+        ? $corIconeTarefa
+        : null;
 
-                            $dadosEdicao = [
-                                'id' => $tarefa->id_tarefa,
-                                'nome' => $tarefa->tarefa,
-                                'tempo' => ((int) $horas * 3600 + (int) $minutos * 60 + (int) $segundos) / 60,
-                                'status' => $tarefa->status ? 'Ativa' : 'Inativa',
-                                'descricao' => $tarefa->descricao,
-                                'id_ferramenta' => $tarefa->id_ferramenta,
-                                'icone' => $iconeTarefa,
-                                'cor_icone' => $corIconeTarefa,
-                            ];
-                        @endphp
-                        <tr class="linha-tarefa hover:bg-gray-50/60 transition">
-                            <td class="py-4 px-6 font-medium text-gray-500">#{{ $tarefa->id_tarefa }}</td>
-                            <td class="py-4 px-6">
-                                <div class="flex items-center space-x-3">
-                                    <span data-tabela-icone-box
-                                          data-icone="{{ $iconeTarefa }}"
-                                          data-hex-cor="{{ $hexCorTarefa ?? '' }}"
-                                          class="h-9 w-9 rounded-xl bg-[#fcfbf9] border border-amber-200/70 flex items-center justify-center text-xl leading-none shrink-0">
-                                        {{ $iconeTarefa }}
-                                    </span>
-                                    <span class="font-bold text-gray-800 uppercase">{{ $tarefa->tarefa ?? 'Sem nome' }}</span>
-                                </div>
-                            </td>
+    $dadosEdicao = [
+        'id' => $tarefa->id_tarefa,
+        'nome' => $tarefa->tarefa,
+        'tempo' => ((int) $horas * 3600 + (int) $minutos * 60 + (int) $segundos) / 60,
+        'status' => $tarefa->status ? 'Ativa' : 'Inativa',
+        'descricao' => $tarefa->descricao,
+        'id_ferramenta' => $tarefa->id_ferramenta,
+        'icone' => $iconeTarefa,
+        'cor_icone' => $corIconeTarefa,
+    ];
+@endphp
+<tr class="linha-tarefa hover:bg-gray-50/60 transition">
+    <td class="py-4 px-6 font-medium text-gray-500">#{{ $tarefa->id_tarefa }}</td>
+    <td class="py-4 px-6">
+        <div class="flex items-center space-x-3">
+            <span
+                class="h-9 w-9 rounded-xl bg-[#fcfbf9] border border-amber-200/70 flex items-center justify-center text-xl leading-none shrink-0"
+                @if($hexCorTarefa)
+                    style="color: {{ $hexCorTarefa }}; filter: grayscale(100%) contrast(150%) drop-shadow(0 0 0 {{ $hexCorTarefa }});"
+                @endif
+            >{{ $iconeTarefa }}</span>
+            <span class="font-bold text-gray-800 uppercase">{{ $tarefa->tarefa ?? 'Sem nome' }}</span>
+        </div>
+    </td>
                             <td class="py-4 px-6 text-gray-500">
                                 {{ $tarefa->tempo_realizar_tarefa ? substr($tarefa->tempo_realizar_tarefa, 0, 8) : 'Não informada' }}
                             </td>
