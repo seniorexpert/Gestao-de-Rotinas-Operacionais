@@ -56,8 +56,11 @@ class HomeControllerTest extends TestCase
             'auxilio' => false,
         ];
 
+        $lanche = $this->tarefa('Acompanhar o lanche');
+        DB::table('tarefas')->where('id_tarefa', $lanche)->update(['icone' => '🧭', 'cor_icone' => '#126abc']);
+
         DB::table('rotinas')->insert([
-            [...$rotina, 'id_tarefa' => $this->tarefa('Acompanhar o lanche'), 'horario' => '15:30:00', 'status' => true],
+            [...$rotina, 'id_tarefa' => $lanche, 'horario' => '15:30:00', 'status' => true],
             [...$rotina, 'id_tarefa' => $this->tarefa('Organizar o quarto'), 'horario' => '09:15:00', 'status' => false],
             [...$rotina, 'id_tarefa' => $this->tarefa('Tarefa de outra unidade'), 'horario' => '08:00:00', 'status' => true,
                 'id_empresa' => $outraUnidade],
@@ -75,6 +78,8 @@ class HomeControllerTest extends TestCase
             ->assertSee('href="'.route('acompanhamento.index').'"', false)
             ->assertSeeTextInOrder(['Pendentes', 'Em andamento', 'Concluídas', 'Todas'])
             ->assertViewHas('aba', 'pendente')
+            ->assertSeeText('🧭')
+            ->assertSee('background-color: #126abc')
             ->assertSeeTextInOrder(['Acompanhar o lanche', 'Sala de Estar', '15:30', 'No prazo'])
             ->assertDontSee('15:30 – 16:00')
             ->assertDontSee('Organizar o quarto')

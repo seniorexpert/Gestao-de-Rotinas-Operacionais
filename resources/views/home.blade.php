@@ -38,12 +38,16 @@
                 $tarefa = $rotina->tarefa ?: 'Tarefa de rotina';
                 $morador = trim($rotina->morador ?? '') ?: 'Não informado';
                 $categoria = \Illuminate\Support\Str::ascii(mb_strtolower($tarefa.' '.$rotina->local));
+                $iconeSalvo = trim((string) $rotina->icone);
                 $icone = match (true) {
+                    ! in_array($iconeSalvo, ['', '0', '1'], true) => $iconeSalvo,
                     str_contains($categoria, 'refeitorio') || str_contains($categoria, 'cozinha') || str_contains($categoria, 'aliment') => '🍽️',
                     str_contains($categoria, 'banheiro') || str_contains($categoria, 'higiene') || str_contains($categoria, 'banho') => '🛁',
                     str_contains($categoria, 'enfermagem') || str_contains($categoria, 'medic') => '💊',
                     default => '🚶',
                 };
+                $corIcone = trim((string) $rotina->cor_icone);
+                $corIcone = preg_match('/\A#(?:[\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})\z/i', $corIcone) ? $corIcone : null;
                 [$selo, $corSelo] = match (true) {
                     $rotina->status === 'nao_realizada' => ['Não realizada', 'bg-rose-100 text-rose-800'],
                     $rotina->status === 'concluida' => ['Concluída', 'bg-emerald-100 text-emerald-800'],
@@ -63,6 +67,7 @@
                     'obs' => $rotina->obs,
                     'documentacao' => $rotina->url_documentacao,
                     'icone' => $icone,
+                    'corIcone' => $corIcone,
                     'selo' => $selo,
                     'corSelo' => $corSelo,
                     'prazo' => $rotina->prazo_execucao,
@@ -83,7 +88,13 @@
                         aria-haspopup="dialog" onclick="abrirModalDetalhes(@js($dados))"
                     @endif
                     class="group flex w-full items-center rounded-[1.25rem] border-2 border-[#d3ae74]/35 bg-white px-2.5 py-1.5 text-left shadow-sm transition-colors hover:border-[#21394e]/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 sm:px-4">
-                <span class="mr-2.5 flex h-12 w-10 shrink-0 items-center justify-center text-3xl leading-none transition-transform group-hover:scale-105 sm:mr-4 sm:h-14 sm:w-14 sm:text-[2.75rem]" aria-hidden="true">{{ $icone }}</span>
+                <span class="mr-2.5 flex h-12 w-10 shrink-0 items-center justify-center text-3xl leading-none transition-transform group-hover:scale-105 sm:mr-4 sm:h-14 sm:w-14 sm:text-[2.75rem]" aria-hidden="true">
+                    <span class="relative isolate inline-flex">{{ $icone }}
+                        @if ($corIcone)
+                            <span class="pointer-events-none absolute inset-0 mix-blend-color" style="background-color: {{ $corIcone }}"></span>
+                        @endif
+                    </span>
+                </span>
                 <span class="min-w-0 flex-1 py-1">
                     <strong class="block truncate text-[1.05rem] leading-tight sm:text-lg" title="{{ $tarefa }}">{{ $tarefa }}</strong>
                     <span class="mt-1 flex flex-col gap-0.5 text-xs leading-snug sm:flex-row sm:flex-wrap sm:gap-x-3.5 sm:text-sm">

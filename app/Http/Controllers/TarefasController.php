@@ -16,6 +16,8 @@ class TarefasController extends Controller
         $dados = $request->validate([
             'id' => 'nullable|integer|exists:tarefas,id_tarefa',
             'nome_tarefa' => 'required|string|max:100',
+            'icone' => 'nullable|string|max:32',
+            'cor_icone' => 'nullable|string|max:20',
             'tempo_tarefa' => 'required|numeric|min:0.01|max:1439.99',
             'status_tarefa' => 'required|in:Ativa,Inativa',
             'id_ferramenta' => 'nullable|integer|exists:ferramentas,id_ferramenta',
@@ -36,6 +38,14 @@ class TarefasController extends Controller
             'id_ferramenta' => $dados['id_ferramenta'] ?? null,
             'descricao' => $dados['descricao_tarefa'] ?? null,
         ];
+
+        if (empty($dados['id']) || array_key_exists('icone', $dados)) {
+            $registro['icone'] = trim($dados['icone'] ?? '') ?: '📋';
+        }
+
+        if (empty($dados['id']) || array_key_exists('cor_icone', $dados)) {
+            $registro['cor_icone'] = $dados['cor_icone'] ?? 'original';
+        }
 
         if ($caminho) {
             $registro['documentacao'] = $caminho;

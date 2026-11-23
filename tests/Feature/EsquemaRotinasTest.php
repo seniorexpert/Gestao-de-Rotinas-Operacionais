@@ -99,6 +99,8 @@ class EsquemaRotinasTest extends TestCase
             'id_ferramenta' => $ferramenta,
             'descricao' => 'Recolher os materiais.',
             'status' => true,
+            'icone' => '📋',
+            'cor_icone' => 'original',
         ]);
     }
 

@@ -19,7 +19,7 @@
                 </span>
                 <input type="text" id="filtroNomeTarefa" placeholder="Buscar pelo nome..." class="w-full pl-11 pr-4 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition">
             </div>
-            <a href="#" onclick="abrirModalNovo('taskModal')" class="w-full sm:w-auto inline-flex items-center justify-center space-x-2 bg-[#1b2a38] hover:bg-[#111c26] text-white px-5 py-3 rounded-xl font-medium text-sm transition shrink-0">
+            <a href="#" onclick="event.preventDefault(); abrirModalNovo('taskModal')" class="w-full sm:w-auto inline-flex items-center justify-center space-x-2 bg-[#1b2a38] hover:bg-[#111c26] text-white px-5 py-3 rounded-xl font-medium text-sm transition shrink-0">
                 <i class="fa-solid fa-plus"></i>
                 <span>Novo registro</span>
             </a>
@@ -42,6 +42,22 @@
                     @forelse($tarefas as $tarefa)
                         @php
                             [$horas, $minutos, $segundos] = array_pad(explode(':', $tarefa->tempo_realizar_tarefa ?? ''), 3, 0);
+                            $iconeRaw = $tarefa->icone ?? '';
+                            $iconeTarefa = trim((string) $iconeRaw) !== '' ? trim((string) $iconeRaw) : '📋';
+                            $corIconeTarefa = trim((string) ($tarefa->cor_icone ?? '')) ?: 'original';
+                            $hexCorTarefa = ($corIconeTarefa !== 'original' && preg_match('/^#[0-9a-fA-F]{3,8}$/', $corIconeTarefa))
+                                ? $corIconeTarefa
+                                : null;
+
+                            $svgMascara = null;
+                            if ($hexCorTarefa) {
+                                $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
+                                     . '<text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-size="52">'
+                                     . htmlspecialchars($iconeTarefa, ENT_XML1 | ENT_QUOTES, 'UTF-8')
+                                     . '</text></svg>';
+                                $svgMascara = 'url("data:image/svg+xml,' . rawurlencode($svg) . '")';
+                            }
+
                             $dadosEdicao = [
                                 'id' => $tarefa->id_tarefa,
                                 'nome' => $tarefa->tarefa,
@@ -49,14 +65,24 @@
                                 'status' => $tarefa->status ? 'Ativa' : 'Inativa',
                                 'descricao' => $tarefa->descricao,
                                 'id_ferramenta' => $tarefa->id_ferramenta,
+                                'icone' => $iconeTarefa,
+                                'cor_icone' => $corIconeTarefa,
                             ];
                         @endphp
                         <tr class="linha-tarefa hover:bg-gray-50/60 transition">
                             <td class="py-4 px-6 font-medium text-gray-500">#{{ $tarefa->id_tarefa }}</td>
                             <td class="py-4 px-6">
                                 <div class="flex items-center space-x-3">
-                                    <span class="h-8 w-8 rounded-lg bg-orange-50 flex items-center justify-center text-orange-500 shrink-0">
-                                        <i class="fa-solid fa-capsules"></i>
+                                    <span class="h-9 w-9 rounded-xl bg-[#fcfbf9] border border-amber-200/70 flex items-center justify-center shrink-0">
+                                        @if ($svgMascara)
+                                            <span
+                                                class="inline-block h-6 w-6"
+                                                style="background-color: {{ $hexCorTarefa }}; -webkit-mask: {{ $svgMascara }} center / contain no-repeat; mask: {{ $svgMascara }} center / contain no-repeat;"
+                                                title="{{ $iconeTarefa }}"
+                                            ></span>
+                                        @else
+                                            <span class="text-xl leading-none">{{ $iconeTarefa }}</span>
+                                        @endif
                                     </span>
                                     <span class="font-bold text-gray-800 uppercase">{{ $tarefa->tarefa ?? 'Sem nome' }}</span>
                                 </div>
@@ -111,14 +137,46 @@
     let paginaAtual = 1;
     let linhasFiltradas = [];
 
+    function sincronizarModalTarefa(icone, corIcone) {
+        const emoji = icone || '📋';
+        const cor = corIcone || 'original';
+
+        const inputIcone = document.querySelector('#taskModal [data-icone-input]');
+        if (inputIcone) {
+            inputIcone.value = emoji;
+            inputIcone.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+
+        const previewTopo = document.querySelector('#taskModal [data-icone-preview]');
+        if (previewTopo) {
+            previewTopo.textContent = emoji;
+        }
+
+        if (typeof window.selecionarCorIcone === 'function') {
+            window.selecionarCorIcone(cor);
+        }
+
+        const btnIr = document.querySelector('#taskModal [data-ir-selecionado]');
+        if (btnIr) {
+            btnIr.click();
+        }
+    }
+
     function openModal(modalId) {
         const modal = document.getElementById(modalId);
-        if (modal) modal.classList.remove('hidden');
+        if (modal) {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            window.dispatchEvent(new Event('resize'));
+        }
     }
 
     function closeModal(modalId) {
         const modal = document.getElementById(modalId);
-        if (modal) modal.classList.add('hidden');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
     }
 
     function abrirModalNovo(modalId) {
@@ -132,6 +190,7 @@
         if (titulo) titulo.textContent = 'Cadastro de tarefa';
 
         openModal(modalId);
+        sincronizarModalTarefa('📋', 'original');
     }
 
     function abrirModalEdicao(dados) {
@@ -159,6 +218,7 @@
         if (titulo) titulo.textContent = 'Editar tarefa';
 
         openModal(modalId);
+        sincronizarModalTarefa(dados.icone || '📋', dados.cor_icone || 'original');
     }
 
     function atualizarTabela() {
