@@ -16,8 +16,8 @@ class TarefasController extends Controller
         $dados = $request->validate([
             'id' => 'nullable|integer|exists:tarefas,id_tarefa',
             'nome_tarefa' => 'required|string|max:100',
-            'cor_icone' => 'required|string|max:32',
-            'cor_icone' => 'required|string|max:20',
+            'icone' => 'required|string|max:32',
+            'cor_icone' => 'nullable|string|max:20',
             'tempo_tarefa' => 'required|numeric|min:0.01|max:1439.99',
             'status_tarefa' => 'required|in:Ativa,Inativa',
             'id_ferramenta' => 'nullable|integer|exists:ferramentas,id_ferramenta',
@@ -31,8 +31,12 @@ class TarefasController extends Controller
             throw ValidationException::withMessages(['manual_tarefa' => 'O arquivo não pôde ser salvo.']);
         }
 
+        $icone = trim($dados['icone']) !== '' ? $dados['icone'] : '📋';
+
         $registro = [
             'tarefa' => $dados['nome_tarefa'],
+            'icone' => $icone,
+            'cor_icone' => $dados['cor_icone'] ?? 'original',
             'tempo_realizar_tarefa' => sprintf('%02d:%02d:%02d', intdiv($segundos, 3600), intdiv($segundos % 3600, 60), $segundos % 60),
             'status' => $dados['status_tarefa'] === 'Ativa',
             'id_ferramenta' => $dados['id_ferramenta'] ?? null,
