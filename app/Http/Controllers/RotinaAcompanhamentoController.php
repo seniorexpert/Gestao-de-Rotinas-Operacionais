@@ -23,12 +23,23 @@ use stdClass;
 class RotinaAcompanhamentoController extends Controller
 {
     private const ABAS = [
-        'pendentes' => 'Pendentes',
-        'verificadas' => 'Verificadas',
+        'auxilio' => 'Solicitação de Auxílio',
         'nao_realizadas' => 'Tarefas Não Realizadas',
+        'pendentes' => 'Tarefas em Atraso',
+        'verificadas' => 'Verificadas',
     ];
 
-    private const NAO_REALIZADAS = 'rotinas_acomp_nao_realizadas';
+    private const TABELAS = [
+        'atraso' => 'rotinas_verificacoes',
+        'nao_realizada' => 'rotinas_acomp_nao_realizadas',
+        'auxilio' => 'rotinas_acomp_auxilios',
+    ];
+
+    private const ABAS_POR_TIPO = [
+        'atraso' => 'pendentes',
+        'nao_realizada' => 'nao_realizadas',
+        'auxilio' => 'auxilio',
+    ];
 
     private const ITENS_POR_PAGINA = 24;
 
@@ -53,11 +64,11 @@ class RotinaAcompanhamentoController extends Controller
         $this->execucoesDiarias->gerar($agora, $this->rotinas->empresas($usuario));
 
         if (isset($filtros['item'])) {
-            $naoRealizada = isset($filtros['tipo']) || ($filtros['aba'] ?? null) === 'nao_realizadas';
-            $item = $this->itens($usuario, $naoRealizada)
+            $tipo = $this->tipoDoItem($filtros);
+            $item = $this->itens($usuario, $tipo)
                 ->leftJoin('usuarios as gerente', 'v.id_usuario_verificacao', '=', 'gerente.id_usuario')
                 ->addSelect('v.acao', 'gerente.usuario as verificado_por')
-                ->where('e.id_execucao', (int) $filtros['item'])
+                ->where($tipo === 'auxilio' ? 'v.id_solicitacao' : 'e.id_execucao', (int) $filtros['item'])
                 ->first();
 
             abort_unless($item && $this->prepararItem($item, $agora, $caixa, $usuario), 404);
@@ -84,9 +95,9 @@ class RotinaAcompanhamentoController extends Controller
             ]);
         }
 
-        $aba = $filtros['aba'] ?? 'pendentes';
+        $aba = $filtros['aba'] ?? 'auxilio';
         $parametros = ['aba' => $aba, 'busca' => $filtros['busca'] ?? null];
-        $atrasos = $this->itens($usuario)
+        $atrasos = $this->itens($usuario, 'atraso')
             ->where(function (Builder $query) use ($agora) {
                 $query->whereNotNull('v.id_execucao')
                     ->orWhere(fn (Builder $pendentes) => $pendentes
@@ -95,10 +106,13 @@ class RotinaAcompanhamentoController extends Controller
                             ->where('e.previsto_em', '<=', $agora)
                             ->orWhere('e.iniciado_em', '<=', $agora)));
             });
-        $naoRealizadas = $this->itens($usuario, true)->where('v.recebido_em', '<=', $agora);
-        $execucoes = DB::query()->fromSub($atrasos->unionAll($naoRealizadas), 'fila')
+        $naoRealizadas = $this->itens($usuario, 'nao_realizada')->where('v.recebido_em', '<=', $agora);
+        $auxilios = $this->itens($usuario, 'auxilio')->where('v.recebido_em', '<=', $agora);
+        $execucoes = DB::query()->fromSub($atrasos->unionAll($naoRealizadas)->unionAll($auxilios), 'fila')
             ->orderByDesc('entrada')
             ->orderByDesc('id_execucao')
+            ->orderByDesc('id_item')
+            ->orderBy('tipo')
             ->cursor();
 
         $totais = array_fill_keys(array_keys(self::ABAS), 0);
@@ -164,18 +178,24 @@ class RotinaAcompanhamentoController extends Controller
         $caixa = $this->escalonamento->caixaDoUsuario($usuario);
         abort_if($caixa === null, 403);
 
-        DB::transaction(function () use ($usuario, $caixa, $id, $dados) {
-            $naoRealizada = isset($dados['tipo']) || ($dados['aba'] ?? null) === 'nao_realizadas';
+        $tipo = $this->tipoDoItem($dados);
+        DB::transaction(function () use ($usuario, $caixa, $id, $dados, $tipo) {
+            $tabela = self::TABELAS[$tipo];
+            $solicitacao = $tipo === 'auxilio';
+            $registroDoItem = DB::table($tabela)->where($solicitacao ? 'id_solicitacao' : 'id_execucao', $id);
+            $idExecucao = $solicitacao ? (clone $registroDoItem)->value('id_execucao') : $id;
+            abort_unless($idExecucao, 404);
+
             $execucao = $this->execucoesDaUnidade($usuario)
-                ->where('e.id_execucao', $id)
+                ->where('e.id_execucao', $idExecucao)
                 ->lockForUpdate()
                 ->first();
 
             abort_unless($execucao, 404);
 
-            $tabela = $naoRealizada ? self::NAO_REALIZADAS : 'rotinas_verificacoes';
-            $registro = DB::table($tabela)->where('id_execucao', $id)->first();
-            abort_if($naoRealizada && ($execucao->status !== 'nao_realizada' || ! $registro), 404);
+            $registro = (clone $registroDoItem)->first();
+            abort_if($tipo !== 'atraso' && ! $registro, 404);
+            abort_if($tipo === 'nao_realizada' && $execucao->status !== 'nao_realizada', 404);
 
             if ($registro?->verificado_em !== null) {
                 abort_unless($this->podeConsultarVerificacao($registro, $caixa, $usuario), 404);
@@ -183,8 +203,8 @@ class RotinaAcompanhamentoController extends Controller
                 return;
             }
 
-            $execucao->nao_realizada = $naoRealizada;
-            if ($naoRealizada) {
+            $execucao->tipo = $tipo;
+            if ($tipo !== 'atraso') {
                 $execucao->caixa_inicial = $registro->caixa;
                 $execucao->entrada = $registro->recebido_em;
             }
@@ -203,15 +223,15 @@ class RotinaAcompanhamentoController extends Controller
                 ), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
             ];
 
-            if ($naoRealizada) {
-                DB::table($tabela)->where('id_execucao', $id)->update($verificacao);
+            if ($tipo === 'atraso') {
+                DB::table($tabela)->insert(['id_execucao' => $idExecucao, ...$verificacao]);
             } else {
-                DB::table($tabela)->insert(['id_execucao' => $id, ...$verificacao]);
+                $registroDoItem->update($verificacao);
             }
 
             AuditoriaService::registrar(
                 'VERIFICAR', $tabela, (string) $id,
-                dadosNovos: ['id_execucao' => $id, 'caixa' => $caixa, 'verificado_em' => $agora],
+                dadosNovos: ['id_execucao' => $idExecucao, 'caixa' => $caixa, 'verificado_em' => $agora],
                 descricao: 'Verificação concluída no acompanhamento',
                 idEmpresa: (int) $execucao->id_empresa,
                 idRotina: (int) $execucao->id_rotina,
@@ -219,7 +239,7 @@ class RotinaAcompanhamentoController extends Controller
         }, 3);
 
         return to_route('acompanhamento.index', [
-            'aba' => $dados['aba'] ?? 'pendentes',
+            'aba' => $dados['aba'] ?? self::ABAS_POR_TIPO[$tipo],
             'busca' => $dados['busca'] ?? null,
             'page' => $dados['page'] ?? null,
         ])->with('success', 'Verificação concluída.');
@@ -232,8 +252,17 @@ class RotinaAcompanhamentoController extends Controller
             'aba' => ['nullable', Rule::in(array_keys(self::ABAS))],
             'busca' => ['nullable', 'string', 'max:150'],
             'page' => ['nullable', 'integer', 'min:1'],
-            'tipo' => ['nullable', Rule::in(['nao_realizada'])],
+            'tipo' => ['nullable', Rule::in(array_keys(self::TABELAS))],
         ];
+    }
+
+    private function tipoDoItem(array $filtros): string
+    {
+        return $filtros['tipo'] ?? match ($filtros['aba'] ?? null) {
+            'auxilio' => 'auxilio',
+            'nao_realizadas' => 'nao_realizada',
+            default => 'atraso',
+        };
     }
 
     private function execucoesDaUnidade(User $usuario): Builder
@@ -264,7 +293,7 @@ class RotinaAcompanhamentoController extends Controller
             ]);
     }
 
-    private function itens(User $usuario, bool $naoRealizada = false): Builder
+    private function itens(User $usuario, string $tipo): Builder
     {
         $consulta = $this->execucoesDaUnidade($usuario)
             ->leftJoin('tarefas as t', 'r.id_tarefa', '=', 't.id_tarefa')
@@ -275,20 +304,22 @@ class RotinaAcompanhamentoController extends Controller
                 'r.local as local_rotina',
                 'l.local as local_cadastrado',
                 'r.auxilio',
-                'e.justificativa_nao_realizada',
                 'v.verificado_em',
                 'v.id_usuario_verificacao',
                 'v.encaminhamentos',
             ]);
 
-        if ($naoRealizada) {
-            return $consulta->join(self::NAO_REALIZADAS.' as v', 'e.id_execucao', '=', 'v.id_execucao')
-                ->where('e.status', 'nao_realizada')
-                ->selectRaw('1 as nao_realizada, v.caixa as caixa_inicial, v.recebido_em as entrada');
+        if ($tipo === 'atraso') {
+            return $consulta->leftJoin(self::TABELAS[$tipo].' as v', 'e.id_execucao', '=', 'v.id_execucao')
+                ->selectRaw("'atraso' as tipo, e.id_execucao as id_item, CAST(NULL AS VARCHAR(40)) as caixa_inicial, e.previsto_em as entrada, CAST(NULL AS VARCHAR(2000)) as justificativa");
         }
 
-        return $consulta->leftJoin('rotinas_verificacoes as v', 'e.id_execucao', '=', 'v.id_execucao')
-            ->selectRaw('0 as nao_realizada, CAST(NULL AS VARCHAR(40)) as caixa_inicial, e.previsto_em as entrada');
+        $consulta->join(self::TABELAS[$tipo].' as v', 'e.id_execucao', '=', 'v.id_execucao');
+
+        return $tipo === 'auxilio'
+            ? $consulta->selectRaw("'auxilio' as tipo, v.id_solicitacao as id_item, v.caixa as caixa_inicial, v.recebido_em as entrada, v.justificativa")
+            : $consulta->where('e.status', 'nao_realizada')
+                ->selectRaw("'nao_realizada' as tipo, e.id_execucao as id_item, v.caixa as caixa_inicial, v.recebido_em as entrada, e.justificativa_nao_realizada as justificativa");
     }
 
     private function prepararItem(stdClass $item, CarbonImmutable $agora, string $caixa, User $usuario): bool
@@ -308,8 +339,9 @@ class RotinaAcompanhamentoController extends Controller
 
         $item->atraso_segundos = $envio['atraso_segundos'];
         $item->recebido_em = $recebidoEm->timezone(ExecucoesDiarias::FUSO);
-        $item->limite_acompanhamento = $this->escalonamento->limite($recebidoEm)->timezone(ExecucoesDiarias::FUSO);
-        $item->sla_acompanhamento = $this->escalonamento->situacao($recebidoEm, $agora);
+        $auxilio = $item->tipo === 'auxilio';
+        $item->limite_acompanhamento = $this->escalonamento->limite($recebidoEm, $auxilio)->timezone(ExecucoesDiarias::FUSO);
+        $item->sla_acompanhamento = $this->escalonamento->situacao($recebidoEm, $agora, $auxilio);
 
         return true;
     }
@@ -317,14 +349,14 @@ class RotinaAcompanhamentoController extends Controller
     /** @return array{atraso_segundos: ?int, recebimentos: array<string, CarbonImmutable>}|null */
     private function encaminharItem(stdClass $item, CarbonImmutable $agora): ?array
     {
-        if (! $item->nao_realizada) {
+        if ($item->tipo === 'atraso') {
             return $this->escalonamento->encaminhar($item, $agora);
         }
 
         return [
             'atraso_segundos' => null,
             'recebimentos' => $this->escalonamento->recebimentos(
-                [$item->caixa_inicial], CarbonImmutable::parse($item->entrada, 'UTC'), $agora,
+                [$item->caixa_inicial], CarbonImmutable::parse($item->entrada, 'UTC'), $agora, $item->tipo === 'auxilio',
             ),
         ];
     }
@@ -349,11 +381,7 @@ class RotinaAcompanhamentoController extends Controller
 
     private function abaDoItem(stdClass $item): string
     {
-        return match (true) {
-            $item->verificado_em !== null => 'verificadas',
-            (bool) $item->nao_realizada => 'nao_realizadas',
-            default => 'pendentes',
-        };
+        return $item->verificado_em !== null ? 'verificadas' : self::ABAS_POR_TIPO[$item->tipo];
     }
 
     private function correspondeBusca(stdClass $item, string $termo): bool
@@ -364,7 +392,7 @@ class RotinaAcompanhamentoController extends Controller
             $item->morador,
             $this->local($item),
             $this->processo($item),
-            $item->nao_realizada ? $item->justificativa_nao_realizada : null,
+            $item->justificativa,
         ]);
 
         return str_contains(Str::lower(Str::ascii($texto)), $termo);
@@ -377,7 +405,11 @@ class RotinaAcompanhamentoController extends Controller
 
     private function processo(stdClass $item): string
     {
-        return $item->auxilio && ! $item->nao_realizada ? 'Solicitação de Auxílio' : 'Rotinas Diárias';
+        return match (true) {
+            $item->tipo === 'auxilio' => 'Solicitação de Auxílio',
+            $item->tipo === 'atraso' && $item->auxilio => 'Auxílio previsto',
+            default => 'Rotinas Diárias',
+        };
     }
 
     private function formatarItem(stdClass $item): stdClass

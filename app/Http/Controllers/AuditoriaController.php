@@ -30,7 +30,7 @@ class AuditoriaController extends Controller
 
     private const GRUPO = 'COALESCE(grupo.grupo_acesso, colaborador.grupo_acesso_nome)';
 
-    private const ROTINAS = ['rotinas', 'rotinas_execucoes', 'rotinas_verificacoes', 'rotinas_acomp_nao_realizadas'];
+    private const ROTINAS = ['rotinas', 'rotinas_execucoes', 'rotinas_verificacoes', 'rotinas_acomp_nao_realizadas', 'rotinas_acomp_auxilios'];
 
     private const RECURSOS = [
         'sessoes' => 'Sessões',
@@ -44,6 +44,7 @@ class AuditoriaController extends Controller
         'rotinas_execucoes' => 'Execuções',
         'rotinas_verificacoes' => 'Acompanhamento',
         'rotinas_acomp_nao_realizadas' => 'Acompanhamento de tarefas não realizadas',
+        'rotinas_acomp_auxilios' => 'Acompanhamento de solicitações de auxílio',
         'logs_auditoria' => 'Auditoria',
     ];
 

@@ -28,7 +28,7 @@
 
         <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <nav id="abas-acompanhamento" aria-label="Situação da verificação"
-                 class="grid grid-cols-[1fr_1fr_1.4fr] gap-1 rounded-xl border border-[#b39359]/30 bg-[#f4f1ea]/80 p-1 sm:w-fit sm:grid-cols-[auto_auto_auto]">
+                 class="grid grid-cols-2 gap-1 rounded-xl border border-[#b39359]/30 bg-[#f4f1ea]/80 p-1 sm:w-fit sm:grid-cols-[auto_auto_auto_auto]">
                 @foreach ($abas as $chave => $rotulo)
                     @php($total = $totais[$chave])
                     <a href="{{ route('acompanhamento.index', [...$parametros, 'aba' => $chave]) }}"
@@ -62,17 +62,17 @@
                 <ul class="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-label="Tarefas para verificação">
                     @foreach ($itens as $item)
                         <li>
-                            <a href="{{ route('acompanhamento.index', [...$parametros, 'item' => $item->id_execucao, 'tipo' => $item->nao_realizada ? 'nao_realizada' : null, 'page' => $itens->currentPage() > 1 ? $itens->currentPage() : null]) }}"
+                            <a href="{{ route('acompanhamento.index', [...$parametros, 'item' => $item->id_item, 'tipo' => $item->tipo === 'atraso' ? null : $item->tipo, 'page' => $itens->currentPage() > 1 ? $itens->currentPage() : null]) }}"
                                class="group flex h-full flex-col rounded-[1.25rem] border-2 bg-white p-4 shadow-sm transition hover:shadow-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#1e2d3d]
                                       {{ $item->verificado_em ? 'border-[#b39359]/30' : 'border-rose-200' }}">
-                                @if ($item->nao_realizada)
-                                    @include('processos.acompanhamento.motivo-nao-realizada', ['resumir' => true])
+                                @if ($item->tipo !== 'atraso')
+                                    @include('processos.acompanhamento.motivo', ['resumir' => true])
                                 @endif
 
                                 <div class="flex items-start gap-3">
                                     <span class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[#f4f1ea] text-2xl text-[#886934] transition-transform group-hover:scale-105"
                                           aria-hidden="true">
-                                        <i class="fa-solid {{ $item->auxilio ? 'fa-handshake-angle' : 'fa-list-check' }}"></i>
+                                        <i class="fa-solid {{ $item->tipo === 'auxilio' || $item->auxilio ? 'fa-handshake-angle' : 'fa-list-check' }}"></i>
                                     </span>
                                     <div class="min-w-0 flex-1">
                                         <h2 class="break-words text-base font-bold leading-snug text-[#1e2d3d]">{{ $item->tarefa }}</h2>
@@ -100,14 +100,14 @@
                                         <span class="rounded-full bg-emerald-50 px-2.5 py-0.5 text-emerald-800">Verificada</span>
                                     @else
                                         @include('processos.acompanhamento.selo-sla', ['situacao' => $item->sla_acompanhamento])
-                                        @if (! $item->nao_realizada)
+                                        @if ($item->tipo === 'atraso')
                                             <span class="rounded-full bg-rose-50 px-2.5 py-0.5 text-rose-800">Atraso da tarefa · {{ $item->atraso }}</span>
                                         @endif
                                     @endif
-                                    @if ($item->nao_realizada)
+                                    @if ($item->tipo === 'nao_realizada')
                                         <span class="rounded-full bg-rose-50 px-2.5 py-0.5 text-rose-800">Não realizada</span>
-                                    @elseif ($item->auxilio)
-                                        <span class="rounded-full bg-amber-50 px-2.5 py-0.5 text-amber-900">Solicitação de auxílio</span>
+                                    @elseif ($item->tipo === 'auxilio' || $item->auxilio)
+                                        <span class="rounded-full bg-amber-50 px-2.5 py-0.5 text-amber-900">{{ $item->processo }}</span>
                                     @endif
                                 </div>
                                 @if (!$item->verificado_em)
@@ -133,9 +133,11 @@
                         @if ($busca !== '')
                             Nenhuma tarefa encontrada para essa busca.
                         @elseif ($aba === 'pendentes')
-                            Nenhuma tarefa aguardando verificação.
+                            Nenhuma tarefa em atraso aguardando verificação nesta caixa.
                         @elseif ($aba === 'nao_realizadas')
                             Nenhuma tarefa não realizada aguardando verificação nesta caixa.
+                        @elseif ($aba === 'auxilio')
+                            Nenhuma solicitação de auxílio aguardando verificação nesta caixa.
                         @else
                             Nenhuma verificação concluída ainda.
                         @endif

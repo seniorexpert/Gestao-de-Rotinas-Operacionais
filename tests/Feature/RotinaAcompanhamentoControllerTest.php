@@ -96,7 +96,7 @@ class RotinaAcompanhamentoControllerTest extends TestCase
         $outroColaborador = $this->usuario('José Lima', 'Enfermagem', $outraEmpresa);
         $this->execucao('Rotina de outra unidade', $outroColaborador, $outraEmpresa);
 
-        $this->actingAs($gerente)->get(route('acompanhamento.index'))
+        $this->actingAs($gerente)->get(route('acompanhamento.index', ['aba' => 'pendentes']))
             ->assertOk()
             ->assertSeeText(['Hidratação atrasada', 'Apoio em andamento', 'Refeição concluída com atraso',
                 'Atividade iniciada tarde', 'Execução antiga vencida'])
@@ -110,7 +110,7 @@ class RotinaAcompanhamentoControllerTest extends TestCase
     #[TestWith(['HIDRATACAO'])]
     #[TestWith(['beatriz'])]
     #[TestWith(['sala de estar'])]
-    #[TestWith(['solicitacao de auxilio'])]
+    #[TestWith(['auxilio previsto'])]
     public function test_busca_ignora_caixa_e_acentos_nos_campos_do_item(string $termo): void
     {
         $empresa = $this->empresa('Unidade Centro');
@@ -118,7 +118,7 @@ class RotinaAcompanhamentoControllerTest extends TestCase
         $colaborador = $this->usuario('João Silva', 'Enfermagem', $empresa);
         $this->execucao('Hidratação', $colaborador, $empresa, rotina: ['morador' => 'Beatriz', 'auxilio' => true]);
 
-        $this->actingAs($gerente)->get(route('acompanhamento.index', ['busca' => $termo]))
+        $this->actingAs($gerente)->get(route('acompanhamento.index', ['aba' => 'pendentes', 'busca' => $termo]))
             ->assertOk()
             ->assertSeeText('Hidratação');
     }
@@ -138,7 +138,7 @@ class RotinaAcompanhamentoControllerTest extends TestCase
         $this->actingAs($gerente)->get(route('acompanhamento.index', ['item' => $id]))
             ->assertOk()
             ->assertSeeText(['Verificação da Tarefa', '11:50 · quarta-feira', '18/11/2026', 'Sala de Estar',
-                'João Silva', 'Bianca Rocha', 'Solicitação de Auxílio', 'Qual ação foi realizada?']);
+                'João Silva', 'Bianca Rocha', 'Auxílio previsto', 'Qual ação foi realizada?']);
     }
 
     public static function acoesInvalidas(): array
@@ -295,11 +295,11 @@ class RotinaAcompanhamentoControllerTest extends TestCase
         }
         $this->execucao('Refeição que não corresponde à busca', $colaborador, $empresa);
 
-        $this->actingAs($gerente)->get(route('acompanhamento.index', ['busca' => 'hidratacao', 'page' => 2]))
+        $this->actingAs($gerente)->get(route('acompanhamento.index', ['aba' => 'pendentes', 'busca' => 'hidratacao', 'page' => 2]))
             ->assertOk()
             ->assertSeeText('Hidratação mais antiga')
             ->assertDontSeeText('Hidratação 24')
-            ->assertViewHas('totais', ['pendentes' => 26, 'verificadas' => 0, 'nao_realizadas' => 0]);
+            ->assertViewHas('totais', ['auxilio' => 0, 'nao_realizadas' => 0, 'pendentes' => 26, 'verificadas' => 0]);
     }
 
     #[TestWith(['Cuidadores', 'Enfermagem'])]
@@ -319,7 +319,7 @@ class RotinaAcompanhamentoControllerTest extends TestCase
         $responsavel = $this->usuario('Rita Souza', $destino, $empresa);
         $this->execucao('Tarefa fora do prazo', $colaborador, $empresa);
 
-        $this->actingAs($responsavel)->get(route('acompanhamento.index'))
+        $this->actingAs($responsavel)->get(route('acompanhamento.index', ['aba' => 'pendentes']))
             ->assertOk()
             ->assertSeeText('Tarefa fora do prazo');
     }
@@ -342,7 +342,7 @@ class RotinaAcompanhamentoControllerTest extends TestCase
         $this->execucao('Hidratação', $colaborador, $empresa);
         $this->travelTo(CarbonImmutable::parse("2026-11-18 $hora", 'UTC'));
 
-        $this->actingAs($responsavel)->get(route('acompanhamento.index'))
+        $this->actingAs($responsavel)->get(route('acompanhamento.index', ['aba' => 'pendentes']))
             ->assertOk()
             ->assertSeeText(['Hidratação', "Acompanhamento · $situacao"]);
     }
@@ -375,7 +375,7 @@ class RotinaAcompanhamentoControllerTest extends TestCase
         $this->execucao('Rotina de gestão da unidade', $gerenteDaUnidade, $empresa);
         $this->execucao('Rotina da gestão geral', $gerenteGeral, $empresa, ['previsto_em' => '2026-11-18 10:00:00']);
 
-        $this->actingAs($gerenteGeral)->get(route('acompanhamento.index'))
+        $this->actingAs($gerenteGeral)->get(route('acompanhamento.index', ['aba' => 'pendentes']))
             ->assertOk()
             ->assertSeeText('Rotina de gestão da unidade')
             ->assertDontSeeText('Rotina de enfermagem')
@@ -456,7 +456,7 @@ class RotinaAcompanhamentoControllerTest extends TestCase
 
         $this->actingAs($superior)->get(route('acompanhamento.index', ['aba' => 'nao_realizadas']))
             ->assertOk()
-            ->assertSeeTextInOrder(['Pendentes', 'Verificadas', 'Tarefas Não Realizadas'])
+            ->assertSeeTextInOrder(['Solicitação de Auxílio', 'Tarefas Não Realizadas', 'Tarefas em Atraso', 'Verificadas'])
             ->assertSeeText(['Hidratação', 'Acompanhamento · No prazo']);
         $this->get(route('acompanhamento.index', ['aba' => 'nao_realizadas', 'item' => $id]))
             ->assertOk()
@@ -509,6 +509,93 @@ class RotinaAcompanhamentoControllerTest extends TestCase
 
         $this->travelTo(CarbonImmutable::parse('2026-11-18 15:30:00', 'UTC'));
         $this->actingAs($gerente)->get(route('acompanhamento.index', ['aba' => 'nao_realizadas', 'item' => $id]))->assertNotFound();
+    }
+
+    #[TestWith(['Cuidador', 'Enfermagem'])]
+    #[TestWith(['Farmácia', 'Enfermagem'])]
+    #[TestWith(['Estoque', 'Coordenador'])]
+    #[TestWith(['Manutenção', 'Coordenador'])]
+    #[TestWith(['Auxiliar de Limpeza', 'Coordenador'])]
+    #[TestWith(['Auxiliar de Cozinha', 'Coordenador'])]
+    #[TestWith(['Enfermagem', 'Gerente da Unidade'])]
+    #[TestWith(['Coordenador', 'Gerente da Unidade'])]
+    #[TestWith(['Gerente da Unidade', 'Gerente Geral'])]
+    public function test_solicitacao_de_auxilio_abre_tarefa_para_o_superior(string $origem, string $destino): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $colaborador = $this->usuario('João Silva', $origem, $empresa);
+        $superior = $this->usuario('Rita Souza', $destino, $empresa);
+        $execucao = $this->execucaoEmAndamento($colaborador, $empresa);
+        $justificativa = 'Preciso de <apoio da equipe>';
+
+        $this->actingAs($colaborador)->post(route('execucoes.auxilio', $execucao), ['justificativa' => $justificativa])
+            ->assertSessionHasNoErrors()->assertRedirectToRoute('execucoes.realizando', $execucao)
+            ->assertSessionHas('success', "Solicitação de auxílio enviada à caixa de {$destino} na Rotina de Acompanhamento.");
+
+        $solicitacao = DB::table('rotinas_acomp_auxilios')->sole();
+        $this->assertDatabaseHas('rotinas_acomp_auxilios', [
+            'id_execucao' => $execucao, 'caixa' => $destino, 'justificativa' => $justificativa, 'recebido_em' => '2026-11-18 15:00:00',
+        ]);
+        $this->assertDatabaseHas('rotinas_execucoes', ['id_execucao' => $execucao, 'status' => 'em_andamento']);
+
+        $this->actingAs($superior)->get(route('acompanhamento.index'))->assertOk()
+            ->assertViewHas('aba', 'auxilio')
+            ->assertSeeTextInOrder(['Solicitação de Auxílio', 'Tarefas Não Realizadas', 'Tarefas em Atraso', 'Verificadas'])
+            ->assertSeeText(['Hidratação', 'Acompanhamento · No prazo']);
+        $this->get(route('acompanhamento.index', ['aba' => 'auxilio', 'item' => $solicitacao->id_solicitacao]))
+            ->assertOk()
+            ->assertSeeTextInOrder(['O Colaborador João Silva Solicita Auxílio para realizar a tarefa Hidratação! Justificativa:', $justificativa, 'Sala de Estar'])
+            ->assertDontSee($justificativa, false);
+    }
+
+    public function test_sla_de_auxilio_e_encaminhamento_usam_cinco_e_dez_minutos_por_caixa(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $colaborador = $this->usuario('João Silva', 'Cuidador', $empresa);
+        $enfermagem = $this->usuario('Rita Souza', 'Enfermagem', $empresa);
+        $gerente = $this->usuario('Marcos Reis', 'Gerente da Unidade', $empresa);
+        $outraUnidade = $this->usuario('Ana Prado', 'Enfermagem', $this->empresa('Unidade Norte'));
+        $execucao = $this->execucaoEmAndamento($colaborador, $empresa);
+        $this->actingAs($colaborador)->post(route('execucoes.auxilio', $execucao), ['justificativa' => 'Apoio no atendimento'])->assertSessionHasNoErrors();
+        $id = DB::table('rotinas_acomp_auxilios')->value('id_solicitacao');
+        $detalhe = route('acompanhamento.index', ['aba' => 'auxilio', 'item' => $id]);
+
+        $this->actingAs($outraUnidade)->get($detalhe)->assertNotFound();
+        $this->post(route('acompanhamento.store', $id), ['tipo' => 'auxilio', 'acao' => 'Atendimento'])->assertNotFound();
+        $this->travelTo(CarbonImmutable::parse('2026-11-18 15:04:59', 'UTC'));
+        $this->actingAs($enfermagem)->get($detalhe)->assertOk()->assertSeeText(['Acompanhamento · No prazo', '18/11/2026 12:10']);
+        $this->travelTo(CarbonImmutable::parse('2026-11-18 15:05:00', 'UTC'));
+        $this->get($detalhe)->assertOk()->assertSeeText('Acompanhamento · Expirando');
+        $this->travelTo(CarbonImmutable::parse('2026-11-18 15:09:59', 'UTC'));
+        $this->actingAs($gerente)->get($detalhe)->assertNotFound();
+
+        $this->travelTo(CarbonImmutable::parse('2026-11-18 15:10:00', 'UTC'));
+        $this->actingAs($enfermagem)->get($detalhe)->assertOk()->assertSeeText('Acompanhamento · Atrasada');
+        $this->actingAs($gerente)->get($detalhe)->assertOk()->assertSeeText(['Acompanhamento · No prazo', '18/11/2026 12:20']);
+    }
+
+    public function test_auxilios_da_mesma_execucao_sao_verificados_individualmente_sem_duplicar_reenvios(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $colaborador = $this->usuario('João Silva', 'Cuidador', $empresa);
+        $superior = $this->usuario('Rita Souza', 'Enfermagem', $empresa);
+        $execucao = $this->execucaoEmAndamento($colaborador, $empresa);
+        $rota = route('execucoes.auxilio', $execucao);
+        $protocolo = (string) Str::uuid();
+
+        $this->actingAs($colaborador)->post($rota, ['justificativa' => 'Auxílio com materiais', 'protocolo' => $protocolo])->assertSessionHasNoErrors();
+        $this->post($rota, ['justificativa' => 'Reenvio', 'protocolo' => $protocolo])->assertSessionHasNoErrors();
+        $this->post($rota, ['justificativa' => 'Apoio no atendimento'])->assertSessionHasNoErrors();
+        $this->assertDatabaseCount('rotinas_acomp_auxilios', 2);
+        $id = DB::table('rotinas_acomp_auxilios')->where('protocolo', $protocolo)->value('id_solicitacao');
+
+        $this->actingAs($superior)->post(route('acompanhamento.store', $id), ['tipo' => 'auxilio', 'acao' => 'Materiais entregues'])
+            ->assertSessionHasNoErrors()->assertRedirectToRoute('acompanhamento.index', ['aba' => 'auxilio']);
+        $this->assertDatabaseHas('rotinas_acomp_auxilios', ['id_solicitacao' => $id, 'acao' => 'Materiais entregues', 'justificativa' => 'Auxílio com materiais']);
+        $this->assertDatabaseHas('logs_auditoria', ['registro_id' => (string) $id, 'tabela' => 'rotinas_acomp_auxilios', 'acao' => 'VERIFICAR']);
+        $this->get(route('acompanhamento.index'))->assertOk()->assertSeeText('Apoio no atendimento')->assertDontSeeText('Auxílio com materiais');
+        $this->get(route('acompanhamento.index', ['aba' => 'verificadas', 'item' => $id, 'tipo' => 'auxilio']))
+            ->assertOk()->assertSeeText(['Materiais entregues', 'Auxílio com materiais']);
     }
 
     private function execucaoEmAndamento(User $colaborador, int $empresa): int

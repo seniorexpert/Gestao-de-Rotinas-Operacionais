@@ -21,6 +21,10 @@ class EscalonamentoAcompanhamento
 
     private const LIMITE_EM_MINUTOS = 30;
 
+    private const ALERTA_AUXILIO_EM_MINUTOS = 5;
+
+    private const LIMITE_AUXILIO_EM_MINUTOS = 10;
+
     private const PROXIMA_CAIXA = [
         self::ENFERMAGEM => self::GERENTE_DA_UNIDADE,
         self::COORDENADOR => self::GERENTE_DA_UNIDADE,
@@ -89,7 +93,7 @@ class EscalonamentoAcompanhamento
      * @param  list<string>  $destinos
      * @return array<string, CarbonImmutable>
      */
-    public function recebimentos(array $destinos, CarbonImmutable $entrada, CarbonImmutable $agora): array
+    public function recebimentos(array $destinos, CarbonImmutable $entrada, CarbonImmutable $agora, bool $auxilio = false): array
     {
         $recebimentos = [];
 
@@ -101,25 +105,26 @@ class EscalonamentoAcompanhamento
                 }
 
                 $caixa = self::PROXIMA_CAIXA[$caixa] ?? null;
-                $recebidoEm = $this->limite($recebidoEm);
+                $recebidoEm = $this->limite($recebidoEm, $auxilio);
             }
         }
 
         return $recebimentos;
     }
 
-    public function limite(CarbonImmutable $recebidoEm): CarbonImmutable
+    public function limite(CarbonImmutable $recebidoEm, bool $auxilio = false): CarbonImmutable
     {
-        return $recebidoEm->addMinutes(self::LIMITE_EM_MINUTOS);
+        return $recebidoEm->addMinutes($auxilio ? self::LIMITE_AUXILIO_EM_MINUTOS : self::LIMITE_EM_MINUTOS);
     }
 
-    public function situacao(CarbonImmutable $recebidoEm, CarbonImmutable $agora): string
+    public function situacao(CarbonImmutable $recebidoEm, CarbonImmutable $agora, bool $auxilio = false): string
     {
-        if ($agora->greaterThanOrEqualTo($this->limite($recebidoEm))) {
+        if ($agora->greaterThanOrEqualTo($this->limite($recebidoEm, $auxilio))) {
             return 'Atrasada';
         }
 
-        if ($agora->greaterThanOrEqualTo($recebidoEm->addMinutes(self::ALERTA_EM_MINUTOS))) {
+        $alerta = $auxilio ? self::ALERTA_AUXILIO_EM_MINUTOS : self::ALERTA_EM_MINUTOS;
+        if ($agora->greaterThanOrEqualTo($recebidoEm->addMinutes($alerta))) {
             return 'Expirando';
         }
 

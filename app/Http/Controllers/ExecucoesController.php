@@ -13,6 +13,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
@@ -42,7 +43,9 @@ class ExecucoesController extends Controller
         $execucao = $this->consultarExecucao($request, $id);
         abort_unless($execucao->status === 'em_andamento' && $execucao->iniciado_em, 404);
 
-        return view('execucoes.formulario', compact('execucao', 'acao'));
+        $protocolo = $acao === 'auxilio' ? (string) Str::uuid() : null;
+
+        return view('execucoes.formulario', compact('execucao', 'acao', 'protocolo'));
     }
 
     public function foto(Request $request, int $id): StreamedResponse
@@ -187,20 +190,47 @@ class ExecucoesController extends Controller
 
     public function auxilio(Request $request, int $id): RedirectResponse
     {
-        DB::transaction(function () use ($request, $id): void {
+        $caixa = DB::transaction(function () use ($request, $id): ?string {
             $execucao = $this->buscarExecucaoAutorizada($request, $id);
             $this->validarEmAndamento($execucao);
+            $justificativa = $this->justificativa($request);
+            $dados = $request->validate(['protocolo' => ['nullable', 'uuid']]);
+            $protocolo = Str::lower($dados['protocolo'] ?? (string) Str::uuid());
+            $caixa = $this->escalonamento->superiorDoGrupo($request->user()->grupoAcesso?->grupo_acesso);
+            $registro = ['justificativa' => $justificativa];
+
+            if ($caixa !== null) {
+                $criada = DB::table('rotinas_acomp_auxilios')->where('id_execucao', $id)->where('protocolo', $protocolo)->value('caixa');
+                if ($criada !== null) {
+                    return $criada;
+                }
+
+                $registro['id_solicitacao'] = DB::table('rotinas_acomp_auxilios')->insertGetId([
+                    'id_execucao' => $id,
+                    'protocolo' => $protocolo,
+                    'caixa' => $caixa,
+                    'justificativa' => $justificativa,
+                    'recebido_em' => now('UTC'),
+                ], 'id_solicitacao');
+                $registro['caixa_destino'] = $caixa;
+            }
 
             AuditoriaService::registrar(
                 'SOLICITAR_AUXILIO', 'rotinas_execucoes', (string) $id,
-                dadosNovos: ['justificativa' => $this->justificativa($request)],
+                dadosNovos: $registro,
                 descricao: 'Solicitação de auxílio',
                 idEmpresa: (int) $execucao->id_empresa,
                 idRotina: (int) $execucao->id_rotina,
             );
+
+            return $caixa;
         });
 
-        return to_route('execucoes.realizando', $id)->with('success', 'Solicitação de auxílio registrada nos Logs de Rotinas.');
+        $mensagem = $caixa !== null
+            ? "Solicitação de auxílio enviada à caixa de {$caixa} na Rotina de Acompanhamento."
+            : 'Solicitação de auxílio registrada nos Logs de Rotinas.';
+
+        return to_route('execucoes.realizando', $id)->with('success', $mensagem);
     }
 
     private function justificativa(Request $request): string
