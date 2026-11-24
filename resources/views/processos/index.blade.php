@@ -1,27 +1,17 @@
 @extends('layouts.app')
 
-@section('content')
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Iniciar Processos</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+@section('title', 'Iniciar Processos')
+
+@push('head')
     <style>
-        body {
-            font-family: 'Georgia', serif;
-            background-color: #fafafa;
-        }
         .sans-text {
             font-family: system-ui, -apple-system, sans-serif;
         }
     </style>
-</head>
-<body class="p-8 text-[#1e293b]">
+@endpush
 
-    <div class="max-w-5xl mx-auto">
+@section('content')
+    <div class="mx-auto max-w-5xl p-4 text-[#1e293b] sm:p-8">
         <h1 class="text-3xl font-bold text-[#1e2d3d] mb-1">Iniciar Processos</h1>
         <p class="sans-text text-gray-500 mb-8">Escolha o que você precisa começar agora</p>
 
@@ -48,8 +38,8 @@
             </a>
 
             @if (auth()->user()->can('editar-modulo', 'processos') && auth()->user()->can('editar-modulo', 'rotinas'))
-            <a href="#" onclick="openModal('modalRotinaEmergencial')" 
-            class="group bg-white p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between h-64 cursor-pointer">
+            <button type="button" onclick="abrirModal('modalRotinaEmergencial')"
+            class="group bg-white p-8 rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col justify-between h-64 cursor-pointer text-left">
                 <div>
                     <div class="w-16 h-16 rounded-full bg-[#f4f1ea] group-hover:bg-[#1e2d3d] transition-colors duration-300 flex items-center justify-center mb-6">
                         <i class="fa-solid fa-lightbulb text-2xl text-[#1e2d3d] group-hover:text-white transition-colors duration-300"></i>
@@ -59,44 +49,21 @@
                         Tarefas Emergenciais
                     </h2>
                     <p class="sans-text text-gray-500 text-sm">
-                        Abra uma tarefa que precisa ser feita agora.
+                        Agende uma tarefa para uma única data e horário.
                     </p>
                 </div>
 
                 <div class="sans-text text-[#b39359] font-bold text-xs tracking-wider flex items-center gap-2 mt-4">
                     ACESSAR <i class="fa-solid fa-arrow-right transition-transform group-hover:translate-x-1"></i>
                 </div>
-            </a>
+            </button>
             @endif
 
         </div>
     </div>
 
-</body>
-<script>
-    function openModal(modalId) {
-        const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.classList.remove('hidden');
-        } else {
-            console.error("Modal não encontrado: " + modalId);
-        }
-    }
-
-    function closeModal(modalId) {
-        const modal = document.getElementById(modalId);
-        if (modal) {
-            modal.classList.add('hidden');
-        } else {
-            console.error("Modal não encontrado: " + modalId);
-        }
-    }
-</script>
-</html>
+    @if (auth()->user()->can('editar-modulo', 'processos') && auth()->user()->can('editar-modulo', 'rotinas'))
+        @include('processos.partials.modal-rotina-emergencial')
+        @include('processos.partials.modal-tarefa-rotina-emergencial')
+    @endif
 @endsection
-
-@if (auth()->user()->can('editar-modulo', 'processos') && auth()->user()->can('editar-modulo', 'rotinas'))
-    @include('processos.partials.modal-rotina-emergencial')
-    @include('processos.partials.modal-tarefa-rotina-emergencial')
-@endif
-

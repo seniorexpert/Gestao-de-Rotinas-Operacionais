@@ -52,6 +52,59 @@ class RotinaAcompanhamentoControllerTest extends TestCase
         $this->assertDatabaseEmpty('rotinas_verificacoes');
     }
 
+    public function test_painel_das_rotinas_diarias_exige_acesso_ao_acompanhamento(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $colaborador = $this->usuario('João Silva', 'Cuidador', $empresa);
+        $consulta = $this->usuario('Ana Silva', 'Consulta', $empresa);
+        DB::table('permissoes_usuarios')->insert([
+            'id_usuario' => $consulta->getKey(), 'modulo' => 'acompanhamento', 'nivel' => 1,
+        ]);
+        $id = $this->execucao('Hidratação', $colaborador, $empresa);
+        $fila = route('acompanhamento.index', ['origem' => 'diarias', 'aba' => 'pendentes']);
+        $cabecalhos = ['X-Painel-Acompanhamento' => '1', 'Accept' => 'application/json'];
+
+        $this->actingAs($colaborador)->get(route('home'))
+            ->assertOk()->assertDontSee('data-url-acompanhamento=', false);
+        $this->get($fila, $cabecalhos)->assertForbidden();
+
+        $this->actingAs($consulta)->get(route('home'))
+            ->assertOk()->assertSeeInOrder(['data-url-acompanhamento=', 'data-caixa-rotinas'], false);
+        $this->get($fila, $cabecalhos)->assertOk()->assertSeeText('Hidratação');
+        $this->get(route('acompanhamento.index', ['origem' => 'diarias', 'item' => $id]))
+            ->assertOk()->assertDontSeeText('Concluir verificação');
+        $this->post(route('acompanhamento.store', $id), ['origem' => 'diarias', 'acao' => 'Ação registrada'])
+            ->assertForbidden();
+    }
+
+    public function test_verificacao_pelo_painel_retorna_as_rotinas_diarias_com_os_filtros(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $enfermagem = $this->usuario('Enfermeira', 'Enfermagem', $empresa);
+        $colaborador = $this->usuario('João Silva', 'Cuidador', $empresa);
+        $id = $this->execucao('Hidratação', $colaborador, $empresa);
+        $foraDoEscopo = $this->empresa('Outra unidade');
+        $this->execucao('Hidratação de outra unidade', $colaborador, $foraDoEscopo);
+        $filtros = ['origem' => 'diarias', 'aba' => 'pendentes', 'busca' => 'hidratacao'];
+        $retorno = ['aba' => 'em_andamento', 'acomp_aba' => 'pendentes', 'acomp_busca' => 'hidratacao'];
+
+        $this->actingAs($enfermagem)->get(route('acompanhamento.index', $filtros), ['X-Painel-Acompanhamento' => '1'])
+            ->assertOk()->assertSee('data-lista-acompanhamento')->assertDontSee('<!DOCTYPE html>', false)
+            ->assertSeeTextInOrder(['Solicitação de Auxílio', 'Tarefas Não Realizadas', 'Tarefas em Atraso', 'Verificadas', 'Hidratação'])
+            ->assertDontSeeText('Hidratação de outra unidade');
+
+        $filtros['aba_diaria'] = 'em_andamento';
+        $this->get(route('acompanhamento.index', [...$filtros, 'item' => $id]))
+            ->assertOk()->assertSee(route('home', $retorno))->assertSeeText('Concluir verificação');
+
+        $this->post(route('acompanhamento.store', ['id' => $id, ...$filtros]), ['acao' => 'Conversei com a equipe.'])
+            ->assertRedirectToRoute('home', $retorno)
+            ->assertSessionHas('success', 'Verificação concluída.');
+        $this->assertDatabaseHas('rotinas_verificacoes', [
+            'id_execucao' => $id, 'id_usuario_verificacao' => $enfermagem->getKey(), 'acao' => 'Conversei com a equipe.',
+        ]);
+    }
+
     public function test_lista_atrasos_de_inicio_e_conclusao_da_unidade(): void
     {
         $empresa = $this->empresa('Unidade Centro');
@@ -226,14 +279,60 @@ class RotinaAcompanhamentoControllerTest extends TestCase
         $empresa = $this->empresa('Unidade Centro');
         $gerente = $this->usuario('Rita Souza', 'Gerente', $empresa);
         $colaborador = $this->usuario('João Silva', 'Enfermagem', $empresa);
-        $this->execucao('Hidratação pendente', $colaborador, $empresa);
+        $pendente = $this->execucao('Hidratação pendente', $colaborador, $empresa);
         $id = $this->execucao('Hidratação verificada', $colaborador, $empresa);
         $this->verificacao($id, $gerente, 'Orientei a equipe.');
+        DB::table('tarefas')->where('tarefa', $visivel)->update(['icone' => '🧭', 'cor_icone' => '#126abc']);
 
         $this->actingAs($gerente)->get(route('acompanhamento.index', ['aba' => $aba]))
             ->assertOk()
             ->assertSeeText($visivel)
+            ->assertSee('background-color: #126abc;', false)
+            ->assertSee(rawurlencode('🧭'), false)
             ->assertDontSeeText($oculto);
+        $this->get(route('acompanhamento.index', ['aba' => $aba, 'item' => $aba === 'verificadas' ? $id : $pendente]))
+            ->assertOk()
+            ->assertSee('background-color: #126abc;', false)
+            ->assertSee(rawurlencode('🧭'), false);
+    }
+
+    public function test_verificadas_listam_e_contam_apenas_as_verificacoes_do_dia_em_brasilia(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-19 05:00:00', 'UTC'));
+        $empresa = $this->empresa('Unidade Centro');
+        $gerente = $this->usuario('Rita Souza', 'Gerente', $empresa);
+        $colaborador = $this->usuario('João Silva', 'Enfermagem', $empresa);
+        $vigente = $this->execucao('Ronda verificada ontem', $colaborador, $empresa, [
+            'previsto_em' => '2026-11-19 01:00:00',
+            'agenda_ate' => '2026-11-20 00:00:00',
+        ]);
+        $encerrada = $this->execucao('Ronda antiga verificada hoje', $colaborador, $empresa, [
+            'agenda_ate' => '2026-11-19 03:00:00',
+        ]);
+        $legada = $this->execucao('Ronda sem agenda verificada hoje', $colaborador, $empresa);
+        $this->execucao('Ronda antiga aguardando verificação', $colaborador, $empresa, [
+            'agenda_ate' => '2026-11-19 03:00:00',
+        ]);
+        $this->verificacao($vigente, $gerente, 'Ronda verificada ontem.', '2026-11-19 01:10:00');
+        $this->verificacao($encerrada, $gerente, 'Ronda verificada à meia-noite.', '2026-11-19 03:00:00');
+        $this->verificacao($legada, $gerente, 'Ronda antiga verificada de madrugada.', '2026-11-19 04:10:00');
+
+        $verificadas = route('acompanhamento.index', ['aba' => 'verificadas', 'busca' => 'ronda']);
+        $this->actingAs($gerente)->get($verificadas)
+            ->assertOk()->assertSeeText(['Ronda antiga verificada hoje', 'Ronda sem agenda verificada hoje'])
+            ->assertDontSeeText('Ronda verificada ontem')
+            ->assertViewHas('totais', ['auxilio' => 0, 'nao_realizadas' => 0, 'pendentes' => 1, 'verificadas' => 2]);
+
+        $this->get($verificadas, ['X-Painel-Acompanhamento' => '1'])
+            ->assertOk()->assertSeeText(['Ronda antiga verificada hoje', 'Ronda sem agenda verificada hoje'])
+            ->assertDontSeeText('Ronda verificada ontem');
+        $this->get(route('acompanhamento.index', ['aba' => 'pendentes']))
+            ->assertOk()->assertSeeText('Ronda antiga aguardando verificação');
+
+        $this->travelTo(CarbonImmutable::parse('2026-11-20 03:00:00', 'UTC'));
+        $this->get($verificadas)->assertOk()->assertDontSeeText(['Ronda antiga verificada hoje', 'Ronda sem agenda verificada hoje'])
+            ->assertViewHas('totais', ['auxilio' => 0, 'nao_realizadas' => 0, 'pendentes' => 1, 'verificadas' => 0]);
+        $this->assertDatabaseCount('rotinas_verificacoes', 3);
     }
 
     public function test_historico_mostra_autor_data_e_acao_como_texto(): void
@@ -444,10 +543,11 @@ class RotinaAcompanhamentoControllerTest extends TestCase
         $colaborador = $this->usuario('João Silva', $origem, $empresa);
         $superior = $this->usuario('Rita Souza', $destino, $empresa);
         $id = $this->execucaoEmAndamento($colaborador, $empresa);
+        DB::table('tarefas')->where('tarefa', 'Hidratação')->update(['icone' => '🥛', 'cor_icone' => 'original']);
         $justificativa = 'Material indisponível <verificar estoque>';
 
         $this->actingAs($colaborador)->post(route('execucoes.nao-realizada', $id), ['justificativa' => $justificativa])
-            ->assertSessionHasNoErrors()->assertRedirectToRoute('home', ['aba' => 'concluida']);
+            ->assertSessionHasNoErrors()->assertRedirectToRoute('home', ['aba' => 'todas']);
         $this->post(route('execucoes.nao-realizada', $id), ['justificativa' => 'Não sobrescrever'])->assertRedirect();
         $this->assertDatabaseCount('rotinas_acomp_nao_realizadas', 1);
         $this->assertDatabaseHas('rotinas_acomp_nao_realizadas', [
@@ -457,9 +557,10 @@ class RotinaAcompanhamentoControllerTest extends TestCase
         $this->actingAs($superior)->get(route('acompanhamento.index', ['aba' => 'nao_realizadas']))
             ->assertOk()
             ->assertSeeTextInOrder(['Solicitação de Auxílio', 'Tarefas Não Realizadas', 'Tarefas em Atraso', 'Verificadas'])
-            ->assertSeeText(['Hidratação', 'Acompanhamento · No prazo']);
+            ->assertSeeText(['🥛', 'Hidratação', 'Acompanhamento · No prazo']);
         $this->get(route('acompanhamento.index', ['aba' => 'nao_realizadas', 'item' => $id]))
             ->assertOk()
+            ->assertSeeText('🥛')
             ->assertSeeTextInOrder(['O Colaborador João Silva não conseguiu realizar a tarefa Hidratação. Justificativa:', $justificativa, 'Sala de Estar'])
             ->assertDontSee($justificativa, false);
     }
@@ -526,6 +627,7 @@ class RotinaAcompanhamentoControllerTest extends TestCase
         $colaborador = $this->usuario('João Silva', $origem, $empresa);
         $superior = $this->usuario('Rita Souza', $destino, $empresa);
         $execucao = $this->execucaoEmAndamento($colaborador, $empresa);
+        DB::table('tarefas')->where('tarefa', 'Hidratação')->update(['icone' => '💧', 'cor_icone' => '#8b5cf6']);
         $justificativa = 'Preciso de <apoio da equipe>';
 
         $this->actingAs($colaborador)->post(route('execucoes.auxilio', $execucao), ['justificativa' => $justificativa])
@@ -540,10 +642,14 @@ class RotinaAcompanhamentoControllerTest extends TestCase
 
         $this->actingAs($superior)->get(route('acompanhamento.index'))->assertOk()
             ->assertViewHas('aba', 'auxilio')
+            ->assertSee('background-color: #8b5cf6;', false)
+            ->assertSee(rawurlencode('💧'), false)
             ->assertSeeTextInOrder(['Solicitação de Auxílio', 'Tarefas Não Realizadas', 'Tarefas em Atraso', 'Verificadas'])
             ->assertSeeText(['Hidratação', 'Acompanhamento · No prazo']);
         $this->get(route('acompanhamento.index', ['aba' => 'auxilio', 'item' => $solicitacao->id_solicitacao]))
             ->assertOk()
+            ->assertSee('background-color: #8b5cf6;', false)
+            ->assertSee(rawurlencode('💧'), false)
             ->assertSeeTextInOrder(['O Colaborador João Silva Solicita Auxílio para realizar a tarefa Hidratação! Justificativa:', $justificativa, 'Sala de Estar'])
             ->assertDontSee($justificativa, false);
     }
@@ -660,13 +766,13 @@ class RotinaAcompanhamentoControllerTest extends TestCase
         ], 'id_execucao');
     }
 
-    private function verificacao(int $id, User $gerente, string $acao): void
+    private function verificacao(int $id, User $gerente, string $acao, string $verificadoEm = '2026-11-18 14:55:00'): void
     {
         DB::table('rotinas_verificacoes')->insert([
             'id_execucao' => $id,
             'id_usuario_verificacao' => $gerente->getKey(),
             'acao' => $acao,
-            'verificado_em' => '2026-11-18 14:55:00',
+            'verificado_em' => $verificadoEm,
         ]);
     }
 }

@@ -306,6 +306,7 @@
     .estatisticas .icone-dado { display: inline-block; width: 14px; color: #b58a4b; text-align: center; }
     .estatisticas .acoes-rotina {
         display: flex;
+        flex-wrap: wrap;
         align-items: flex-start;
         justify-content: space-between;
         gap: 10px;
@@ -342,7 +343,7 @@
     @endif
 
     @if ($errors->any())
-        <div role="alert"
+        <div id="erros-estatisticas" role="alert"
              class="mt-4 rounded-lg bg-red-50 p-4 text-red-700">
             @foreach ($errors->all() as $erro)
                 <p>{{ $erro }}</p>
@@ -418,6 +419,9 @@
                                         <span class="icone-tarefa" aria-hidden="true">📋</span>
                                         <div class="nome-tarefa">
                                             <h3 id="tarefa-{{ $execucao->id_execucao }}">{{ $execucao->tarefa }}</h3>
+                                            @if ($execucao->tipo_rotina === \App\Services\ExecucoesDiarias::TIPO_EMERGENCIAL)
+                                                <p>Tarefa emergencial</p>
+                                            @endif
                                             <p>
                                                 @if ($execucao->status === 'concluida' && $execucao->concluido_em)
                                                     Finalizada em {{ $dataLocal($execucao->concluido_em)->format('d/m/Y') }}
@@ -483,10 +487,21 @@
                                                     <button type="submit" class="botao primario">Iniciar</button>
                                                 </form>
                                             @elseif ($execucao->status === 'em_andamento')
-                                                <form method="POST" action="{{ route('execucoes.concluir', $execucao->id_execucao) }}">
-                                                    @csrf
-                                                    <button type="submit" class="botao botao-concluir">Concluir</button>
-                                                </form>
+                                                @php
+                                                    $erroComentario = old('id_execucao') === (string) $execucao->id_execucao && $errors->has('comentario');
+                                                @endphp
+                                                <details class="shrink-0 open:w-full" @if ($erroComentario) open @endif>
+                                                    <summary class="botao botao-concluir w-fit list-none">Concluir</summary>
+                                                    <form method="POST" action="{{ route('execucoes.concluir', $execucao->id_execucao) }}" class="mt-2 grid gap-1.5">
+                                                        @csrf
+                                                        <input type="hidden" name="id_execucao" value="{{ $execucao->id_execucao }}">
+                                                        <label for="comentario-{{ $execucao->id_execucao }}" class="text-xs font-semibold">Comentário (obrigatório)</label>
+                                                        <textarea id="comentario-{{ $execucao->id_execucao }}" name="comentario" rows="3" maxlength="2000" required
+                                                                  @if ($erroComentario) aria-invalid="true" aria-describedby="erros-estatisticas" @endif
+                                                                  class="w-full resize-y rounded-lg border border-[#e8d7c1] bg-white p-2 text-sm">{{ $erroComentario && is_string(old('comentario')) ? old('comentario') : '' }}</textarea>
+                                                        <button type="submit" class="botao botao-concluir justify-self-start">Confirmar conclusão</button>
+                                                    </form>
+                                                </details>
                                             @endif
                                         @endif
                                     </div>

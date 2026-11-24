@@ -8,6 +8,7 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use stdClass;
 
 class ConsultaRotinas
 {
@@ -44,9 +45,25 @@ class ConsultaRotinas
             ->whereIn('r.id_empresa', $this->empresas($usuario));
     }
 
+    public function rotinasDiarias(User $usuario): Builder
+    {
+        return $this->rotinas($usuario)->where('r.tipo_rotina', ExecucoesDiarias::TIPO_DIARIA);
+    }
+
+    public function filtrarEmergenciaisDisponiveis(Builder $consulta): Builder
+    {
+        return $consulta->where(fn (Builder $visiveis) => $visiveis
+            ->whereNull('r.tipo_rotina')
+            ->orWhere('r.tipo_rotina', ExecucoesDiarias::TIPO_DIARIA)
+            ->orWhere(fn (Builder $emergenciais) => $emergenciais
+                ->where('r.tipo_rotina', ExecucoesDiarias::TIPO_EMERGENCIAL)
+                ->whereColumn('e.previsto_em', 'r.agendada_em')
+                ->where('e.previsto_em', '<=', now('UTC'))));
+    }
+
     public function execucoes(User $usuario): Builder
     {
-        return DB::table('rotinas_execucoes as e')
+        $consulta = DB::table('rotinas_execucoes as e')
             ->leftJoin('usuarios as u', 'e.id_usuario_responsavel', '=', 'u.id_usuario')
             ->leftJoin('grupos_acesso as g', 'u.id_grupo_acesso', '=', 'g.id_grupo_acesso')
             ->leftJoin('rotinas as r', fn (JoinClause $join) => $join
@@ -58,28 +75,90 @@ class ConsultaRotinas
             ->select([
                 'e.id_execucao', 'e.id_rotina', 'e.id_empresa', 'e.id_usuario_responsavel',
                 'e.previsto_em', 'e.prazo_em', 'e.iniciado_em', 'e.concluido_em',
-                'e.tempo_limite_minutos', 'e.duracao_prevista_segundos', 'e.status',
+                'e.tempo_limite_minutos', 'e.duracao_prevista_segundos', 'e.status', 'e.created_at', 'r.tipo_rotina',
                 'u.usuario as responsavel', 'u.id_grupo_acesso', 'g.grupo_acesso', 'unidade.empresa',
                 't.tarefa', 'r.morador', 'r.local as local_rotina', 'l.local as local_cadastrado',
                 'r.status as rotina_ativa', 'r.id_usuario as rotina_responsavel',
             ]);
+
+        return $this->filtrarEmergenciaisDisponiveis($consulta);
     }
 
-    public function execucoesDoDia(User $usuario, CarbonImmutable $agora): Builder
+    public function execucoesDaAgenda(User $usuario, CarbonImmutable $agora): Builder
     {
         [$inicio, $fim] = ExecucoesDiarias::janela($agora);
 
-        return $this->execucoes($usuario)->where('e.previsto_em', '>=', $inicio)->where('e.previsto_em', '<', $fim);
+        return $this->execucoes($usuario)->where(fn (Builder $jornada) => $jornada
+            ->where('e.agenda_ate', '>', $agora->utc())
+            ->orWhere(fn (Builder $legado) => $legado->whereNull('e.agenda_ate')
+                ->where('e.previsto_em', '>=', $inicio)->where('e.previsto_em', '<', $fim))
+            ->orWhere(fn (Builder $emergenciais) => $emergenciais->where('r.tipo_rotina', ExecucoesDiarias::TIPO_EMERGENCIAL)
+                ->whereIn('e.status', ['pendente', 'em_andamento']))
+            ->orWhere(fn (Builder $emAndamento) => $emAndamento->whereNotNull('e.agenda_ate')->where('e.status', 'em_andamento')));
     }
 
-    public function execucoesPessoais(User $usuario, ?CarbonImmutable $dia = null): Builder
+    public function execucoesPessoais(User $usuario, ?CarbonImmutable $agora = null): Builder
     {
-        $consulta = $dia ? $this->execucoesDoDia($usuario, $dia) : $this->execucoes($usuario);
+        $consulta = $agora ? $this->execucoesDaAgenda($usuario, $agora) : $this->execucoes($usuario);
 
         return $consulta->when(! $usuario->isAdmin(), fn (Builder $consulta) => $consulta->where('e.id_usuario_responsavel', $usuario->getKey()))
             ->leftJoin('ferramentas as f', 't.id_ferramenta', '=', 'f.id_ferramenta')
-            ->addSelect('r.horario', 'r.obs', 'r.auxilio', 't.descricao', 't.documentacao', 't.icone', 't.cor_icone', 'f.ferramenta',
+            ->addSelect('e.agenda_ate', 'r.horario', 'r.obs', 'r.auxilio', 't.descricao', 't.documentacao', 't.icone', 't.cor_icone', 'f.ferramenta',
                 'e.comentario_conclusao', 'e.foto_conclusao', 'e.justificativa_nao_realizada');
+    }
+
+    /** @return Collection<int, stdClass> */
+    public function concluidasNaJornada(User $usuario, CarbonImmutable $agora): Collection
+    {
+        $agora = $agora->utc();
+        [$inicioDoDia, $fimDoDia] = ExecucoesDiarias::janela($agora);
+        $chaveJornada = fn (stdClass $execucao): string => $execucao->id_empresa.':'.$execucao->id_usuario_responsavel;
+
+        $jornadas = DB::table('rotinas_execucoes as e')
+            ->join('rotinas as r', 'r.id_rotina', '=', 'e.id_rotina')
+            ->where('r.tipo_rotina', ExecucoesDiarias::TIPO_DIARIA)
+            ->whereIn('e.id_empresa', $this->empresas($usuario))
+            ->when(! $usuario->isAdmin(), fn (Builder $consulta) => $consulta->where('e.id_usuario_responsavel', $usuario->getKey()))
+            ->where('e.agenda_ate', '>', $agora)
+            ->groupBy('e.id_empresa', 'e.id_usuario_responsavel', 'e.agenda_ate')
+            ->select('e.id_empresa', 'e.id_usuario_responsavel')
+            ->selectRaw('MIN(e.previsto_em) as primeira_tarefa')
+            ->selectRaw('MIN(e.created_at) as primeira_entrada')
+            ->orderBy('primeira_tarefa')
+            ->get()
+            ->keyBy($chaveJornada)
+            ->map(function (stdClass $jornada): CarbonImmutable {
+                $inicioPrevisto = CarbonImmutable::parse($jornada->primeira_tarefa, 'UTC')
+                    ->subMinutes(ExecucoesDiarias::ANTECEDENCIA_MINUTOS);
+
+                return $jornada->primeira_entrada
+                    ? min($inicioPrevisto, CarbonImmutable::parse($jornada->primeira_entrada, 'UTC'))
+                    : $inicioPrevisto;
+            });
+
+        $desde = $jornadas->values()->push($inicioDoDia)->min();
+
+        return $this->execucoesPessoais($usuario)
+            ->where('e.status', 'concluida')
+            ->whereBetween('e.concluido_em', [$desde, $agora])
+            ->get()
+            ->filter(function (stdClass $execucao) use ($chaveJornada, $jornadas, $inicioDoDia, $fimDoDia): bool {
+                $concluidoEm = CarbonImmutable::parse($execucao->concluido_em, 'UTC');
+                $inicioDaJornada = $jornadas->get($chaveJornada($execucao));
+                if ($execucao->tipo_rotina === ExecucoesDiarias::TIPO_EMERGENCIAL) {
+                    return $concluidoEm >= min($inicioDoDia, $inicioDaJornada ?? $inicioDoDia);
+                }
+                if ($inicioDaJornada) {
+                    return $concluidoEm >= $inicioDaJornada;
+                }
+                if ($execucao->agenda_ate !== null) {
+                    return false;
+                }
+
+                $previstoEm = CarbonImmutable::parse($execucao->previsto_em, 'UTC');
+
+                return $previstoEm >= $inicioDoDia && $previstoEm < $fimDoDia && $concluidoEm >= $inicioDoDia;
+            });
     }
 
     /** @return array{empresas: Collection, tarefas: Collection, locais: Collection} */

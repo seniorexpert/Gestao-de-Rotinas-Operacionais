@@ -31,8 +31,11 @@ class ExecucoesController extends Controller
     {
         $execucao = $this->consultarExecucao($request, $id);
         abort_unless($execucao->status === 'em_andamento' && $execucao->iniciado_em, 404);
-        $prazo = filled($execucao->prazo_em)
-            ? Carbon::parse($execucao->prazo_em, 'UTC')->setTimezone(ExecucoesDiarias::FUSO)->format('d/m H:i:s')
+        $limite = $execucao->tipo_rotina === ExecucoesDiarias::TIPO_EMERGENCIAL
+            ? $this->sla->calcular($execucao)['prazo_em']
+            : $execucao->prazo_em;
+        $prazo = filled($limite)
+            ? Carbon::parse($limite, 'UTC')->setTimezone(ExecucoesDiarias::FUSO)->format('d/m H:i:s')
             : null;
         $documentacao = $execucao->documentacao ? Storage::disk('public')->url($execucao->documentacao) : null;
 
@@ -80,7 +83,8 @@ class ExecucoesController extends Controller
                 ]);
             }
 
-            $duracao = (int) $execucao->duracao_prevista_segundos;
+            $emergencial = $execucao->tipo_rotina === ExecucoesDiarias::TIPO_EMERGENCIAL;
+            $duracao = $emergencial ? CalculadoraSla::LIMITE_EMERGENCIAL_MINUTOS * 60 : (int) $execucao->duracao_prevista_segundos;
 
             // Para pendentes sem duração registrada, captura o tempo
             // da tarefa no primeiro início e o preserva na execução.
@@ -99,13 +103,13 @@ class ExecucoesController extends Controller
                 ]);
             }
 
-            $agora = now();
+            $agora = now('UTC');
 
             $this->registrarMudanca($execucao, 'INICIAR', 'Execução iniciada', [
                 'status' => 'em_andamento',
                 'iniciado_em' => $agora,
                 'duracao_prevista_segundos' => $duracao,
-                'prazo_em' => $agora->copy()->addSeconds($duracao),
+                'prazo_em' => $emergencial ? $this->sla->calcular($execucao, $agora)['prazo_em'] : $agora->copy()->addSeconds($duracao),
             ]);
         });
 
@@ -127,9 +131,11 @@ class ExecucoesController extends Controller
 
                 $encerramento = $this->encerramento($request, $execucao);
                 $dados = $request->validate([
-                    'comentario' => ['nullable', 'string', 'max:2000'],
+                    'comentario' => ['required', 'string', 'max:2000'],
                     'foto' => ['nullable', 'image', 'max:2048'],
                 ], [
+                    'comentario.required' => 'Informe um comentário sobre a execução.',
+                    'comentario.string' => 'O comentário deve ser informado em texto.',
                     'comentario.max' => 'Escreva um comentário de até 2.000 caracteres.',
                     'foto.image' => 'Selecione um arquivo de imagem.',
                     'foto.max' => 'A foto deve ter até 2 MB.',
@@ -144,7 +150,7 @@ class ExecucoesController extends Controller
                 $this->registrarMudanca($execucao, 'CONCLUIR', 'Execução concluída', [
                     ...$encerramento,
                     'status' => 'concluida',
-                    'comentario_conclusao' => $dados['comentario'] ?? null,
+                    'comentario_conclusao' => $dados['comentario'],
                     'foto_conclusao' => $foto,
                 ]);
             });
@@ -186,7 +192,7 @@ class ExecucoesController extends Controller
             }
         });
 
-        return to_route('home', ['aba' => 'concluida'])->with('success', 'Justificativa registrada. Tarefa encerrada como não realizada.');
+        return to_route('home', ['aba' => 'todas'])->with('success', 'Justificativa registrada. Tarefa encerrada como não realizada.');
     }
 
     public function auxilio(Request $request, int $id): RedirectResponse
@@ -265,7 +271,10 @@ class ExecucoesController extends Controller
     {
         $this->validarEmAndamento($execucao);
         $agora = now('UTC');
-        if ((int) $execucao->duracao_prevista_segundos <= 0 || $agora->lessThan(Carbon::parse($execucao->iniciado_em, 'UTC'))) {
+        if (
+            ($execucao->tipo_rotina !== ExecucoesDiarias::TIPO_EMERGENCIAL && (int) $execucao->duracao_prevista_segundos <= 0)
+            || $agora->lessThan(Carbon::parse($execucao->iniciado_em, 'UTC'))
+        ) {
             throw ValidationException::withMessages(['execucao' => 'Revise a duração e as datas desta execução.']);
         }
 
@@ -294,12 +303,12 @@ class ExecucoesController extends Controller
     ): object {
         $usuario = $request->user();
 
-        $execucao = DB::table('rotinas_execucoes')
-            ->where('id_execucao', $id)
-            ->when(! $usuario->isAdmin(), fn ($consulta) => $consulta->where('id_usuario_responsavel', $usuario->getKey()))
-            ->whereIn('id_empresa', $this->rotinas->empresas($usuario))
-            ->lockForUpdate()
-            ->first();
+        $consulta = DB::table('rotinas_execucoes as e')
+            ->join('rotinas as r', 'r.id_rotina', '=', 'e.id_rotina')
+            ->where('e.id_execucao', $id)
+            ->when(! $usuario->isAdmin(), fn ($consulta) => $consulta->where('e.id_usuario_responsavel', $usuario->getKey()))
+            ->whereIn('e.id_empresa', $this->rotinas->empresas($usuario));
+        $execucao = $this->rotinas->filtrarEmergenciaisDisponiveis($consulta)->lockForUpdate()->first(['e.*', 'r.tipo_rotina']);
 
         abort_if(
             ! $execucao,

@@ -11,7 +11,25 @@
 @endpush
 
 @section('content')
-<div data-caixa-rotinas class="mx-auto w-full max-w-3xl px-4 py-6 text-[#21394e] sm:px-6 sm:py-8">
+<div class="mx-auto flex w-full flex-col gap-7 px-4 py-6 sm:gap-8 sm:px-6 sm:py-8 @can('visualizar-modulo', 'acompanhamento') max-w-6xl @else max-w-3xl @endcan">
+@can('visualizar-modulo', 'acompanhamento')
+    <section data-painel-acompanhamento data-url-acompanhamento="{{ route('acompanhamento.index', ['origem' => 'diarias']) }}"
+             aria-label="Rotina de Acompanhamento"
+             class="min-w-0">
+        <p data-carregando-acompanhamento role="status" class="text-sm text-slate-600">Carregando acompanhamento…</p>
+        <p data-erro-acompanhamento role="status" class="text-sm text-slate-600" hidden>
+            Não foi possível carregar o acompanhamento.
+            <button type="button" data-tentar-acompanhamento class="font-semibold text-[#1e2d3d] underline">Tentar novamente</button>
+        </p>
+        <noscript>
+            <style>[data-carregando-acompanhamento] { display: none; }</style>
+            <a href="{{ route('acompanhamento.index') }}" class="text-sm font-semibold text-[#1e2d3d] underline">Abrir Rotina de Acompanhamento</a>
+        </noscript>
+    </section>
+    @include('processos.acompanhamento.interacoes')
+@endcan
+
+<div data-caixa-rotinas class="min-w-0 text-[#21394e]">
     <h1 class="rotinas-titulo mb-5 text-2xl font-bold sm:text-3xl">Rotinas Diárias</h1>
 
     <label class="mb-4 flex h-11 items-center gap-3 rounded-xl border border-[#d3ae74]/40 bg-white px-3.5 focus-within:border-[#21394e] sm:mb-5">
@@ -32,10 +50,12 @@
         @endforeach
     </div>
 
+    @fragment('lista-rotinas')
     <div id="listaRotinas" role="tabpanel" aria-labelledby="aba-rotinas-{{ $aba }}" class="space-y-3">
         @foreach ($rotinas as $rotina)
             @php
                 $tarefa = $rotina->tarefa ?: 'Tarefa de rotina';
+                $emergencial = $rotina->tipo_rotina === \App\Services\ExecucoesDiarias::TIPO_EMERGENCIAL;
                 $morador = trim($rotina->morador ?? '') ?: 'Não informado';
                 $categoria = \Illuminate\Support\Str::ascii(mb_strtolower($tarefa.' '.$rotina->local));
                 $iconeSalvo = trim((string) $rotina->icone);
@@ -51,7 +71,7 @@
                 [$selo, $corSelo] = match (true) {
                     $rotina->status === 'nao_realizada' => ['Não realizada', 'bg-rose-100 text-rose-800'],
                     $rotina->status === 'concluida' => ['Concluída', 'bg-emerald-100 text-emerald-800'],
-                    $rotina->situacao_sla === 'atrasado' => ['Em atraso', 'bg-rose-100 text-rose-800'],
+                    $rotina->situacao_sla === 'atrasado' => [$emergencial ? 'Atrasada' : 'Em atraso', 'bg-rose-100 text-rose-800'],
                     $rotina->situacao_sla === 'expirando' => ['Expirando', 'bg-amber-100 text-amber-800'],
                     $rotina->status === 'em_andamento' => ['Realizando', 'bg-sky-100 text-[#21394e]'],
                     $rotina->situacao_sla === 'noPrazo' => ['No prazo', 'bg-emerald-100 text-emerald-800'],
@@ -80,14 +100,18 @@
                 ];
             @endphp
 
-            <button type="button" data-estado-rotina="{{ $rotina->status }}" data-aba-execucao="{{ $rotina->aba }}" data-busca="{{ $tarefa }} {{ $rotina->local }} {{ $morador }}"
-                    @if ($aba !== 'todas' && $aba !== $rotina->aba) hidden @endif
+            <button type="button" data-estado-rotina="{{ $rotina->status }}" data-busca="{{ $tarefa }} {{ $rotina->local }} {{ $morador }}"
+                    @if ($aba !== 'todas' && $aba !== $rotina->status) hidden @endif
                     @if ($rotina->status === 'em_andamento')
                         onclick="location.assign(@js(route('execucoes.realizando', $rotina->id_execucao)))"
                     @else
                         aria-haspopup="dialog" onclick="abrirModalDetalhes(@js($dados))"
                     @endif
-                    class="group flex w-full items-center rounded-[1.25rem] border-2 border-[#d3ae74]/35 bg-white px-2.5 py-1.5 text-left shadow-sm transition-colors hover:border-[#21394e]/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 sm:px-4">
+                    @class([
+                        'group flex w-full items-center rounded-[1.25rem] border-2 bg-white px-2.5 py-1.5 text-left shadow-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 sm:px-4',
+                        'border-rose-400 hover:border-rose-500' => $emergencial,
+                        'border-[#d3ae74]/35 hover:border-[#21394e]/40' => ! $emergencial,
+                    ])>
                 <span class="mr-2.5 flex h-12 w-10 shrink-0 items-center justify-center text-3xl leading-none transition-transform group-hover:scale-105 sm:mr-4 sm:h-14 sm:w-14 sm:text-[2.75rem]" aria-hidden="true">
                     <span class="relative isolate inline-flex">{{ $icone }}
                         @if ($corIcone)
@@ -108,6 +132,14 @@
                         </span>
                     </span>
                     <span class="mt-1 block text-[0.82rem] font-bold tabular-nums sm:text-sm" title="Horário previsto">{{ $rotina->horario }}</span>
+                    @if ($emergencial)
+                        <span class="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">Tarefa emergencial</span>
+                    @endif
+                    @if ($rotina->data_conclusao)
+                        <span class="mt-0.5 block text-xs text-[#64748b]">
+                            Concluída em <time datetime="{{ $rotina->data_conclusao->toIso8601String() }}">{{ $rotina->data_conclusao->format('d/m/Y H:i') }}</time>
+                        </span>
+                    @endif
                 </span>
                 <span class="ml-1.5 flex shrink-0 flex-col items-end justify-between self-stretch py-1 sm:ml-3">
                     <i class="fa-solid fa-chevron-right mr-0.5 text-xs text-[#64748b]" aria-hidden="true"></i>
@@ -117,11 +149,13 @@
         @endforeach
 
         <p id="rotinasAbaVazia" role="status"
-           @if ($rotinas->contains(fn ($rotina) => $aba === 'todas' || $rotina->aba === $aba)) hidden @endif
+           @if ($rotinas->contains(fn ($rotina) => $aba === 'todas' || $rotina->status === $aba)) hidden @endif
            class="rounded-[1.25rem] border border-dashed border-[#d3ae74]/50 px-4 py-9 text-center text-sm text-[#64748b]">
-            {{ $rotinas->isEmpty() ? 'Nenhuma rotina atribuída a você para hoje.' : 'Nenhuma rotina nesta situação.' }}
+            {{ $rotinas->isEmpty() ? 'Nenhuma rotina disponível na sua agenda.' : 'Nenhuma rotina nesta situação.' }}
         </p>
     </div>
+    @endfragment
+</div>
 </div>
 
 @include('sla.partials.modal-detalhes-rotina')
@@ -132,15 +166,23 @@
         const abaLista = document.getElementById('abasRotinas');
         const abas = Array.from(abaLista.querySelectorAll('[role="tab"]'));
         const busca = document.getElementById('buscaRotinas');
-        const vazio = document.getElementById('rotinasAbaVazia');
-        const mensagemVazia = vazio.textContent.trim();
         const normalizar = texto => texto.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-        const cartoes = Array.from(lista.querySelectorAll('[data-estado-rotina]'), elemento => ({
-            elemento,
-            estado: elemento.dataset.abaExecucao,
-            texto: normalizar(elemento.dataset.busca),
-        }));
         let abaAtiva = abas.find(aba => aba.getAttribute('aria-selected') === 'true');
+        let vazio;
+        let mensagemVazia;
+        let cartoes;
+        let conteudoDoServidor = lista.innerHTML;
+        let consultando = false;
+
+        function lerCartoes() {
+            vazio = lista.querySelector('#rotinasAbaVazia');
+            mensagemVazia = vazio.textContent.trim();
+            cartoes = Array.from(lista.querySelectorAll('[data-estado-rotina]'), elemento => ({
+                elemento,
+                estado: elemento.dataset.estadoRotina,
+                texto: normalizar(elemento.dataset.busca),
+            }));
+        }
 
         function atualizarLista() {
             const termo = normalizar(busca.value.trim());
@@ -193,7 +235,38 @@
         });
 
         busca.addEventListener('input', atualizarLista);
+        lerCartoes();
         atualizarLista();
+
+        const podeAtualizar = () => !document.hidden
+            && !lista.contains(document.activeElement)
+            && !document.querySelector('#modalDetalhesRotina[open]');
+
+        setInterval(async () => {
+            if (consultando || !podeAtualizar()) return;
+            consultando = true;
+
+            try {
+                const resposta = await fetch(location.href, {
+                    cache: 'no-store',
+                    headers: { 'X-Painel-Rotinas-Diarias': '1', 'X-Atualizacao-Automatica': '1' },
+                });
+                if (!resposta.ok) return;
+
+                const pagina = new DOMParser().parseFromString(await resposta.text(), 'text/html');
+                const novaLista = pagina.getElementById(lista.id);
+                if (!novaLista || !podeAtualizar() || conteudoDoServidor === novaLista.innerHTML) return;
+
+                conteudoDoServidor = novaLista.innerHTML;
+                lista.replaceChildren(...novaLista.childNodes);
+                lerCartoes();
+                atualizarLista();
+            } catch {
+                // A próxima consulta tenta carregar a agenda novamente.
+            } finally {
+                consultando = false;
+            }
+        }, 60000);
     })();
 </script>
 @endsection

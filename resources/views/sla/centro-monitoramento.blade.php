@@ -89,7 +89,7 @@
                             </span>
                         </button>
                     @empty
-                        <p class="py-8 text-center text-sm text-slate-600">Nenhuma execução prevista para hoje.</p>
+                        <p class="py-8 text-center text-sm text-slate-600">Nenhuma execução nas agendas disponíveis.</p>
                     @endforelse
                 </div>
             </section>

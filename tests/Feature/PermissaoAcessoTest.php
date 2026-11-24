@@ -15,6 +15,25 @@ class PermissaoAcessoTest extends TestCase
 {
     use LazilyRefreshDatabase;
 
+    public function test_menu_de_permissoes_fica_no_perfil_do_admin_e_central_de_ajuda_sai_da_navegacao(): void
+    {
+        $admin = $this->usuario('admin');
+        $grupo = GrupoAcesso::create(['grupo_acesso' => 'Gerente Geral', 'status' => true]);
+        $gerente = $this->usuario('gestor', $grupo);
+        $linkPermissoes = 'href="'.route('permissoes.index').'"';
+
+        $paginaDoAdmin = $this->actingAs($admin)->get(route('home'))->assertOk()
+            ->assertSeeInOrder(['</aside>', 'id="profileDropdownMenu"', $linkPermissoes], false)
+            ->assertDontSeeText('Central de Ajuda');
+        $this->assertSame(1, substr_count($paginaDoAdmin->getContent(), $linkPermissoes));
+
+        $this->actingAs($gerente)->get(route('home'))->assertOk()
+            ->assertSeeInOrder(['id="profileDropdownMenu"', 'href="'.route('usuarios.index').'"'], false)
+            ->assertDontSee($linkPermissoes, false)
+            ->assertDontSeeText('Central de Ajuda');
+        $this->get(route('permissoes.index'))->assertForbidden();
+    }
+
     public function test_admin_configura_permissoes_de_grupo_e_excecoes_individuais(): void
     {
         $grupo = GrupoAcesso::create(['grupo_acesso' => 'Equipe operacional', 'status' => true]);

@@ -12,12 +12,12 @@
 
         <div class="flex-shrink-0">
             <h2 class="text-3xl font-bold text-[#1e2d3d] mb-1">{{ $emergencial ? 'Cadastro de Rotina Emergencial' : 'Cadastro de Rotinas' }}</h2>
-            <p class="sans-text text-gray-500 text-sm mb-6">Configure a rotina e adicione suas tarefas</p>
+            <p class="sans-text text-gray-500 text-sm mb-6">{{ $emergencial ? 'Escolha a unidade e o colaborador para agendar as tarefas.' : 'Configure a rotina e adicione suas tarefas' }}</p>
         </div>
 
         <div class="space-y-6 sans-text overflow-y-auto flex-1 pr-1">
             <div>
-                <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Unidade</label>
+                <label for="selectUnidadeRotina" class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Unidade</label>
                 <select name="id_empresa" id="selectUnidadeRotina" data-url-usuarios="{{ route('processos.usuarios-por-unidade') }}" required onchange="carregarColaboradoresPorUnidade(this)" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
                     <option value="" disabled selected>Selecione a unidade</option>
                     @foreach ($empresas as $empresa)
@@ -27,12 +27,13 @@
             </div>
 
             <div>
-                <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Colaborador(a)</label>
+                <label for="selectColaboradorModalRotina" class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Colaborador(a)</label>
                 <select name="colaborador_id" id="selectColaboradorModalRotina" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
                     <option value="" disabled selected>Selecione a unidade primeiro</option>
                 </select>
             </div>
             
+            @unless ($emergencial)
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Situação da rotina</label>
                 <div class="flex items-center gap-6 pt-2">
@@ -46,6 +47,7 @@
                     </label>
                 </div>
             </div>
+            @endunless
 
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Tarefas da rotina</label>
@@ -121,10 +123,15 @@
 
     function abrirModalTarefaRotina() {
         const unidadeSelect = document.getElementById('selectUnidadeRotina');
-        if (!unidadeSelect || !unidadeSelect.value) {
-            alert('Por favor, selecione uma unidade primeiro na rotina.');
+        if (!unidadeSelect?.reportValidity()) {
             return;
         }
+        @if ($emergencial)
+        if (!document.getElementById('selectColaboradorModalRotina').reportValidity()) {
+            return;
+        }
+        preencherAgendamentoEmergencial();
+        @endif
         
         if (typeof carregarCuidadoresAuxiliares === 'function') {
             carregarCuidadoresAuxiliares(unidadeSelect.value);

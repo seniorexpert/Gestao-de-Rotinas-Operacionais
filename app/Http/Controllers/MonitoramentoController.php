@@ -8,6 +8,7 @@ use App\Services\ConsultaRotinas;
 use App\Services\ExecucoesDiarias;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -32,13 +33,14 @@ class MonitoramentoController extends Controller
             'r.id_rotina', 'r.id_usuario', 'r.horario', 'r.morador', 'r.status',
             'r.local', 'l.local as local_cadastrado', 'u.usuario', 't.tarefa',
         ]);
-        $execucoes = $this->consultaRotinas->execucoesDoDia($usuario, $agora)
+        $execucoes = $this->consultaRotinas->execucoesDaAgenda($usuario, $agora)
             ->whereIn('e.status', ['pendente', 'em_andamento', 'concluida', 'nao_realizada'])
             ->orderBy('e.previsto_em')->orderBy('e.id_execucao')->get();
 
+        $hoje = $agora->setTimezone(ExecucoesDiarias::FUSO);
         foreach ($execucoes as $execucao) {
-            $execucao->horario = CarbonImmutable::parse($execucao->previsto_em, 'UTC')
-                ->setTimezone(ExecucoesDiarias::FUSO)->format('H:i');
+            $previsto = CarbonImmutable::parse($execucao->previsto_em, 'UTC')->setTimezone(ExecucoesDiarias::FUSO);
+            $execucao->horario = $previsto->format($previsto->isSameDay($hoje) ? 'H:i' : 'H:i · d/m');
             $execucao->limite = null;
             $execucao->situacao_sla = 'semDados';
             if ($execucao->status === 'nao_realizada') {
@@ -70,7 +72,7 @@ class MonitoramentoController extends Controller
             ];
         })->sortBy('colaborador_nome', SORT_NATURAL | SORT_FLAG_CASE);
         $colaboradores = $this->consultaRotinas->colaboradores($usuario)->get();
-        $data = $agora->setTimezone(ExecucoesDiarias::FUSO)->format('d/m/Y');
+        $data = $hoje->format('d/m/Y');
 
         return view('sla.centro-monitoramento', compact('produtividades', 'rotinas', 'colaboradores', 'execucoes', 'abertas', 'situacoes', 'data'));
     }
@@ -113,7 +115,8 @@ class MonitoramentoController extends Controller
             DB::table('rotinas')->whereIn('id_rotina', $ids)
                 ->update(['id_usuario' => $novoResponsavel, 'updated_at' => $agora]);
             DB::table('rotinas_execucoes')->whereIn('id_rotina', $ids)
-                ->where('previsto_em', '>=', $inicioDoDia)
+                ->where(fn (Builder $consulta) => $consulta->where('previsto_em', '>=', $inicioDoDia)
+                    ->orWhere('agenda_ate', '>', $agora->utc()))
                 ->where('status', 'pendente')->whereNull('iniciado_em')->whereNull('concluido_em')
                 ->update(['id_usuario_responsavel' => $novoResponsavel, 'updated_at' => $agora]);
 

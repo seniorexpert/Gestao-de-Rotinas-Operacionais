@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\User;
+use App\Services\ExecucoesDiarias;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -108,6 +109,7 @@ class EsquemaRotinasTest extends TestCase
     #[TestWith(['rotinas.emergenciais.store'])]
     public function test_formulario_grava_rotina_na_unidade_selecionada_e_registra_auxiliar(string $rota): void
     {
+        $emergencial = $rota === 'rotinas.emergenciais.store';
         $empresa = $this->empresa('Unidade Centro');
         $usuario = $this->usuario('Joana Exemplo', $empresa);
         $responsavel = $this->usuario('Ana Exemplo', $empresa);
@@ -126,13 +128,14 @@ class EsquemaRotinasTest extends TestCase
                 'auxilio' => 'Sim',
                 'cuidador' => $auxiliar->getKey(),
             ]], JSON_THROW_ON_ERROR),
-        ])->assertSessionHas('success', 'Todas as rotinas foram salvas com sucesso!');
+        ])->assertSessionHas('success', $emergencial ? 'Tarefas emergenciais salvas com sucesso!' : 'Todas as rotinas foram salvas com sucesso!');
 
         $idRotina = DB::table('rotinas')->value('id_rotina');
         $this->assertDatabaseHas('rotinas', [
             'id_rotina' => $idRotina, 'id_empresa' => $empresa, 'id_usuario' => $responsavel->getKey(),
             'id_tarefa' => $catalogo['tarefa'], 'id_local' => $catalogo['local'],
-            'local' => 'Sala de estar', 'horario' => '08:30:00', 'status' => false, 'auxilio' => true,
+            'local' => 'Sala de estar', 'horario' => '08:30:00', 'status' => $emergencial, 'auxilio' => true,
+            'tipo_rotina' => $emergencial ? ExecucoesDiarias::TIPO_EMERGENCIAL : ExecucoesDiarias::TIPO_DIARIA,
         ]);
         $this->assertDatabaseHas('rotina_auxiliares', ['id_rotina' => $idRotina, 'id_usuario' => $auxiliar->getKey()]);
         $this->assertDatabaseHas('logs_auditoria', ['tabela' => 'rotinas', 'registro_id' => (string) $idRotina]);

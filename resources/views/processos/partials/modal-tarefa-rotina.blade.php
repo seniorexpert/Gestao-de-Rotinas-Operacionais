@@ -1,6 +1,7 @@
 @php
     $emergencial = $emergencial ?? false;
     $modalTarefa = $emergencial ? 'tarefaRotinaEmergencialModal' : 'tarefaRotinaModal';
+    $agoraEmergencial = $emergencial ? now(\App\Services\ExecucoesDiarias::FUSO) : null;
 @endphp
 
 <div id="{{ $modalTarefa }}" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
@@ -19,9 +20,21 @@
             <input type="hidden" name="tarefas_json" id="tarefasJsonInput">
             <input type="hidden" name="id_empresa">
             <input type="hidden" name="colaborador_id">
-            <input type="hidden" name="status_rotina">
+            @unless ($emergencial)
+                <input type="hidden" name="status_rotina">
+            @endunless
             <input type="hidden" id="tarefaIndexEdicao" value="">
 
+            @if ($emergencial)
+                <div>
+                    <label for="inputDataEmergencial" class="mb-2 block text-xs font-bold uppercase tracking-wider text-[#1e2d3d]">Data de execução</label>
+                    <input type="date" id="inputDataEmergencial" required
+                           value="{{ $agoraEmergencial->toDateString() }}" min="{{ $agoraEmergencial->toDateString() }}"
+                           onchange="atualizarDiaEmergencial()" aria-describedby="diaEmergencial"
+                           class="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3.5 text-sm text-gray-800 focus:border-[#1e2d3d] focus:outline-none">
+                    <p id="diaEmergencial" class="mt-1 text-xs capitalize text-gray-500">{{ $agoraEmergencial->locale('pt_BR')->dayName }}</p>
+                </div>
+            @else
             <div class="relative">
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Dia(s) da semana</label>
                 
@@ -72,10 +85,12 @@
                     </label>
                 </div>
             </div>
+            @endif
 
             <div>
-                <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Horário</label>
-                <input type="time" name="horario" id="inputHorario" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
+                <label for="inputHorario" class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Horário</label>
+                <input type="time" name="horario" id="inputHorario" required @if ($emergencial) value="{{ $agoraEmergencial->format('H:i') }}" @endif
+                       class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
             </div>
 
             <div>
@@ -156,6 +171,28 @@
 <script>
     let listaTarefasMemoria = [];
 
+    @if ($emergencial)
+    function atualizarDiaEmergencial() {
+        const data = document.getElementById('inputDataEmergencial').value;
+        document.getElementById('diaEmergencial').textContent = data
+            ? new Date(data + 'T12:00:00Z').toLocaleDateString('pt-BR', { weekday: 'long', timeZone: 'UTC' })
+            : '';
+    }
+
+    function preencherAgendamentoEmergencial() {
+        const partes = new Intl.DateTimeFormat('pt-BR', {
+            timeZone: 'America/Sao_Paulo',
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+        }).formatToParts(new Date());
+        const agora = Object.fromEntries(partes.map(parte => [parte.type, parte.value]));
+        const campoData = document.getElementById('inputDataEmergencial');
+        campoData.value = campoData.min = `${agora.year}-${agora.month}-${agora.day}`;
+        document.getElementById('inputHorario').value = `${agora.hour}:${agora.minute}`;
+        atualizarDiaEmergencial();
+    }
+    @endif
+
     function fecharModalTarefa() {
         limparFormularioTarefa();
         const modal = document.getElementById('{{ $modalTarefa }}');
@@ -219,6 +256,9 @@
 
     function salvarTarefaDaRotina() {
         const indexEdicao = document.getElementById('tarefaIndexEdicao').value;
+        const campoData = document.getElementById('inputDataEmergencial');
+        const data = campoData?.value;
+        if (campoData && !campoData.reportValidity()) return;
         const diasSelecionados = Array.from(document.querySelectorAll('.dia-checkbox:checked')).map(cb => cb.value);
         const horario = document.getElementById('inputHorario').value;
         
@@ -237,13 +277,14 @@
         const cuidadorAux = necessitaAuxilio === 'Sim' ? selectCuidador.value || null : null;
         const observacao = document.getElementById('inputObservacao').value;
 
-        if (!tarefaId || !morador || !localId || !horario || diasSelecionados.length === 0) {
-            alert('Por favor, preencha os campos obrigatórios e selecione ao menos um dia.');
+        if (!tarefaId || !morador || !localId || !horario || (!data && diasSelecionados.length === 0)) {
+            alert('Preencha os campos obrigatórios da tarefa.');
             return;
         }
 
         const dadosTarefa = {
-            dias: diasSelecionados.join(', '),
+            data: data,
+            dias: data ? data.split('-').reverse().join('/') : diasSelecionados.join(', '),
             horario: horario,
             id_tarefa: tarefaId,
             tarefa: tarefaNome,
@@ -302,7 +343,7 @@
                     </div>
 
                     <div id="detalhesTarefa_${index}" class="hidden mt-4 pt-4 border-t border-gray-100 space-y-2 text-xs text-gray-600">
-                        <div class="flex justify-between"><span class="font-bold text-gray-400">Dias</span> <span class="text-gray-800 font-medium">${escaparTexto(t.dias)}</span></div>
+                        <div class="flex justify-between"><span class="font-bold text-gray-400">${t.data ? 'Data' : 'Dias'}</span> <span class="text-gray-800 font-medium">${escaparTexto(t.dias)}</span></div>
                         <div class="flex justify-between"><span class="font-bold text-gray-400">Morador(a)</span> <span class="text-gray-800 font-medium">${escaparTexto(t.morador)}</span></div>
                         <div class="flex justify-between"><span class="font-bold text-gray-400">Local</span> <span class="text-gray-800 font-medium">${escaparTexto(t.local)}</span></div>
                         <div class="flex justify-between"><span class="font-bold text-gray-400">Auxílio</span> <span class="text-gray-800 font-medium">${escaparTexto(t.auxilio)} ${t.cuidador_nome ? '(' + escaparTexto(t.cuidador_nome) + ')' : ''}</span></div>
@@ -336,6 +377,10 @@
         const t = listaTarefasMemoria[index];
         
         document.getElementById('tarefaIndexEdicao').value = index;
+        @if ($emergencial)
+        document.getElementById('inputDataEmergencial').value = t.data;
+        atualizarDiaEmergencial();
+        @endif
         document.getElementById('inputHorario').value = t.horario;
         document.getElementById('selectTarefa').value = t.id_tarefa;
         document.getElementById('selectMorador').value = t.morador;
@@ -467,23 +512,21 @@
     }
 
     function enviarRotinasParaBanco() {
+        const unidade = document.getElementById('selectUnidadeRotina');
+        const colaborador = document.getElementById('selectColaboradorModalRotina');
+        if (!unidade.reportValidity() || !colaborador.reportValidity()) return;
+
         if (listaTarefasMemoria.length === 0) {
             alert('Adicione pelo menos uma tarefa na rotina antes de salvar.');
             return;
         }
 
-        const selectColab = document.getElementById('selectColaboradorModalRotina');
-        const colaboradorId = selectColab ? selectColab.value : null;
-
-        if (!colaboradorId) {
-            alert('Por favor, selecione um colaborador no cadastro da rotina.');
-            return;
-        }
-
         const form = document.getElementById('formSalvarRotina');
-        form.elements.id_empresa.value = document.getElementById('selectUnidadeRotina').value;
-        form.elements.colaborador_id.value = colaboradorId;
-        form.elements.status_rotina.value = document.querySelector('input[type="radio"][name="status_rotina"]:checked')?.value ?? 'Ativa';
+        form.elements.id_empresa.value = unidade.value;
+        form.elements.colaborador_id.value = colaborador.value;
+        if (form.elements.status_rotina) {
+            form.elements.status_rotina.value = document.querySelector('input[type="radio"][name="status_rotina"]:checked')?.value ?? 'Ativa';
+        }
 
         const inputJson = form.querySelector('#tarefasJsonInput');
         if (inputJson) {

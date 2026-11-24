@@ -22,6 +22,9 @@
                 <div class="item-tarefa-prod flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-4" data-usuario="{{ $execucao->id_usuario_responsavel }}">
                     <div>
                         <h3 class="font-semibold text-slate-800">{{ $execucao->tarefa ?? 'Rotina' }}</h3>
+                        @if ($execucao->tipo_rotina === \App\Services\ExecucoesDiarias::TIPO_EMERGENCIAL)
+                            <p class="mt-0.5 text-xs font-semibold text-amber-900">Tarefa emergencial</p>
+                        @endif
                         <p class="mt-0.5 text-xs text-slate-600">
                             {{ $execucao->horario }} · {{ $execucao->local_rotina ?: ($execucao->local_cadastrado ?? 'Local não informado') }} · {{ $execucao->morador ?? 'Tarefa geral' }}
                         </p>

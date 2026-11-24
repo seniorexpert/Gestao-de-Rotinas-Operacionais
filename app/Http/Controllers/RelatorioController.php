@@ -39,7 +39,7 @@ class RelatorioController extends Controller
     {
         $colaboradorFiltro = $request->validate(['colaborador' => 'nullable|string|max:255'])['colaborador'] ?? null;
         $usuario = $request->user();
-        $rotinas = $this->consultaRotinas->rotinas($usuario)
+        $rotinas = $this->consultaRotinas->rotinasDiarias($usuario)
             ->when($colaboradorFiltro && $colaboradorFiltro !== 'Todas', fn (Builder $query) => $query->where('u.usuario', $colaboradorFiltro))
             ->select('r.id_usuario', 'u.usuario as nome_colaborador', 'e.empresa as unidade_colaborador', 'g.grupo_acesso as cargo_colaborador')
             ->selectRaw('MIN(r.id_rotina) as id_rotina_principal, MIN(r.horario) as horario_inicio, MAX(r.horario) as horario_fim')
@@ -60,7 +60,7 @@ class RelatorioController extends Controller
     {
         $colaboradorFiltro = $request->validate(['colaborador' => 'nullable|string|max:255'])['colaborador'] ?? null;
         $usuario = $request->user();
-        $rotinas = $this->consultaRotinas->rotinas($usuario)
+        $rotinas = $this->consultaRotinas->rotinasDiarias($usuario)
             ->where('r.status', 1)
             ->when($colaboradorFiltro && $colaboradorFiltro !== 'Todas', fn (Builder $query) => $query->where('u.usuario', $colaboradorFiltro))
             ->select('r.id_usuario', 'u.usuario as nome_colaborador', 'e.empresa as unidade_colaborador', 'g.grupo_acesso as cargo_colaborador')
@@ -123,7 +123,7 @@ class RelatorioController extends Controller
         $colaboradores = $this->consultaRotinas->colaboradores($usuario)
             ->when($colaboradorFiltro && $colaboradorFiltro !== 'Todas', fn (Builder $query) => $query->where('u.usuario', $colaboradorFiltro))
             ->get();
-        $rotinas = $this->consultaRotinas->rotinas($usuario)->where('r.status', true)
+        $rotinas = $this->consultaRotinas->rotinasDiarias($usuario)->where('r.status', true)
             ->whereIn('r.id_usuario', $colaboradores->pluck('id_usuario'))->orderBy('r.horario')
             ->get(['r.id_usuario', 'r.horario', 'r.dias_semanas', 'r.morador', 'r.local', 'l.local as local_cadastrado', 't.tarefa', 't.descricao']);
 

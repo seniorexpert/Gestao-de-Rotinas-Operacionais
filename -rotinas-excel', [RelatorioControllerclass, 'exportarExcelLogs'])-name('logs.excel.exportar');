@@ -1,0 +1,20 @@
+[1mdiff --cc routes/web.php[m
+[1mindex 5af3d3b,a62c94f..0000000[m
+[1m--- a/routes/web.php[m
+[1m+++ b/routes/web.php[m
+[36m@@@ -38,10 -35,10 +38,14 @@@[m [mRoute::middleware(['auth'])->group(func[m
+          Route::get('/ferramentas', [RelatorioController::class, 'ferramentas'])->name('ferramentas');[m
+          Route::get('/locais', [RelatorioController::class, 'locais'])->name('locais');[m
+          Route::get('/rotinas-finalizadas', [RelatorioController::class, 'rotinasFinalizadas'])->name('rotinas-finalizadas');[m
+[31m -        Route::get('/rotinas-excel', [RelatorioController::class, 'rotinasExcel'])->name('rotinas-excel');[m
+          Route::get('/logs-rotinas', [RelatorioController::class, 'logsRotinas'])->name('logs-rotinas');[m
+          Route::get('/estatisticas', [EstatisticasController::class, 'index'])->name('estatisticas');[m
+[32m++<<<<<<< Updated upstream[m
+[32m +        Route::get('/relatorios/api-log-detalhes/{id}', [RelatorioController::class, 'apiLogDetalhes']);[m
+[32m +        Route::get('/logs-rotinas-excel', [RelatorioController::class, 'exportarExcelLogs'])->name('logs.excel.exportar');[m
+[32m++=======[m
+[32m+ [m
+[32m++>>>>>>> Stashed changes[m
+      });[m
+  });[m
+  [m

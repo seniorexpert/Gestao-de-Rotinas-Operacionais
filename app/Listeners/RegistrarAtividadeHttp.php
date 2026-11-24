@@ -102,11 +102,13 @@ class RegistrarAtividadeHttp
         if ($rota === 'login.autenticar' && $resultado !== 'sucesso') {
             $descricao = 'Tentativa de entrada no sistema';
         }
-        if (in_array($rota, ['acompanhamento.index', 'monitoramento.index'], true) && $request->header('X-Atualizacao-Automatica') === '1') {
+        if (in_array($rota, ['acompanhamento.index', 'home', 'monitoramento.index'], true) && $request->header('X-Atualizacao-Automatica') === '1') {
             $acao = 'ATUALIZAR_PAINEL';
-            $descricao = $rota === 'monitoramento.index'
-                ? 'Atualização automática do monitoramento'
-                : 'Atualização automática do acompanhamento';
+            $descricao = match ($rota) {
+                'monitoramento.index' => 'Atualização automática do monitoramento',
+                'home' => 'Atualização automática das Rotinas Diárias',
+                default => 'Atualização automática do acompanhamento',
+            };
         }
 
         $id = $rota === 'acompanhamento.index' ? ($request->query()['item'] ?? null) : $request->route('id');

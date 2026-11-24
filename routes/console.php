@@ -12,10 +12,10 @@ Artisan::command('inspire', function () {
 Artisan::command('rotinas:gerar-execucoes', function (ExecucoesDiarias $execucoes): void {
     $total = $execucoes->gerar(now()->toImmutable());
 
-    $this->info("$total execução(ões) gerada(s) para o dia.");
+    $this->info("$total execução(ões) gerada(s) para as agendas liberadas.");
 })->purpose('Gerar as execuções diárias das rotinas ativas');
 
 Schedule::command('rotinas:gerar-execucoes')
-    ->daily()
+    ->everyMinute()
     ->timezone(ExecucoesDiarias::FUSO)
     ->withoutOverlapping(10);

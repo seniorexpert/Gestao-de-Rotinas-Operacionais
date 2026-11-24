@@ -18,7 +18,7 @@ class RotinasExport implements FromCollection, WithHeadings, WithMapping
             return collect();
         }
 
-        return app(ConsultaRotinas::class)->rotinas($usuario)->where('r.status', true)->get([
+        return app(ConsultaRotinas::class)->rotinasDiarias($usuario)->where('r.status', true)->get([
             'r.id_rotina', 'r.horario', 'r.dias_semanas', 'u.usuario as nome_colaborador',
             'e.empresa as unidade_colaborador', 't.tarefa', 't.descricao',
         ]);

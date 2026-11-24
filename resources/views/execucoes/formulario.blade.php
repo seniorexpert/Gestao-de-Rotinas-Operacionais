@@ -10,13 +10,6 @@
     $voltar = route('execucoes.realizando', $execucao->id_execucao);
     $tarefa = $execucao->tarefa ?: 'Tarefa de rotina';
     $campo = $finalizar ? 'comentario' : 'justificativa';
-    $categoria = \Illuminate\Support\Str::ascii(mb_strtolower($tarefa.' '.$execucao->local));
-    $icone = match (true) {
-        str_contains($categoria, 'banho') || str_contains($categoria, 'higiene') => '🛁',
-        str_contains($categoria, 'aliment') || str_contains($categoria, 'refeitorio') => '🍽️',
-        str_contains($categoria, 'medic') => '💊',
-        default => '📋',
-    };
 @endphp
 
 @section('title', $titulo.' - Senior Expert')
@@ -51,6 +44,15 @@
     @enderror
 
     @if ($finalizar)
+        @php
+            $categoria = \Illuminate\Support\Str::ascii(mb_strtolower($tarefa.' '.$execucao->local));
+            $icone = match (true) {
+                str_contains($categoria, 'banho') || str_contains($categoria, 'higiene') => '🛁',
+                str_contains($categoria, 'aliment') || str_contains($categoria, 'refeitorio') => '🍽️',
+                str_contains($categoria, 'medic') => '💊',
+                default => '📋',
+            };
+        @endphp
         <input type="hidden" name="fluxo_diario" value="1">
         <p class="mb-4 self-start rounded-full bg-[#e6eff2] px-4 py-1 text-xs font-bold"><span aria-hidden="true">{{ $icone }}</span> {{ $tarefa }}</p>
         <div data-anexo-execucao class="mb-4 grid justify-items-center gap-3 rounded-3xl border-2 border-[#d3ae74]/35 bg-white p-6 text-center shadow-sm">
@@ -68,18 +70,35 @@
             @enderror
         </div>
     @else
-        <div class="mb-5 rounded-3xl border-2 border-[#d3ae74]/35 bg-white p-5 shadow-sm">
+        <section aria-labelledby="tarefa-selecionada" class="mb-5 rounded-3xl border-2 border-[#d3ae74]/35 bg-white p-5 shadow-sm">
             <p class="mb-1 text-xs text-[#64748b]">Tarefa selecionada</p>
-            <p class="font-bold"><span class="mr-1.5" aria-hidden="true">{{ $icone }}</span>{{ $tarefa }} · {{ $execucao->horario }}</p>
-        </div>
+            <h2 id="tarefa-selecionada" class="flex items-center gap-2 font-bold">
+                <x-icone-tarefa :icone="$execucao->icone" :cor="$execucao->cor_icone" class="h-6 w-6 text-xl" />
+                <span class="min-w-0 break-words">{{ $tarefa }} <span class="whitespace-nowrap tabular-nums">· {{ $execucao->horario }}</span></span>
+            </h2>
+
+            <dl class="mt-3 grid grid-cols-2 gap-4 border-t border-slate-100 pt-3 text-sm">
+                <div class="min-w-0">
+                    <dt class="text-xs text-[#64748b]">Local</dt>
+                    <dd class="mt-1 break-words font-semibold">{{ $execucao->local }}</dd>
+                </div>
+                <div class="min-w-0">
+                    <dt class="text-xs text-[#64748b]">Quem</dt>
+                    <dd class="mt-1 break-words font-semibold">{{ trim($execucao->morador ?? '') ?: 'Não informado' }}</dd>
+                </div>
+            </dl>
+        </section>
     @endif
 
-    <label for="{{ $campo }}" class="mb-1.5 text-xs font-bold">{{ $finalizar ? 'Comentário' : 'Justificativa' }}</label>
-    <textarea id="{{ $campo }}" name="{{ $campo }}" rows="{{ $finalizar ? 5 : 7 }}" maxlength="2000" @required(! $finalizar)
+    <label for="{{ $campo }}" class="mb-1.5 text-xs font-bold">
+        {{ $finalizar ? 'Comentário' : 'Justificativa' }} <span class="font-normal">(obrigatório)</span>
+    </label>
+    <textarea id="{{ $campo }}" name="{{ $campo }}" rows="{{ $finalizar ? 5 : 7 }}" maxlength="2000" required
               placeholder="{{ $finalizar ? 'Descreva como a tarefa foi realizada...' : 'Descreva o motivo...' }}"
-              class="w-full resize-y rounded-3xl border border-[#d3ae74]/45 bg-white px-4 py-4 text-sm placeholder:text-slate-400 shadow-sm focus:border-[#21394e] focus:outline-none">{{ old($campo) }}</textarea>
+              @error($campo) aria-invalid="true" aria-describedby="erro-{{ $campo }}" @enderror
+              class="w-full resize-y rounded-3xl border border-[#d3ae74]/45 bg-white px-4 py-4 text-sm placeholder:text-slate-400 shadow-sm focus:border-[#21394e] focus:outline-none">{{ is_string(old($campo)) ? old($campo) : '' }}</textarea>
     @error($campo)
-        <p class="mt-1.5 text-xs text-rose-800" role="alert">{{ $message }}</p>
+        <p id="erro-{{ $campo }}" class="mt-1.5 text-xs text-rose-800" role="alert">{{ $message }}</p>
     @enderror
 
     <div class="mt-auto grid grid-cols-2 gap-3 pt-8">

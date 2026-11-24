@@ -348,10 +348,6 @@
             <symbol id="senior-menu-scroll-text" viewBox="0 0 24 24">
                 <path d="M15 12H9m6-4H9m11 8V4a2 2 0 0 0-2-2H4m0 0a2 2 0 0 1 2 2v16a2 2 0 0 0 4 0v-2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2H8M4 2a2 2 0 0 0-2 2v3h4"/>
             </symbol>
-            <symbol id="senior-menu-circle-help" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4m.1 3h.01"/>
-            </symbol>
             <symbol id="senior-menu-user" viewBox="0 0 24 24">
                 <circle cx="12" cy="8" r="5"/>
                 <path d="M4 22a8 8 0 0 1 16 0"/>
@@ -442,20 +438,9 @@
                 @endforeach
             </div>
             @endif
-
-            @can('administrar-permissoes')
-                <a class="senior-sidebar__item" href="{{ route('permissoes.index') }}" @if (request()->routeIs('permissoes.*')) aria-current="page" @endif>
-                    <i class="fa-solid fa-shield-halved senior-sidebar__icon" aria-hidden="true"></i>
-                    <span>Permissões de Acesso</span>
-                </a>
-            @endcan
         </nav>
 
-        <nav class="senior-sidebar__utility" aria-label="Ajuda e conta">
-            <span class="senior-sidebar__item" role="link" aria-disabled="true">
-                <svg class="senior-sidebar__icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#senior-menu-circle-help"/></svg>
-                <span>Central de Ajuda</span>
-            </span>
+        <nav class="senior-sidebar__utility" aria-label="Conta">
             <a class="senior-sidebar__item" href="{{ url('/mudar-senha') }}" @if (request()->is('mudar-senha')) aria-current="page" @endif>
                 <svg class="senior-sidebar__icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#senior-menu-user"/></svg>
                 <span>Meu perfil</span>
@@ -505,7 +490,8 @@
                 <div class="relative flex items-center space-x-2 border-l pl-2 sm:pl-4 border-gray-200">
                     <span class="text-sm font-medium text-gray-700 hidden md:inline">{{ Auth::user()->name ?? Auth::user()->username ?? 'Utilizador' }}</span>
                     
-                    <button id="profileDropdownBtn" class="flex items-center space-x-1 focus:outline-none">
+                    <button type="button" id="profileDropdownBtn" aria-label="Menu do perfil" aria-controls="profileDropdownMenu" aria-expanded="false"
+                            class="flex items-center space-x-1 rounded-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2">
                         <div class="h-8 w-8 sm:h-9 sm:w-9 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 border border-gray-200 hover:bg-gray-200 transition overflow-hidden">
                             @if(Auth::check() && !empty(Auth::user()->photo))
                                 <img src="{{ asset('storage/' . Auth::user()->photo) }}" alt="Foto de perfil" class="w-full h-full object-cover">
@@ -516,7 +502,7 @@
                         <i class="fa-solid fa-chevron-down text-[10px] text-gray-400"></i>
                     </button>
 
-                    <div id="profileDropdownMenu" class="hidden absolute right-0 top-12 w-48 bg-white border border-gray-200 rounded-xl shadow-lg py-2 z-50">
+                    <div id="profileDropdownMenu" class="hidden absolute right-0 top-12 w-56 bg-white border border-gray-200 rounded-xl shadow-lg py-2 z-50">
                         <div class="w-full">
                             <a href="{{ url('/mudar-senha') }}" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2 transition">
                                 <i class="fa-solid fa-user"></i>
@@ -527,6 +513,14 @@
                                 <a href="{{ route('usuarios.index') }}" class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center space-x-2 transition">
                                     <i class="fa-solid fa-users"></i>
                                     <span>Gestão de acessos</span>
+                                </a>
+                            @endcan
+
+                            @can('administrar-permissoes')
+                                <a href="{{ route('permissoes.index') }}" @if (request()->routeIs('permissoes.*')) aria-current="page" @endif
+                                   class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 aria-[current=page]:bg-gray-50 flex items-center space-x-2 transition">
+                                    <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
+                                    <span>Permissões de Acesso</span>
                                 </a>
                             @endcan
 
@@ -599,14 +593,28 @@
         const profileBtn = document.getElementById('profileDropdownBtn');
         const profileMenu = document.getElementById('profileDropdownMenu');
 
+        function closeProfileMenu() {
+            profileMenu.classList.add('hidden');
+            profileBtn.setAttribute('aria-expanded', 'false');
+        }
+
         profileBtn.addEventListener('click', function (e) {
             e.stopPropagation();
-            profileMenu.classList.toggle('hidden');
+            const expanded = !profileMenu.classList.toggle('hidden');
+            profileBtn.setAttribute('aria-expanded', String(expanded));
         });
 
-        window.addEventListener('click', function () {
-            if (!profileMenu.classList.contains('hidden')) {
-                profileMenu.classList.add('hidden');
+        window.addEventListener('click', function (event) {
+            if (!profileMenu.contains(event.target)) {
+                closeProfileMenu();
+            }
+        });
+
+        profileBtn.parentElement.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && !profileMenu.classList.contains('hidden')) {
+                event.preventDefault();
+                closeProfileMenu();
+                profileBtn.focus();
             }
         });
 

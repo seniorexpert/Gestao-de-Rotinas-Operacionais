@@ -47,19 +47,6 @@
                             $iconeRaw = $tarefa->icone ?? '';
                             $iconeTarefa = trim((string) $iconeRaw) !== '' ? trim((string) $iconeRaw) : '📋';
                             $corIconeTarefa = trim((string) ($tarefa->cor_icone ?? '')) ?: 'original';
-                            $hexCorTarefa = ($corIconeTarefa !== 'original' && preg_match('/^#[0-9a-fA-F]{3,8}$/', $corIconeTarefa))
-                                ? $corIconeTarefa
-                                : null;
-
-                            $svgMascara = null;
-                            if ($hexCorTarefa) {
-                                $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
-                                     . '<text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-size="52">'
-                                     . htmlspecialchars($iconeTarefa, ENT_XML1 | ENT_QUOTES, 'UTF-8')
-                                     . '</text></svg>';
-                                $svgMascara = 'url("data:image/svg+xml,' . rawurlencode($svg) . '")';
-                            }
-
                             $dadosEdicao = [
                                 'id' => $tarefa->id_tarefa,
                                 'nome' => $tarefa->tarefa,
@@ -76,15 +63,7 @@
                             <td class="py-4 px-6">
                                 <div class="flex items-center space-x-3">
                                     <span class="h-9 w-9 rounded-xl bg-[#fcfbf9] border border-amber-200/70 flex items-center justify-center shrink-0">
-                                        @if ($svgMascara)
-                                            <span
-                                                class="inline-block h-6 w-6"
-                                                style="background-color: {{ $hexCorTarefa }}; -webkit-mask: {{ $svgMascara }} center / contain no-repeat; mask: {{ $svgMascara }} center / contain no-repeat;"
-                                                title="{{ $iconeTarefa }}"
-                                            ></span>
-                                        @else
-                                            <span class="text-xl leading-none">{{ $iconeTarefa }}</span>
-                                        @endif
+                                        <x-icone-tarefa :icone="$iconeTarefa" :cor="$corIconeTarefa" class="h-6 w-6 text-xl" />
                                     </span>
                                     <span class="font-bold text-gray-800 uppercase">{{ $tarefa->tarefa ?? 'Sem nome' }}</span>
                                 </div>

@@ -19,7 +19,7 @@ class HomeControllerTest extends TestCase
 
     public function test_login_abre_as_rotinas_do_responsavel_e_exibe_o_atalho_de_acompanhamento(): void
     {
-        $this->travelTo(CarbonImmutable::parse('2026-11-18 14:00:00', 'UTC'));
+        $this->travelTo(CarbonImmutable::parse('2026-11-18 17:30:00', 'UTC'));
         $unidade = DB::table('empresas')->insertGetId(['empresa' => 'Unidade Centro'], 'id_empresa');
         $outraUnidade = DB::table('empresas')->insertGetId(['empresa' => 'Unidade Norte'], 'id_empresa');
         $grupo = DB::table('grupos_acesso')->insertGetId(['grupo_acesso' => 'Gerente Geral'], 'id_grupo_acesso');
@@ -80,7 +80,7 @@ class HomeControllerTest extends TestCase
             ->assertViewHas('aba', 'pendente')
             ->assertSeeText('🧭')
             ->assertSee('background-color: #126abc')
-            ->assertSeeTextInOrder(['Acompanhar o lanche', 'Sala de Estar', '15:30', 'No prazo'])
+            ->assertSeeTextInOrder(['Acompanhar o lanche', 'Sala de Estar', '15:30 · 18/11/2026', 'No prazo'])
             ->assertDontSee('15:30 – 16:00')
             ->assertDontSee('Organizar o quarto')
             ->assertDontSee('Tarefa de outra unidade')
@@ -89,14 +89,14 @@ class HomeControllerTest extends TestCase
         $execucao = DB::table('rotinas_execucoes')->where('id_usuario_responsavel', $gerente)->sole();
         DB::table('rotinas')->where('id_rotina', $execucao->id_rotina)->update(['id_usuario' => $colega]);
         DB::table('rotinas_execucoes')->where('id_execucao', $execucao->id_execucao)->update([
-            'status' => 'em_andamento', 'iniciado_em' => '2026-11-18 13:50:00', 'prazo_em' => '2026-11-18 14:20:00',
+            'status' => 'em_andamento', 'iniciado_em' => '2026-11-18 17:20:00', 'prazo_em' => '2026-11-18 17:50:00',
         ]);
 
         $this->get(route('home', ['aba' => 'todas', 'id_usuario' => $colega]))
             ->assertOk()
             ->assertViewHas('aba', 'todas')
             ->assertViewHas('rotinas', fn ($rotinas) => (int) $rotinas->sole()->id_execucao === (int) $execucao->id_execucao)
-            ->assertSeeText('Realizando')
+            ->assertSeeTextInOrder(['15:30 · 18/11/2026', 'Realizando'])
             ->assertDontSee('Tarefa de outro colaborador');
     }
 

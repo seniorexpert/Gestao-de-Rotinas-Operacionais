@@ -8,6 +8,10 @@ use InvalidArgumentException;
 
 class CalculadoraSla
 {
+    public const LIMITE_EMERGENCIAL_MINUTOS = 30;
+
+    private const ALERTA_EMERGENCIAL_MINUTOS = 15;
+
     public const ROTULOS = [
         'noPrazo' => 'No prazo',
         'expirando' => 'Expirando',
@@ -115,6 +119,10 @@ class CalculadoraSla
             );
         }
 
+        if (($execucao->tipo_rotina ?? null) === ExecucoesDiarias::TIPO_EMERGENCIAL) {
+            return $this->calcularEmergencial($execucao, $momento);
+        }
+
         if ($execucao->status === 'pendente') {
             if (
                 ! empty($execucao->iniciado_em)
@@ -201,6 +209,15 @@ class CalculadoraSla
     public function atraso(object $execucao, DateTimeInterface $agora): ?array
     {
         $sla = $this->calcular($execucao, $agora);
+        if (($execucao->tipo_rotina ?? null) === ExecucoesDiarias::TIPO_EMERGENCIAL) {
+            return $sla['sla_atual'] === 'atrasado'
+                ? [
+                    'vencido_em' => $sla['prazo_em'],
+                    'segundos' => (int) $sla['prazo_em']->diffInSeconds($this->data($execucao->concluido_em ?? $agora)),
+                ]
+                : null;
+        }
+
         $prazoInicio = $this->prazoInicio($execucao->previsto_em);
 
         if ($execucao->status === 'pendente') {
@@ -230,6 +247,44 @@ class CalculadoraSla
     public function prazoInicio(DateTimeInterface|string $previsto): CarbonImmutable
     {
         return $this->data($previsto)->addMinute();
+    }
+
+    public function prazoEmergencial(DateTimeInterface|string $entrada): CarbonImmutable
+    {
+        return $this->data($entrada)->addMinutes(self::LIMITE_EMERGENCIAL_MINUTOS);
+    }
+
+    /** @return array{sla_atual: string, sla_inicio: ?string, sla_conclusao: ?string, prazo_em: CarbonImmutable} */
+    private function calcularEmergencial(object $execucao, CarbonImmutable $momento): array
+    {
+        $previsto = $this->data($execucao->previsto_em);
+        $entrada = max($previsto, $this->data($execucao->created_at ?? $previsto));
+        $prazo = $this->prazoEmergencial($entrada);
+        $alerta = $entrada->addMinutes(self::ALERTA_EMERGENCIAL_MINUTOS);
+        $inicio = ! empty($execucao->iniciado_em) ? $this->data($execucao->iniciado_em) : null;
+        $conclusao = ! empty($execucao->concluido_em) ? $this->data($execucao->concluido_em) : null;
+
+        if (
+            ($execucao->status === 'pendente' && ($inicio || $conclusao))
+            || ($execucao->status !== 'pendente' && ! $inicio)
+            || ($execucao->status === 'concluida' && ! $conclusao)
+            || ($execucao->status === 'em_andamento' && $conclusao)
+        ) {
+            throw new InvalidArgumentException('A execução emergencial possui datas inconsistentes.');
+        }
+
+        $situacao = fn (CarbonImmutable $referencia): string => match (true) {
+            $referencia >= $prazo => 'atrasado',
+            $referencia >= $alerta => 'expirando',
+            default => 'noPrazo',
+        };
+
+        return [
+            'sla_atual' => $situacao($conclusao ?? $momento),
+            'sla_inicio' => $inicio ? $situacao($inicio) : null,
+            'sla_conclusao' => $conclusao ? $situacao($conclusao) : null,
+            'prazo_em' => $prazo,
+        ];
     }
 
     private function duracaoPrevista(object $execucao): int

@@ -83,20 +83,20 @@ class RotinaAcompanhamentoController extends Controller
                 ->orderBy('u.usuario')
                 ->pluck('u.usuario');
 
+            $filtros['aba'] ??= $this->abaDoItem($item);
+
             return view('processos.acompanhamento.detalhes', [
                 'item' => $this->formatarItem($item),
                 'auxiliares' => $auxiliares,
                 'caixa' => $nomeCaixa,
-                'filtros' => [
-                    'aba' => $filtros['aba'] ?? $this->abaDoItem($item),
-                    'busca' => $filtros['busca'] ?? null,
-                    'page' => $filtros['page'] ?? null,
-                ],
+                'filtros' => array_diff_key($filtros, ['item' => true, 'tipo' => true]),
+                'voltar' => $this->urlDaLista($usuario, $filtros),
             ]);
         }
 
         $aba = $filtros['aba'] ?? 'auxilio';
-        $parametros = ['aba' => $aba, 'busca' => $filtros['busca'] ?? null];
+        $parametros = ['aba' => $aba, 'busca' => $filtros['busca'] ?? null, 'origem' => $filtros['origem'] ?? null];
+        [$inicioDoDia, $fimDoDia] = ExecucoesDiarias::janela($agora);
         $atrasos = $this->itens($usuario, 'atraso')
             ->where(function (Builder $query) use ($agora) {
                 $query->whereNotNull('v.id_execucao')
@@ -109,6 +109,10 @@ class RotinaAcompanhamentoController extends Controller
         $naoRealizadas = $this->itens($usuario, 'nao_realizada')->where('v.recebido_em', '<=', $agora);
         $auxilios = $this->itens($usuario, 'auxilio')->where('v.recebido_em', '<=', $agora);
         $execucoes = DB::query()->fromSub($atrasos->unionAll($naoRealizadas)->unionAll($auxilios), 'fila')
+            ->where(fn (Builder $fila) => $fila->whereNull('fila.verificado_em')
+                ->orWhere(fn (Builder $verificadas) => $verificadas
+                    ->where('fila.verificado_em', '>=', $inicioDoDia)
+                    ->where('fila.verificado_em', '<', $fimDoDia)))
             ->orderByDesc('entrada')
             ->orderByDesc('id_execucao')
             ->orderByDesc('id_item')
@@ -153,7 +157,9 @@ class RotinaAcompanhamentoController extends Controller
             return to_route('acompanhamento.index', [...$parametros, 'page' => $itens->lastPage()]);
         }
 
-        return view('processos.acompanhamento.index', [
+        $view = $request->header('X-Painel-Acompanhamento') === '1' ? 'painel' : 'index';
+
+        return view('processos.acompanhamento.'.$view, [
             'abas' => self::ABAS,
             'aba' => $aba,
             'caixa' => $nomeCaixa,
@@ -238,14 +244,12 @@ class RotinaAcompanhamentoController extends Controller
             );
         }, 3);
 
-        return to_route('acompanhamento.index', [
-            'aba' => $dados['aba'] ?? self::ABAS_POR_TIPO[$tipo],
-            'busca' => $dados['busca'] ?? null,
-            'page' => $dados['page'] ?? null,
-        ])->with('success', 'Verificação concluída.');
+        $dados['aba'] ??= self::ABAS_POR_TIPO[$tipo];
+
+        return redirect()->to($this->urlDaLista($usuario, $dados))->with('success', 'Verificação concluída.');
     }
 
-    /** @return array{aba: array, busca: array, page: array, tipo: array} */
+    /** @return array<string, array> */
     private function regrasDosFiltros(): array
     {
         return [
@@ -253,7 +257,29 @@ class RotinaAcompanhamentoController extends Controller
             'busca' => ['nullable', 'string', 'max:150'],
             'page' => ['nullable', 'integer', 'min:1'],
             'tipo' => ['nullable', Rule::in(array_keys(self::TABELAS))],
+            'origem' => ['nullable', Rule::in(['diarias'])],
+            'aba_diaria' => ['nullable', 'string', 'max:30'],
         ];
+    }
+
+    private function urlDaLista(User $usuario, array $filtros): string
+    {
+        $parametros = [
+            'aba' => $filtros['aba'],
+            'busca' => $filtros['busca'] ?? null,
+            'page' => $filtros['page'] ?? null,
+        ];
+
+        if (($filtros['origem'] ?? null) === 'diarias' && $usuario->can('visualizar-modulo', 'rotinas_diarias')) {
+            return route('home', [
+                'aba' => $filtros['aba_diaria'] ?? null,
+                'acomp_aba' => $parametros['aba'],
+                'acomp_busca' => $parametros['busca'],
+                'acomp_page' => $parametros['page'],
+            ]);
+        }
+
+        return route('acompanhamento.index', $parametros);
     }
 
     private function tipoDoItem(array $filtros): string
@@ -267,7 +293,7 @@ class RotinaAcompanhamentoController extends Controller
 
     private function execucoesDaUnidade(User $usuario): Builder
     {
-        return DB::table('rotinas_execucoes as e')
+        $consulta = DB::table('rotinas_execucoes as e')
             ->join('rotinas as r', fn (JoinClause $join) => $join
                 ->on('e.id_rotina', '=', 'r.id_rotina')
                 ->on('e.id_empresa', '=', 'r.id_empresa'))
@@ -280,6 +306,8 @@ class RotinaAcompanhamentoController extends Controller
                 'e.id_empresa',
                 'e.id_usuario_responsavel',
                 'e.previsto_em',
+                'e.created_at',
+                'r.tipo_rotina',
                 'e.prazo_em',
                 'e.iniciado_em',
                 'e.concluido_em',
@@ -289,6 +317,8 @@ class RotinaAcompanhamentoController extends Controller
                 'u.usuario as colaborador',
                 'g.grupo_acesso as grupo_origem',
             ]);
+
+        return $this->rotinas->filtrarEmergenciaisDisponiveis($consulta);
     }
 
     private function itens(User $usuario, string $tipo): Builder
@@ -298,6 +328,8 @@ class RotinaAcompanhamentoController extends Controller
             ->leftJoin('locais as l', 'r.id_local', '=', 'l.id_local')
             ->addSelect([
                 't.tarefa',
+                't.icone',
+                't.cor_icone',
                 'r.morador',
                 'r.local as local_rotina',
                 'l.local as local_cadastrado',
@@ -408,6 +440,7 @@ class RotinaAcompanhamentoController extends Controller
     {
         return match (true) {
             $item->tipo === 'auxilio' => 'Solicitação de Auxílio',
+            $item->tipo_rotina === ExecucoesDiarias::TIPO_EMERGENCIAL => 'Tarefa Emergencial',
             $item->tipo === 'atraso' && $item->auxilio => 'Auxílio previsto',
             default => 'Rotinas Diárias',
         };

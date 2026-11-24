@@ -8,7 +8,7 @@
 
 @section('content')
     <div class="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:py-8">
-        <a href="{{ route('acompanhamento.index', $filtros) }}"
+        <a href="{{ $voltar }}"
            class="mb-4 inline-flex items-center gap-2 rounded-lg border border-[#b39359]/30 bg-[#f4f1ea]/60 px-3 py-2 text-sm font-semibold text-[#1e2d3d] transition hover:bg-[#f4f1ea]">
             <i class="fa-solid fa-arrow-left text-xs" aria-hidden="true"></i>
             Voltar
@@ -48,9 +48,8 @@
 
                 <h2 id="tarefa-acompanhamento"
                     class="mb-3 flex items-center gap-3 border-b border-slate-100 pb-3 text-lg font-bold text-[#1e2d3d] sm:text-xl">
-                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#f4f1ea] text-lg text-[#886934]"
-                          aria-hidden="true">
-                        <i class="fa-solid {{ $item->tipo === 'auxilio' || $item->auxilio ? 'fa-handshake-angle' : 'fa-list-check' }}"></i>
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-[#f4f1ea]">
+                        <x-icone-tarefa :icone="$item->icone" :cor="$item->cor_icone" class="h-6 w-6 text-xl" />
                     </span>
                     <span class="min-w-0 break-words">{{ $item->tarefa }}</span>
                 </h2>
@@ -120,7 +119,9 @@
                 <form method="POST" action="{{ route('acompanhamento.store', ['id' => $item->id_item, 'tipo' => $item->tipo === 'atraso' ? null : $item->tipo, ...$filtros]) }}"
                       class="flex flex-col gap-2">
                     @csrf
-                    <label for="acao-realizada" class="text-sm font-bold text-[#1e2d3d] sm:text-base">Qual ação foi realizada?</label>
+                    <label for="acao-realizada" class="text-sm font-bold text-[#1e2d3d] sm:text-base">
+                        Qual ação foi realizada? <span class="font-normal">(obrigatório)</span>
+                    </label>
                     <textarea id="acao-realizada" name="acao" rows="3" maxlength="2000" required
                               placeholder="Conversei com a colaboradora e a tarefa foi feita às 15:20."
                               @error('acao') aria-invalid="true" aria-describedby="erro-acao" @enderror

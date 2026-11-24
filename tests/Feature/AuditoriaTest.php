@@ -115,7 +115,8 @@ class AuditoriaTest extends TestCase
 
         $this->actingAs($usuario)->post(route('execucoes.iniciar', $id))->assertRedirect()->assertSessionHasNoErrors();
         $this->post(route('execucoes.iniciar', $id))->assertRedirect()->assertSessionHasNoErrors();
-        $this->post(route('execucoes.concluir', $id))->assertRedirect()->assertSessionHasNoErrors();
+        $this->post(route('execucoes.concluir', $id), ['comentario' => 'Sala aberta e organizada.'])
+            ->assertRedirect()->assertSessionHasNoErrors();
 
         $eventos = DB::table('logs_auditoria')->where('tabela', 'rotinas_execucoes')->where('registro_id', (string) $id)->orderBy('id_log')->get();
         $this->assertSame(['INICIAR', 'INICIAR', 'CONCLUIR'], $eventos->pluck('acao')->all());
