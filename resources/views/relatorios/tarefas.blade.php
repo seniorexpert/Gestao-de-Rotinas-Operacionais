@@ -3,7 +3,7 @@
 @section('title', 'Relatório de Tarefas')
 
 @section('content')
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div>
     
     <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900 tracking-tight">Relatório de Tarefas</h1>
@@ -37,6 +37,8 @@
                         <th class="py-4 px-6">Nome da Tarefa</th>
                         <th class="py-4 px-6 w-40">Duração</th>
                         <th class="py-4 px-6 w-44">Ferramentas</th>
+                        <th class="py-4 px-6">Unidades</th>
+                        <th class="py-4 px-6">Situação</th>
                         <th class="py-4 px-6 w-28 text-right">Ação</th>
                     </tr>
                 </thead>
@@ -54,6 +56,7 @@
                                 'status' => $tarefa->status ? 'Ativa' : 'Inativa',
                                 'descricao' => $tarefa->descricao,
                                 'id_ferramenta' => $tarefa->id_ferramenta,
+                                'unidades' => $tarefa->ids_empresas,
                                 'icone' => $iconeTarefa,
                                 'cor_icone' => $corIconeTarefa,
                             ];
@@ -74,20 +77,22 @@
                             <td class="py-4 px-6 text-gray-500">
                                 {{ $tarefa->ferramenta ?? '—' }}
                             </td>
+                            <td class="py-4 px-6 text-gray-600">{{ $tarefa->unidades->pluck('empresa')->join(', ') ?: 'Sem unidade' }}</td>
+                            <td class="py-4 px-6 text-gray-600">{{ $tarefa->status ? 'Ativo' : 'Inativo' }}</td>
                             <td class="py-4 px-6 text-right">
-                                @can('editar-modulo', 'tarefas')
+                                @if ($tarefa->editavel && auth()->user()->can('editar-modulo', 'tarefas'))
                                 <button type="button"
                                     onclick="abrirModalEdicao(@js($dadosEdicao))"
                                     class="inline-flex items-center space-x-1 text-sm font-semibold text-gray-700 hover:text-gray-900 transition">
                                     <span>Editar</span>
                                     <i class="fa-solid fa-chevron-right text-xs"></i>
                                 </button>
-                                @endcan
+                                @endif
                             </td>
                         </tr>
                     @empty
                         <tr class="linha-vazia">
-                            <td colspan="5" class="py-8 text-center text-gray-400">
+                            <td colspan="7" class="py-8 text-center text-gray-400">
                                 Nenhuma tarefa cadastrada no momento.
                             </td>
                         </tr>
@@ -198,6 +203,7 @@
         if (inputDescricao) inputDescricao.value = dados.descricao ?? '';
 
         document.getElementById('id_ferramenta').value = dados.id_ferramenta ?? '';
+        preencherUnidadesCadastro(document.querySelector('#taskModal form'), dados.unidades);
 
         const titulo = document.getElementById('modalTituloTarefa');
         if (titulo) titulo.textContent = 'Editar tarefa';

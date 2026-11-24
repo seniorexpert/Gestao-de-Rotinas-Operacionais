@@ -3,7 +3,7 @@
 @section('title', 'Relatório de Rotinas - Excel')
 
 @section('content')
-<div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div>
     
     <div class="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>

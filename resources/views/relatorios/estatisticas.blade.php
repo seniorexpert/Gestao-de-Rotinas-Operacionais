@@ -44,7 +44,6 @@
 
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Fraunces:wght@600;700&amp;display=swap">
 <style>
-    .estatisticas.estatisticas--lista { max-width: none; width: 100%; padding: 12px 16px 32px; }
     .estatisticas--lista .filtros-estatisticas { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
     .estatisticas--lista .busca-lista { display: flex; flex: 0 1 37%; min-width: min(240px, 100%); margin-right: auto; border: 1px solid #e5d7c3; border-radius: 12px; overflow: hidden; }
     .busca-lista input { flex: 1; width: 0; padding: 11px 16px; background: white; }
@@ -82,12 +81,6 @@
     .estatisticas .filtro-periodo { color: #21394e; font-weight: 700; cursor: pointer; }
     .estatisticas .periodos { background: #faf7f2; border: 1px solid #e6d5bf; border-radius: 20px; }
     .estatisticas .busca-rotinas:focus-within { outline: 2px solid #243e53; }
-
-    .estatisticas {
-        max-width: 1300px;
-        margin: auto;
-        padding: 28px 24px;
-    }
 
     .estatisticas summary { cursor: pointer; }
     .estatisticas summary::marker { color: #8a9299; }
@@ -152,7 +145,6 @@
         outline: 2px solid #153e56;
         outline-offset: 3px;
     }
-    .estatisticas--detalhe { max-width: none; width: 100%; padding: 12px 16px 24px; color: #21394e; }
     .estatisticas .voltar {
         display: inline-flex;
         gap: 7px;
@@ -326,8 +318,6 @@
         .estatisticas .grade-rotinas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 639px) {
-        .estatisticas { padding: 20px 12px; }
-        .estatisticas--detalhe { padding: 12px 12px 20px; }
         .estatisticas .titulo-colaborador { font-size: 27px; }
         .estatisticas .grade-rotinas { grid-template-columns: minmax(0, 1fr); }
     }
@@ -337,14 +327,14 @@
 <div class="estatisticas {{ $chaveDetalhe ? 'estatisticas--detalhe' : 'estatisticas--lista' }}">
     @if (session('success'))
         <div role="status"
-            class="mt-4 rounded-lg bg-green-50 p-4 text-sm text-green-800">
+            class="mb-4 rounded-lg bg-green-50 p-4 text-sm text-green-800">
             {{ session('success') }}
         </div>
     @endif
 
     @if ($errors->any())
         <div id="erros-estatisticas" role="alert"
-             class="mt-4 rounded-lg bg-red-50 p-4 text-red-700">
+             class="mb-4 rounded-lg bg-red-50 p-4 text-red-700">
             @foreach ($errors->all() as $erro)
                 <p>{{ $erro }}</p>
             @endforeach

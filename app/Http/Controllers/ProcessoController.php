@@ -22,7 +22,7 @@ class ProcessoController extends Controller
     {
         return view('processos.gestao-rotinas', [
             ...$this->consultaRotinas->catalogos($request->user()),
-            'ferramentas' => DB::table('ferramentas')->orderBy('ferramenta')->get(['id_ferramenta', 'ferramenta']),
+            'ferramentas' => $this->consultaRotinas->ferramentasParaCadastro($request->user()),
         ]);
     }
 

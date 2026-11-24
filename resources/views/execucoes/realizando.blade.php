@@ -9,7 +9,7 @@
 @section('content')
 @php($temOrientacoes = $execucao->descricao || $execucao->obs || $documentacao)
 
-<div class="mx-auto w-full max-w-[38rem] px-4 py-6 text-[#21394e] sm:px-6 lg:max-w-7xl lg:px-8">
+<div class="text-[#21394e]">
     <a href="{{ route('home', ['aba' => 'em_andamento']) }}" class="mb-2 inline-block rounded px-0.5 py-1 hover:text-[#64748b]" aria-label="Voltar para Rotinas Diárias">
         <i class="fa-solid fa-arrow-left" aria-hidden="true"></i>
     </a>

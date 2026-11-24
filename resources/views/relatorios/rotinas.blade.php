@@ -3,19 +3,19 @@
 @section('title', 'Relatório de Rotinas')
 
 @section('content')
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div>
     
     <div class="mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
             <h1 class="text-3xl font-bold text-gray-900 tracking-tight">Relatório de Rotinas</h1>
             <p class="text-sm text-gray-500 mt-1">Visualize, busque e gerencie as rotinas de colaboradores cadastradas</p>
         </div>
-        @can('editar-modulo', 'rotinas')
+        @if (!$edicaoTarefa && !$rotinaParaAdicionarTarefa && auth()->user()->can('editar-modulo', 'rotinas'))
         <a href="#" onclick="abrirModal('rotinaModal')" class="inline-flex items-center justify-center space-x-2 bg-[#1b2a38] hover:bg-[#111c26] text-white px-5 py-3 rounded-xl font-medium text-sm transition shrink-0">
             <i class="fa-solid fa-plus"></i>
             <span>Novo registro</span>
         </a>
-        @endcan
+        @endif
     </div>
 
     <div class="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-gray-200 mb-6">
@@ -86,16 +86,21 @@
                                 </span>
                             </td>
                             <td class="py-4 px-6">
-                                <span class="px-3 py-1 rounded-full text-xs font-bold {{ isset($rotina->status_rotina) && $rotina->status_rotina == 1 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600' }}">
-                                    {{ isset($rotina->status_rotina) && $rotina->status_rotina == 1 ? 'Ativa' : 'Inativa' }}
+                                <span @class([
+                                    'px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap',
+                                    'bg-green-100 text-green-700' => $rotina->todas_ativas,
+                                    'bg-amber-100 text-amber-800' => $rotina->status_rotina && !$rotina->todas_ativas,
+                                    'bg-gray-100 text-gray-600' => !$rotina->status_rotina,
+                                ])>
+                                    {{ $rotina->todas_ativas ? 'Ativa' : ($rotina->status_rotina ? 'Parcialmente ativa' : 'Inativa') }}
                                 </span>
                             </td>
                             <td class="py-4 px-6 text-right">
                                 @can('editar-modulo', 'rotinas')
-                                <button type="button" onclick="openModal('modalDetalhesRotina')" class="inline-flex items-center space-x-1 text-sm font-semibold text-gray-700 hover:text-gray-900 transition">
+                                <a href="{{ route('relatorios.rotinas', array_filter(['colaborador' => $colaboradorFiltro, 'editar' => $rotina->grupo_rotina ?? $rotina->id_rotina_principal])) }}" class="inline-flex items-center space-x-1 text-sm font-semibold text-gray-700 hover:text-gray-900 transition">
                                     <span>Editar</span>
                                     <i class="fa-solid fa-chevron-right text-xs"></i>
-                                </button>
+                                </a>
                                 @endcan
                             </td>
                         </tr>
@@ -114,21 +119,13 @@
 </div>
 
 @can('editar-modulo', 'rotinas')
-@include('processos.partials.modal-rotina')
-@include('processos.partials.modal-tarefa-rotina')
-@include('processos.partials.modal-detalhes-rotinas')
+    @unless ($edicaoTarefa || $rotinaParaAdicionarTarefa)
+        @include('processos.partials.modal-rotina')
+        @if ($grupoEdicao !== null)
+            @include('processos.partials.modal-detalhes-rotinas')
+        @endif
+    @endunless
+    @include('processos.partials.modal-tarefa-rotina', ['edicaoTarefa' => $edicaoTarefa, 'rotinaParaAdicionarTarefa' => $rotinaParaAdicionarTarefa])
 @endcan
 
 @endsection
-
-<script>
-    function openModal(modalId) {
-        const modal = document.getElementById(modalId);
-        if (modal) modal.classList.remove('hidden');
-    }
-
-    function closeModal(modalId) {
-        const modal = document.getElementById(modalId);
-        if (modal) modal.classList.add('hidden');
-    }
-</script>

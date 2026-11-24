@@ -24,6 +24,9 @@ class ExecucoesDiariasTest extends TestCase
         $tarefa = $this->tarefa('Organizar o salão', '00:01:30');
         $local = DB::table('locais')->insertGetId(['local' => 'Salão', 'status' => true], 'id_local');
 
+        DB::table('tarefas_empresas')->insert(['id_tarefa' => $tarefa, 'id_empresa' => $unidade->getKey()]);
+        DB::table('locais_empresas')->insert(['id_local' => $local, 'id_empresa' => $unidade->getKey()]);
+
         $this->actingAs($usuario)->post(route('rotinas.store'), [
             'id_empresa' => $unidade->getKey(),
             'colaborador_id' => $usuario->getKey(),
@@ -399,6 +402,8 @@ class ExecucoesDiariasTest extends TestCase
         }
         $local = DB::table('locais')->insertGetId(['local' => 'Enfermaria', 'status' => true], 'id_local');
         $tarefa = $this->tarefa('Atendimento urgente', '00:02:00');
+        DB::table('tarefas_empresas')->insert(['id_tarefa' => $tarefa, 'id_empresa' => $unidade->getKey()]);
+        DB::table('locais_empresas')->insert(['id_local' => $local, 'id_empresa' => $unidade->getKey()]);
         $recorrente = $this->rotina($colaborador, $unidade, $this->tarefa('Ronda recorrente'), '16:00:00', 'Terça-feira');
 
         $this->actingAs($colaborador)->get(route('processos.index'))->assertOk()

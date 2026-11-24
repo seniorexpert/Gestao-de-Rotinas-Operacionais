@@ -19,6 +19,10 @@ class ExecucoesDiarias
 
     public const TIPO_EMERGENCIAL = 'emergencial';
 
+    public const DIAS_DA_SEMANA = [
+        'Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado',
+    ];
+
     private const DIAS = [
         ['dom', 'domingo'],
         ['seg', 'segunda'],
@@ -48,6 +52,7 @@ class ExecucoesDiarias
         return DB::transaction(function () use ($agora, $empresas, $idsRotinas, $idUsuario, $hoje): int {
             $rotinasAtivas = DB::table('rotinas as r')
                 ->where('r.status', true)
+                ->whereNull('r.excluida_em')
                 ->when($empresas !== null, fn (Builder $consulta) => $consulta->whereIn('r.id_empresa', $empresas))
                 ->when($idUsuario !== null, fn (Builder $consulta) => $consulta->where('r.id_usuario', $idUsuario));
             $emergenciais = $this->gerarEmergenciais(clone $rotinasAtivas, $agora, $idsRotinas);
@@ -135,6 +140,18 @@ class ExecucoesDiarias
 
             return $emergenciais + count($registros);
         }, 3);
+    }
+
+    /** @param list<int> $idsRotinas */
+    public function reatribuirPendentes(array $idsRotinas, int $responsavel, CarbonImmutable $agora): void
+    {
+        [$inicioDoDia] = self::janela($agora);
+
+        DB::table('rotinas_execucoes')->whereIntegerInRaw('id_rotina', $idsRotinas)
+            ->where(fn (Builder $consulta) => $consulta->where('previsto_em', '>=', $inicioDoDia)
+                ->orWhere('agenda_ate', '>', $agora->utc()))
+            ->where('status', 'pendente')->whereNull('iniciado_em')->whereNull('concluido_em')
+            ->update(['id_usuario_responsavel' => $responsavel, 'updated_at' => $agora->utc()]);
     }
 
     /** @param list<int>|null $idsRotinas */
@@ -273,7 +290,7 @@ class ExecucoesDiarias
     }
 
     /** @return list<int> */
-    private function diasDaSemana(string $dias): array
+    public function diasDaSemana(string $dias): array
     {
         $nomes = Str::lower(Str::ascii(trim($dias)));
         if (in_array($nomes, ['todos', 'todos os dias', 'diariamente'], true)) {

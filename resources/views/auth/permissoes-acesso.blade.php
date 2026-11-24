@@ -7,7 +7,7 @@
 @endpush
 
 @section('content')
-    <div class="mx-auto w-full max-w-5xl px-4 py-7 text-[#1e2d3d] sm:px-6 sm:py-9">
+<div class="text-[#1e2d3d]">
         <header class="mb-5">
             <h1 class="text-2xl font-bold sm:text-3xl" style="font-family: Fraunces, Georgia, serif">Permissões de Acesso</h1>
             <p class="mt-1 text-sm text-slate-600">Uma regra individual tem prioridade sobre a regra do grupo.</p>

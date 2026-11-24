@@ -27,26 +27,14 @@
             </div>
 
             <div>
-                <label for="selectColaboradorModalRotina" class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Colaborador(a)</label>
+                <label for="selectColaboradorModalRotina" class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Colaborador(a) (obrigatório)</label>
                 <select name="colaborador_id" id="selectColaboradorModalRotina" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
                     <option value="" disabled selected>Selecione a unidade primeiro</option>
                 </select>
             </div>
             
             @unless ($emergencial)
-            <div>
-                <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Situação da rotina</label>
-                <div class="flex items-center gap-6 pt-2">
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="status_rotina" value="Ativa" checked class="w-4 h-4 text-[#1e2d3d] focus:ring-[#1e2d3d]">
-                        <span class="text-sm text-gray-800">Ativa</span>
-                    </label>
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="status_rotina" value="Inativa" class="w-4 h-4 text-[#1e2d3d] focus:ring-[#1e2d3d]">
-                        <span class="text-sm text-gray-800">Inativa</span>
-                    </label>
-                </div>
-            </div>
+                <x-situacao-cadastro id="situacaoRotina" nome="status_rotina" rotulo="Situação da rotina" />
             @endunless
 
             <div>
@@ -123,13 +111,12 @@
 
     function abrirModalTarefaRotina() {
         const unidadeSelect = document.getElementById('selectUnidadeRotina');
-        if (!unidadeSelect?.reportValidity()) {
+        const colaboradorSelect = document.getElementById('selectColaboradorModalRotina');
+        if (!unidadeSelect?.reportValidity() || !colaboradorSelect.reportValidity()) {
             return;
         }
+        filtrarCatalogoDaRotina(unidadeSelect.value);
         @if ($emergencial)
-        if (!document.getElementById('selectColaboradorModalRotina').reportValidity()) {
-            return;
-        }
         preencherAgendamentoEmergencial();
         @endif
         

@@ -3,7 +3,7 @@
 @section('title', 'Detalhes do evento')
 
 @section('content')
-<div class="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+<div>
     <a href="{{ route('relatorios.logs-rotinas', $filtros) }}" class="inline-flex items-center gap-2 text-sm font-medium text-[#1e2d3d] hover:underline">
         <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Voltar aos logs
     </a>

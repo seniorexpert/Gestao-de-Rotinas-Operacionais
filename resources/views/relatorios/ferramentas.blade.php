@@ -3,7 +3,7 @@
 @section('title', 'Relatório de Ferramentas')
 
 @section('content')
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div>
     
     <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900 tracking-tight">Relatório de Ferramentas</h1>
@@ -35,6 +35,8 @@
                     <tr class="bg-[#fcfbf9] border-b border-gray-200 text-xs font-bold uppercase tracking-wider text-gray-500">
                         <th class="py-4 px-6 w-24">ID</th>
                         <th class="py-4 px-6">Ferramenta</th>
+                        <th class="py-4 px-6">Unidades</th>
+                        <th class="py-4 px-6">Situação</th>
                         <th class="py-4 px-6 w-28 text-right">Ação</th>
                     </tr>
                 </thead>
@@ -47,21 +49,23 @@
                                     <span class="font-bold text-gray-800 uppercase">{{ $ferramenta->ferramenta ?? 'Sem nome' }}</span>
                                 </div>
                             </td>
+                            <td class="py-4 px-6 text-gray-600">{{ $ferramenta->unidades->pluck('empresa')->join(', ') ?: 'Sem unidade' }}</td>
+                            <td class="py-4 px-6 text-gray-600">{{ $ferramenta->status ? 'Ativo' : 'Inativo' }}</td>
                             <td class="py-4 px-6 text-right">
-                                @php($dadosEdicao = ['id' => $ferramenta->id_ferramenta, 'nome' => $ferramenta->ferramenta])
-                                @can('editar-modulo', 'ferramentas')
+                                @php($dadosEdicao = ['id' => $ferramenta->id_ferramenta, 'nome' => $ferramenta->ferramenta, 'status' => (int) $ferramenta->status, 'unidades' => $ferramenta->ids_empresas])
+                                @if ($ferramenta->editavel && auth()->user()->can('editar-modulo', 'ferramentas'))
                                 <button type="button"
                                     onclick="abrirModalEdicao(@js($dadosEdicao))"
                                     class="inline-flex items-center space-x-1 text-sm font-semibold text-gray-700 hover:text-gray-900 transition">
                                     <span>Editar</span>
                                     <i class="fa-solid fa-chevron-right text-xs"></i>
                                 </button>
-                                @endcan
+                                @endif
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="3" class="py-8 text-center text-gray-400">
+                            <td colspan="5" class="py-8 text-center text-gray-400">
                                 Nenhuma ferramenta cadastrada no momento.
                             </td>
                         </tr>
@@ -120,6 +124,9 @@
     }
 
     function abrirModalEdicao(dados) {
+        const formulario = document.querySelector('#ferramentaModal form');
+        preencherUnidadesCadastro(formulario, dados.unidades);
+        formulario.elements.status.value = dados.status;
         const modalId = 'ferramentaModal'; 
         
         const inputId = document.getElementById('ferramenta_id');

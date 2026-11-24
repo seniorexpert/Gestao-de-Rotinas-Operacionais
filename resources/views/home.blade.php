@@ -11,7 +11,7 @@
 @endpush
 
 @section('content')
-<div class="mx-auto flex w-full flex-col gap-7 px-4 py-6 sm:gap-8 sm:px-6 sm:py-8 @can('visualizar-modulo', 'acompanhamento') max-w-6xl @else max-w-3xl @endcan">
+<div class="flex flex-col gap-7 sm:gap-8">
 @can('visualizar-modulo', 'acompanhamento')
     <section data-painel-acompanhamento data-url-acompanhamento="{{ route('acompanhamento.index', ['origem' => 'diarias']) }}"
              aria-label="Rotina de Acompanhamento"
@@ -69,6 +69,7 @@
                 $corIcone = trim((string) $rotina->cor_icone);
                 $corIcone = preg_match('/\A#(?:[\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})\z/i', $corIcone) ? $corIcone : null;
                 [$selo, $corSelo] = match (true) {
+                    $rotina->execucao_bloqueada => ['Rotina inativa', 'bg-slate-100 text-[#21394e]'],
                     $rotina->status === 'nao_realizada' => ['Não realizada', 'bg-rose-100 text-rose-800'],
                     $rotina->status === 'concluida' => ['Concluída', 'bg-emerald-100 text-emerald-800'],
                     $rotina->situacao_sla === 'atrasado' => [$emergencial ? 'Atrasada' : 'Em atraso', 'bg-rose-100 text-rose-800'],
@@ -91,7 +92,7 @@
                     'selo' => $selo,
                     'corSelo' => $corSelo,
                     'prazo' => $rotina->prazo_execucao,
-                    'sla' => $rotina->status === 'nao_realizada' ? null : (\App\Services\CalculadoraSla::ROTULOS[$rotina->situacao_sla] ?? 'Sem dados de SLA'),
+                    'sla' => $rotina->execucao_bloqueada || $rotina->status === 'nao_realizada' ? null : (\App\Services\CalculadoraSla::ROTULOS[$rotina->situacao_sla] ?? 'Sem dados de SLA'),
                     'acao' => $rotina->acao_execucao,
                     'auxilio' => (bool) $rotina->auxilio,
                     'comentario' => $rotina->comentario_conclusao,
@@ -102,7 +103,7 @@
 
             <button type="button" data-estado-rotina="{{ $rotina->status }}" data-busca="{{ $tarefa }} {{ $rotina->local }} {{ $morador }}"
                     @if ($aba !== 'todas' && $aba !== $rotina->status) hidden @endif
-                    @if ($rotina->status === 'em_andamento')
+                    @if ($rotina->status === 'em_andamento' && ! $rotina->execucao_bloqueada)
                         onclick="location.assign(@js(route('execucoes.realizando', $rotina->id_execucao)))"
                     @else
                         aria-haspopup="dialog" onclick="abrirModalDetalhes(@js($dados))"

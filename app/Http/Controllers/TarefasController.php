@@ -11,19 +11,21 @@ use Throwable;
 
 class TarefasController extends Controller
 {
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, CadastroCatalogo $catalogo): RedirectResponse
     {
         $dados = $request->validate([
-            'id' => 'nullable|integer|exists:tarefas,id_tarefa',
+            'id' => 'nullable|integer|min:1',
             'nome_tarefa' => 'required|string|max:100',
             'icone' => 'nullable|string|max:32',
             'cor_icone' => 'nullable|string|max:20',
             'tempo_tarefa' => 'required|numeric|min:0.01|max:1439.99',
             'status_tarefa' => 'required|in:Ativa,Inativa',
-            'id_ferramenta' => 'nullable|integer|exists:ferramentas,id_ferramenta',
+            'id_ferramenta' => 'nullable|integer|min:1',
+            'id_empresas' => ['required', 'array', 'list', 'min:1'],
+            'id_empresas.*' => ['required', 'integer', 'min:1', 'distinct'],
             'descricao_tarefa' => 'nullable|string',
             'manual_tarefa' => 'nullable|file|max:2048|mimes:pdf,doc,docx,odt,txt,png,jpg,jpeg,webp,xls,xlsx,csv,ods,ppt,pptx',
-        ]);
+        ], ['id_empresas.required' => 'Selecione pelo menos uma unidade.']);
 
         $segundos = (int) round($dados['tempo_tarefa'] * 60);
         $caminho = $request->file('manual_tarefa')?->store('arquivos_tarefas', 'public');
@@ -52,7 +54,7 @@ class TarefasController extends Controller
         }
 
         try {
-            CadastroCatalogo::salvar('tarefas', 'id_tarefa', $dados['id'] ?? null, $registro, 'tarefa');
+            $catalogo->salvar($request->user(), 'tarefas', $dados['id'] ?? null, $registro, $dados['id_empresas'], 'tarefa');
         } catch (Throwable $erro) {
             if ($caminho) {
                 Storage::disk('public')->delete($caminho);

@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div>
     <div class="mb-6">
         <h1 class="text-3xl font-bold text-[#101722] font-serif">Gestão de Acessos</h1>
         <p class="text-sm text-gray-500 mt-1">Gerencie os usuários e grupos de acesso do sistema.</p>

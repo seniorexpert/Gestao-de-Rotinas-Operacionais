@@ -4,48 +4,111 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Services\ConsultaRotinas;
+use App\Services\ExecucoesDiarias;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class RelatorioController extends Controller
 {
     public function __construct(private ConsultaRotinas $consultaRotinas) {}
 
-    public function tarefas(): View
+    public function tarefas(Request $request): View
     {
-        $tarefas = DB::table('tarefas as t')
-            ->leftJoin('ferramentas as f', 't.id_ferramenta', '=', 'f.id_ferramenta')
-            ->orderBy('t.id_tarefa')->get(['t.*', 'f.ferramenta']);
-        $ferramentas = DB::table('ferramentas')->orderBy('ferramenta')->get(['id_ferramenta', 'ferramenta']);
-
-        return view('relatorios.tarefas', compact('tarefas', 'ferramentas'));
-    }
-
-    public function locais(): View
-    {
-        return view('relatorios.locais', ['locais' => DB::table('locais')->orderBy('id_local')->get()]);
-    }
-
-    public function ferramentas(): View
-    {
-        return view('relatorios.ferramentas', ['ferramentas' => DB::table('ferramentas')->orderBy('id_ferramenta')->get()]);
-    }
-
-    public function rotinas(Request $request): View
-    {
-        $colaboradorFiltro = $request->validate(['colaborador' => 'nullable|string|max:255'])['colaborador'] ?? null;
         $usuario = $request->user();
+        $ferramentas = $this->consultaRotinas->ferramentasParaCadastro($usuario);
+        $tarefas = $this->consultaRotinas->comUnidades('tarefas', $usuario, $this->consultaRotinas->catalogo('tarefas', $usuario)
+            ->orderBy('c.id_tarefa')->get(['c.*']));
+        $ferramentasPorId = $ferramentas->keyBy('id_ferramenta');
+        foreach ($tarefas as $tarefa) {
+            $ferramenta = $ferramentasPorId->get($tarefa->id_ferramenta);
+            $tarefa->ferramenta = array_intersect($tarefa->ids_empresas, $ferramenta->ids_empresas ?? []) !== []
+                ? $ferramenta->ferramenta
+                : null;
+        }
+
+        return view('relatorios.tarefas', [
+            ...$this->consultaRotinas->unidadesParaCadastro($usuario),
+            'tarefas' => $tarefas,
+            'ferramentas' => $ferramentas,
+        ]);
+    }
+
+    public function locais(Request $request): View
+    {
+        $usuario = $request->user();
+
+        return view('relatorios.locais', [
+            ...$this->consultaRotinas->unidadesParaCadastro($usuario),
+            'locais' => $this->consultaRotinas->comUnidades('locais', $usuario, $this->consultaRotinas->catalogo('locais', $usuario)
+                ->orderBy('c.id_local')->get(['c.*'])),
+        ]);
+    }
+
+    public function ferramentas(Request $request): View
+    {
+        $usuario = $request->user();
+
+        return view('relatorios.ferramentas', [
+            ...$this->consultaRotinas->unidadesParaCadastro($usuario),
+            'ferramentas' => $this->consultaRotinas->ferramentasParaCadastro($usuario),
+        ]);
+    }
+
+    public function rotinas(Request $request, ExecucoesDiarias $execucoes): View
+    {
+        $filtros = $request->validate([
+            'colaborador' => 'nullable|string|max:255', 'editar' => 'nullable|string|max:36', 'tarefa' => 'nullable|integer|min:1',
+            'adicionar_tarefa' => 'nullable|boolean',
+        ]);
+        $colaboradorFiltro = $filtros['colaborador'] ?? null;
+        $usuario = $request->user();
+        $grupoEdicao = $filtros['editar'] ?? null;
+        $tarefasEdicao = collect();
+        $colaboradoresEdicao = collect();
+        $edicaoTarefa = null;
+        $rotinaParaAdicionarTarefa = null;
+        if ($grupoEdicao !== null) {
+            Gate::authorize('editar-modulo', 'rotinas');
+            $tarefasEdicao = $this->consultaRotinas->grupoDaRotina($this->consultaRotinas->rotinas($usuario), $grupoEdicao)
+                ->orderBy('r.horario')->orderBy('r.id_rotina')->get([
+                    'r.id_rotina', 'r.id_usuario', 'r.id_empresa', 'r.status', 'r.horario', 'r.dias_semanas', 'r.morador',
+                    'r.id_tarefa', 'r.id_local', 'r.auxilio', 'r.obs',
+                    'r.local as local_rotina', 'l.local as local_cadastrado', 't.tarefa', 't.icone', 't.cor_icone', 'e.empresa',
+                ]);
+            abort_if($tarefasEdicao->isEmpty(), 404);
+            $rotina = $tarefasEdicao->first();
+            $colaboradoresEdicao = $this->consultaRotinas->colaboradores($usuario, (int) $rotina->id_empresa)->get();
+            foreach ($tarefasEdicao as $tarefa) {
+                $tarefa->dias_programados = $execucoes->diasDaSemana($tarefa->dias_semanas);
+            }
+
+            if (isset($filtros['tarefa'])) {
+                $tarefa = $tarefasEdicao->firstWhere('id_rotina', $filtros['tarefa']);
+                abort_unless($tarefa, 404);
+                $edicaoTarefa = [
+                    'registro' => $tarefa,
+                    'dias' => $tarefa->dias_programados,
+                    'auxiliares' => DB::table('rotina_auxiliares')->where('id_rotina', $tarefa->id_rotina)->pluck('id_usuario')->all(),
+                ];
+            } elseif ($request->boolean('adicionar_tarefa')) {
+                $rotinaParaAdicionarTarefa = $rotina;
+            }
+        }
+
         $rotinas = $this->consultaRotinas->rotinasDiarias($usuario)
             ->when($colaboradorFiltro && $colaboradorFiltro !== 'Todas', fn (Builder $query) => $query->where('u.usuario', $colaboradorFiltro))
-            ->select('r.id_usuario', 'u.usuario as nome_colaborador', 'e.empresa as unidade_colaborador', 'g.grupo_acesso as cargo_colaborador')
+            ->select('r.id_usuario', 'r.grupo_rotina', 'u.usuario as nome_colaborador', 'e.empresa as unidade_colaborador', 'g.grupo_acesso as cargo_colaborador')
             ->selectRaw('MIN(r.id_rotina) as id_rotina_principal, MIN(r.horario) as horario_inicio, MAX(r.horario) as horario_fim')
             ->selectRaw('COUNT(r.id_rotina) as total_tarefas, MAX(CASE WHEN r.status = 1 THEN 1 ELSE 0 END) as status_rotina')
-            ->groupBy('r.id_usuario', 'u.usuario', 'e.id_empresa', 'e.empresa', 'g.grupo_acesso')
-            ->orderBy('u.usuario')->orderBy('e.empresa')->get();
+            ->selectRaw('MIN(CASE WHEN r.status = 1 THEN 1 ELSE 0 END) as todas_ativas')
+            ->groupBy('r.grupo_rotina', 'r.id_usuario', 'u.usuario', 'e.id_empresa', 'e.empresa', 'g.grupo_acesso')
+            ->groupByRaw('CASE WHEN r.grupo_rotina IS NULL THEN r.id_rotina END')
+            ->orderBy('u.usuario')->orderBy('e.empresa')->orderBy('id_rotina_principal')->get();
         $colaboradores = $this->nomesDosColaboradores($usuario);
 
         return view('relatorios.rotinas', [
@@ -53,6 +116,11 @@ class RelatorioController extends Controller
             'rotinas' => $rotinas,
             'colaboradores' => $colaboradores,
             'colaboradorFiltro' => $colaboradorFiltro,
+            'grupoEdicao' => $grupoEdicao,
+            'tarefasEdicao' => $tarefasEdicao,
+            'colaboradoresEdicao' => $colaboradoresEdicao,
+            'edicaoTarefa' => $edicaoTarefa,
+            'rotinaParaAdicionarTarefa' => $rotinaParaAdicionarTarefa,
         ]);
     }
 

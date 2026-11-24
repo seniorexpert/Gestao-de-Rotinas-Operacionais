@@ -8,16 +8,21 @@ use Illuminate\Http\Request;
 
 class LocaisController extends Controller
 {
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, CadastroCatalogo $catalogo): RedirectResponse
     {
         $dados = $request->validate([
-            'id' => 'nullable|integer|exists:locais,id_local',
+            'id' => 'nullable|integer|min:1',
             'nome_local' => 'required|string|max:100',
+            'id_empresa' => ['required', 'integer', 'min:1'],
+            'status' => ['sometimes', 'boolean'],
+        ], [
+            'id_empresa.required' => 'Selecione uma unidade.',
         ]);
 
-        CadastroCatalogo::salvar('locais', 'id_local', $dados['id'] ?? null, [
+        $catalogo->salvar($request->user(), 'locais', $dados['id'] ?? null, [
             'local' => $dados['nome_local'],
-        ], 'local');
+            ...isset($dados['status']) ? ['status' => (bool) $dados['status']] : [],
+        ], [$dados['id_empresa']], 'local');
 
         return back()->with('success', 'Local salvo com sucesso.');
     }

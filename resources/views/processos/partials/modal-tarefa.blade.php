@@ -1,4 +1,4 @@
-<div id="taskModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/50 p-4">
+<div id="taskModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/50 p-4">
     <div class="relative flex max-h-[90vh] w-full max-w-xl flex-col rounded-3xl bg-white p-8 shadow-2xl">
         <button type="button" onclick="closeModal('taskModal')" class="absolute top-6 right-6 text-gray-400 hover:text-gray-700 focus:outline-none">
             <i class="fa-solid fa-xmark text-xl"></i>
@@ -14,6 +14,16 @@
 
             <input type="hidden" name="id" id="tarefa_id">
 
+            <x-unidades-cadastro id="unidadesTarefa" :empresas="$empresas" :padrao="$unidadePadrao" multiplo />
+
+            <div>
+                <label for="status_tarefa" class="mb-2 block text-xs font-bold tracking-wider text-[#1e2d3d] uppercase">Situação</label>
+                <select name="status_tarefa" id="status_tarefa" class="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3.5 text-sm text-gray-800 focus:border-[#1e2d3d] focus:outline-none">
+                    <option value="Ativa">Ativa</option>
+                    <option value="Inativa">Inativa</option>
+                </select>
+            </div>
+
             <div>
                 <label class="mb-2 block text-xs font-bold tracking-wider text-[#1e2d3d] uppercase">Nome da tarefa</label>
                 <input type="text" name="nome_tarefa" id="nome_tarefa" required class="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3.5 text-sm text-gray-800 focus:border-[#1e2d3d] focus:outline-none" placeholder="Ex.: Alimentação">
@@ -28,19 +38,12 @@
             </div>
 
             <div>
-                <label class="mb-2 block text-xs font-bold tracking-wider text-[#1e2d3d] uppercase">Situação</label>
-                <select name="status_tarefa" id="status_tarefa" class="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3.5 text-sm text-gray-800 focus:border-[#1e2d3d] focus:outline-none">
-                    <option value="Ativa">Ativa</option>
-                    <option value="Inativa">Inativa</option>
-                </select>
-            </div>
-
-            <div>
                 <label for="id_ferramenta" class="mb-2 block text-xs font-bold tracking-wider text-[#1e2d3d] uppercase">Ferramenta</label>
                 <select name="id_ferramenta" id="id_ferramenta" class="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3.5 text-sm text-gray-800 focus:border-[#1e2d3d] focus:outline-none">
                     <option value="">Nenhuma ferramenta</option>
                     @foreach ($ferramentas as $ferramenta)
-                        <option value="{{ $ferramenta->id_ferramenta }}">{{ $ferramenta->ferramenta }}</option>
+                        <option value="{{ $ferramenta->id_ferramenta }}" data-unidades="{{ implode(',', $ferramenta->ids_empresas) }}"
+                                data-ativa="{{ (int) $ferramenta->status }}">{{ $ferramenta->ferramenta }}{{ $ferramenta->status ? '' : ' (inativa)' }}</option>
                     @endforeach
                 </select>
             </div>
@@ -117,6 +120,26 @@
 
 <script>
     (function () {
+        const formulario = document.querySelector('#taskModal form');
+        const selectFerramenta = formulario.elements.id_ferramenta;
+
+        function filtrarFerramentas() {
+            const unidades = [...formulario.querySelectorAll('[data-unidade-cadastro]:checked')].map(campo => campo.value);
+            for (const opcao of selectFerramenta.options) {
+                if (!opcao.value) continue;
+                const vinculadas = opcao.dataset.unidades.split(',');
+                const ativa = opcao.dataset.ativa === '1' || (opcao.selected && formulario.elements.id.value);
+                opcao.disabled = opcao.hidden = !ativa || !unidades.some(id => vinculadas.includes(id));
+            }
+            if (selectFerramenta.selectedOptions[0]?.disabled) selectFerramenta.value = '';
+        }
+
+        formulario.addEventListener('change', (evento) => {
+            if (evento.target.matches('[data-unidade-cadastro]')) filtrarFerramentas();
+        });
+        formulario.addEventListener('reset', () => setTimeout(filtrarFerramentas, 0));
+        filtrarFerramentas();
+
         const CORES_MAP = {
             'original': { label: 'Cores originais', hex: null },
             '#1e2d3d':  { label: 'Azul escuro',    hex: '#1e2d3d' },
@@ -216,15 +239,11 @@
         const modal = document.getElementById('taskModal');
         if (modal) {
             const observer = new MutationObserver(() => {
-                const visivel = !modal.classList.contains('hidden') && getComputedStyle(modal).display !== 'none';
-                if (visivel) {
-                    modal.style.display = 'flex';
-                    modal.style.alignItems = 'center';
-                    modal.style.justifyContent = 'center';
+                if (!modal.classList.contains('hidden')) {
                     window.atualizarPreviewCorIcone();
                 }
             });
-            observer.observe(modal, { attributes: true, attributeFilter: ['class', 'style'] });
+            observer.observe(modal, { attributeFilter: ['class'] });
         }
 
         document.addEventListener('DOMContentLoaded', function () {

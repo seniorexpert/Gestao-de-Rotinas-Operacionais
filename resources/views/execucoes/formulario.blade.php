@@ -23,7 +23,7 @@
 
 @section('content')
 <form method="POST" action="{{ route($rota, $execucao->id_execucao) }}" @if ($finalizar) enctype="multipart/form-data" @endif
-      class="mx-auto flex min-h-[calc(100dvh_-_12rem)] w-full max-w-[38rem] flex-col px-4 pt-5 text-[#21394e] sm:px-6">
+      class="flex min-h-[calc(100dvh_-_16rem)] w-full max-w-[38rem] flex-col text-[#21394e]">
     @csrf
     @if ($protocolo)
         <input type="hidden" name="protocolo" value="{{ $protocolo }}">

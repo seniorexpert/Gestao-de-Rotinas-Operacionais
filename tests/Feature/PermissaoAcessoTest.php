@@ -39,6 +39,8 @@ class PermissaoAcessoTest extends TestCase
         $grupo = GrupoAcesso::create(['grupo_acesso' => 'Equipe operacional', 'status' => true]);
         $admin = $this->usuario('admin');
         $colaborador = $this->usuario('ana', $grupo);
+        $unidade = Empresa::create(['empresa' => 'Unidade Centro']);
+        $colaborador->empresas()->attach($unidade, ['empresa_nome' => $unidade->empresa]);
         $regrasDoGrupo = route('permissoes.update', ['grupo', $grupo->getKey()]);
         $regrasIndividuais = route('permissoes.update', ['usuario', $colaborador->getKey()]);
 
@@ -59,7 +61,7 @@ class PermissaoAcessoTest extends TestCase
         $this->put($regrasIndividuais, ['regras' => ['tarefas' => '2', 'locais' => '0', 'monitoramento' => '1']])->assertSessionHasNoErrors();
         $this->actingAs($colaborador)->get(route('relatorios.tarefas'))->assertOk()->assertSeeText('Novo registro');
         $this->post(route('tarefas.store'), [
-            'nome_tarefa' => 'Conferir materiais', 'tempo_tarefa' => '5', 'status_tarefa' => 'Ativa',
+            'nome_tarefa' => 'Conferir materiais', 'tempo_tarefa' => '5', 'status_tarefa' => 'Ativa', 'id_empresas' => [$unidade->getKey()],
         ])->assertSessionHas('success');
         $this->get(route('relatorios.locais'))->assertForbidden();
         $this->get(route('monitoramento.index'))->assertOk()->assertDontSeeText('Atribuir tarefa');

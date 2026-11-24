@@ -2,28 +2,73 @@
     $emergencial = $emergencial ?? false;
     $modalTarefa = $emergencial ? 'tarefaRotinaEmergencialModal' : 'tarefaRotinaModal';
     $agoraEmergencial = $emergencial ? now(\App\Services\ExecucoesDiarias::FUSO) : null;
+    $tarefaEmEdicao = $edicaoTarefa['registro'] ?? null;
+    $editandoTarefa = $tarefaEmEdicao !== null;
+    $rotinaDaTarefa = $tarefaEmEdicao ?? $rotinaParaAdicionarTarefa ?? null;
+    $salvarNaRotina = $rotinaDaTarefa !== null;
+    $localObrigatorio = !$editandoTarefa || $tarefaEmEdicao->id_local !== null;
+    $classeCancelar = 'w-1/2 py-3.5 rounded-2xl border border-[#e5dec9] text-[#1e2d3d] hover:bg-gray-50 text-sm font-bold transition text-center';
+    $acaoFormulario = route($emergencial ? 'rotinas.emergenciais.store' : 'rotinas.store');
+    $idFormulario = 'formSalvarRotina';
+    if ($salvarNaRotina) {
+        $acaoFormulario = $editandoTarefa
+            ? route('rotinas.tarefas.update', [$grupoEdicao, $tarefaEmEdicao->id_rotina])
+            : route('rotinas.tarefas.store', $grupoEdicao);
+        $idFormulario = $editandoTarefa ? 'formEditarTarefaRotina' : 'formAdicionarTarefaRotina';
+        $voltarParaRotina = route('relatorios.rotinas', array_filter(['colaborador' => $colaboradorFiltro, 'editar' => $grupoEdicao]));
+        $unidadeDaTarefa = (int) $rotinaDaTarefa->id_empresa;
+        $tarefas = $tarefas->filter(fn ($tarefa) => in_array($unidadeDaTarefa, $tarefa->ids_empresas, true));
+        $locais = $locais->filter(fn ($local) => in_array($unidadeDaTarefa, $local->ids_empresas, true));
+        $diasSelecionados = array_map('intval', array_filter((array) old('dias', $errors->any() ? [] : ($edicaoTarefa['dias'] ?? [])), 'is_scalar'));
+        $auxiliaresSelecionados = array_map('intval', array_filter((array) old('auxiliares', $errors->any() ? [] : ($edicaoTarefa['auxiliares'] ?? [])), 'is_scalar'));
+        $auxilioSelecionado = in_array(old('auxilio', (int) ($tarefaEmEdicao->auxilio ?? 0)), [1, '1'], true);
+        $horarioSelecionado = old('horario', substr($tarefaEmEdicao->horario ?? '', 0, 8));
+        $tarefaSelecionada = old('id_tarefa', $tarefaEmEdicao->id_tarefa ?? null);
+        $localSelecionado = old('id_local', $tarefaEmEdicao->id_local ?? null);
+        $moradorSelecionado = old('morador', $tarefaEmEdicao->morador ?? null);
+        $observacaoSelecionada = old('observacao', $tarefaEmEdicao->obs ?? null);
+    }
 @endphp
 
-<div id="{{ $modalTarefa }}" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl max-w-xl w-full p-8 relative shadow-2xl max-h-[90vh] flex flex-col">
-        <button type="button" onclick="fecharModalTarefa()" class="absolute top-6 right-6 text-gray-400 hover:text-gray-700 focus:outline-none">
-            <i class="fa-solid fa-xmark text-xl"></i>
-        </button>
+<div id="{{ $modalTarefa }}" role="dialog" aria-modal="true" aria-labelledby="modalTarefaTitulo" @class(['fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4', 'hidden' => !$salvarNaRotina])>
+    <div class="bg-white rounded-3xl max-w-xl w-full p-5 sm:p-8 relative shadow-2xl max-h-[90vh] flex flex-col">
+        @if ($salvarNaRotina)
+            <a href="{{ $voltarParaRotina }}" aria-label="Fechar" class="absolute top-6 right-6 text-gray-400 hover:text-gray-700">
+                <i class="fa-solid fa-xmark text-xl" aria-hidden="true"></i>
+            </a>
+        @else
+            <button type="button" onclick="fecharModalTarefa()" aria-label="Fechar" class="absolute top-6 right-6 text-gray-400 hover:text-gray-700">
+                <i class="fa-solid fa-xmark text-xl" aria-hidden="true"></i>
+            </button>
+        @endif
 
-        <div class="flex-shrink-0">
+        <div class="shrink-0 pr-8">
             <h2 id="modalTarefaTitulo" class="text-3xl font-bold text-[#1e2d3d] mb-1">{{ $emergencial ? 'Dados da tarefa emergencial' : 'Dados da tarefa' }}</h2>
-            <p class="sans-text text-gray-500 text-sm mb-6">Adicione esta tarefa à rotina</p>
+            <p class="sans-text text-gray-500 text-sm mb-6">{{ $editandoTarefa ? 'Edite os dados da tarefa da rotina' : 'Adicione esta tarefa à rotina' }}</p>
         </div>
 
-        <form action="{{ route($emergencial ? 'rotinas.emergenciais.store' : 'rotinas.store') }}" method="POST" id="formSalvarRotina" class="space-y-6 sans-text overflow-y-auto flex-1 pr-1">
+        <form action="{{ $acaoFormulario }}" method="POST" id="{{ $idFormulario }}" class="space-y-6 sans-text overflow-y-auto flex-1 pr-1">
             @csrf
-            <input type="hidden" name="tarefas_json" id="tarefasJsonInput">
-            <input type="hidden" name="id_empresa">
-            <input type="hidden" name="colaborador_id">
-            @unless ($emergencial)
-                <input type="hidden" name="status_rotina">
-            @endunless
-            <input type="hidden" id="tarefaIndexEdicao" value="">
+            @if ($salvarNaRotina)
+                @if ($editandoTarefa)
+                    @method('PUT')
+                @endif
+                @if ($errors->any())
+                    <ul role="alert" class="space-y-1 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                        @foreach ($errors->all() as $erro)
+                            <li>{{ $erro }}</li>
+                        @endforeach
+                    </ul>
+                @endif
+            @else
+                <input type="hidden" name="tarefas_json" id="tarefasJsonInput">
+                <input type="hidden" name="id_empresa">
+                <input type="hidden" name="colaborador_id">
+                @unless ($emergencial)
+                    <input type="hidden" name="status_rotina">
+                @endunless
+                <input type="hidden" id="tarefaIndexEdicao" value="">
+            @endif
 
             @if ($emergencial)
                 <div>
@@ -49,64 +94,53 @@
                         <input type="checkbox" id="selectAllDias" onchange="toggleTodosDias(this)" class="w-4 h-4 rounded border-gray-300 text-[#1e2d3d] focus:ring-[#1e2d3d]">
                     </label>
 
-                    <label class="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-2 rounded-xl transition">
-                        <span class="text-sm text-gray-800">Domingo</span>
-                        <input type="checkbox" name="dias_semana[]" value="Domingo" onchange="atualizarContagemDias()" class="w-4 h-4 rounded border-gray-300 text-[#1e2d3d] focus:ring-[#1e2d3d] dia-checkbox">
-                    </label>
-
-                    <label class="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-2 rounded-xl transition">
-                        <span class="text-sm text-gray-800">Segunda-feira</span>
-                        <input type="checkbox" name="dias_semana[]" value="Segunda-feira" onchange="atualizarContagemDias()" class="w-4 h-4 rounded border-gray-300 text-[#1e2d3d] focus:ring-[#1e2d3d] dia-checkbox">
-                    </label>
-
-                    <label class="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-2 rounded-xl transition">
-                        <span class="text-sm text-gray-800">Terça-feira</span>
-                        <input type="checkbox" name="dias_semana[]" value="Terça-feira" onchange="atualizarContagemDias()" class="w-4 h-4 rounded border-gray-300 text-[#1e2d3d] focus:ring-[#1e2d3d] dia-checkbox">
-                    </label>
-
-                    <label class="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-2 rounded-xl transition">
-                        <span class="text-sm text-gray-800">Quarta-feira</span>
-                        <input type="checkbox" name="dias_semana[]" value="Quarta-feira" onchange="atualizarContagemDias()" class="w-4 h-4 rounded border-gray-300 text-[#1e2d3d] focus:ring-[#1e2d3d] dia-checkbox">
-                    </label>
-
-                    <label class="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-2 rounded-xl transition">
-                        <span class="text-sm text-gray-800">Quinta-feira</span>
-                        <input type="checkbox" name="dias_semana[]" value="Quinta-feira" onchange="atualizarContagemDias()" class="w-4 h-4 rounded border-gray-300 text-[#1e2d3d] focus:ring-[#1e2d3d] dia-checkbox">
-                    </label>
-
-                    <label class="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-2 rounded-xl transition">
-                        <span class="text-sm text-gray-800">Sexta-feira</span>
-                        <input type="checkbox" name="dias_semana[]" value="Sexta-feira" onchange="atualizarContagemDias()" class="w-4 h-4 rounded border-gray-300 text-[#1e2d3d] focus:ring-[#1e2d3d] dia-checkbox">
-                    </label>
-
-                    <label class="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-2 rounded-xl transition">
-                        <span class="text-sm text-gray-800">Sábado</span>
-                        <input type="checkbox" name="dias_semana[]" value="Sábado" onchange="atualizarContagemDias()" class="w-4 h-4 rounded border-gray-300 text-[#1e2d3d] focus:ring-[#1e2d3d] dia-checkbox">
-                    </label>
+                    @foreach (\App\Services\ExecucoesDiarias::DIAS_DA_SEMANA as $dia => $nome)
+                        <label class="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-2 rounded-xl transition">
+                            <span class="text-sm text-gray-800">{{ $nome }}</span>
+                            <input type="checkbox" name="{{ $salvarNaRotina ? 'dias[]' : 'dias_semana[]' }}" value="{{ $salvarNaRotina ? $dia : $nome }}"
+                                   @checked($salvarNaRotina && in_array($dia, $diasSelecionados, true)) onchange="atualizarContagemDias()"
+                                   class="w-4 h-4 rounded border-gray-300 text-[#1e2d3d] focus:ring-[#1e2d3d] dia-checkbox">
+                        </label>
+                    @endforeach
                 </div>
             </div>
             @endif
 
             <div>
                 <label for="inputHorario" class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Horário</label>
-                <input type="time" name="horario" id="inputHorario" required @if ($emergencial) value="{{ $agoraEmergencial->format('H:i') }}" @endif
+                <input type="time" name="horario" id="inputHorario" required
+                       @if ($salvarNaRotina) step="1" value="{{ is_string($horarioSelecionado) ? $horarioSelecionado : '' }}"
+                       @elseif ($emergencial) value="{{ $agoraEmergencial->format('H:i') }}" @endif
                        class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
+                @if ($editandoTarefa)
+                    <p class="mt-1 text-xs text-gray-500">O horário e os dias atualizados valem para as próximas execuções geradas.</p>
+                @endif
             </div>
 
             <div>
-                <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Tarefa</label>
-                <select name="tarefa" id="selectTarefa" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
-                    <option value="" disabled selected>Selecione a tarefa</option>
+                <label for="selectTarefa" class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Tarefa</label>
+                <select name="{{ $salvarNaRotina ? 'id_tarefa' : 'tarefa' }}" id="selectTarefa" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
+                    <option value="" disabled @selected(!$salvarNaRotina || blank($tarefaSelecionada))>Selecione a tarefa</option>
+                    @if ($editandoTarefa && !$tarefas->contains('id_tarefa', $tarefaEmEdicao->id_tarefa))
+                        <option value="{{ $tarefaEmEdicao->id_tarefa }}" @selected($tarefaSelecionada == $tarefaEmEdicao->id_tarefa)>{{ $tarefaEmEdicao->tarefa ?? 'Tarefa atual' }}</option>
+                    @endif
                     @foreach ($tarefas as $tarefa)
-                        <option value="{{ $tarefa->id_tarefa }}">{{ $tarefa->tarefa }}</option>
+                        <option value="{{ $tarefa->id_tarefa }}" data-unidades="{{ implode(',', $tarefa->ids_empresas) }}" @selected($salvarNaRotina && $tarefaSelecionada == $tarefa->id_tarefa)>{{ $tarefa->tarefa }}</option>
                     @endforeach
                 </select>
             </div>
 
             <div>
-                <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Morador(a)</label>
-                <select name="morador" id="selectMorador" required onchange="aoMudarMorador(this.value)" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
-                    <option value="" disabled selected>Selecione a unidade primeiro</option>
+                <label for="selectMorador" class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Morador(a)</label>
+                <select name="morador" id="selectMorador" @required(!$salvarNaRotina) onchange="aoMudarMorador(this.value)" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
+                    @if ($salvarNaRotina)
+                        <option value="{{ $moradorSelecionado === 'Nenhum (Tarefa Geral)' ? $moradorSelecionado : '' }}">Nenhum (Tarefa Geral)</option>
+                        @if (is_string($moradorSelecionado) && filled($moradorSelecionado) && $moradorSelecionado !== 'Nenhum (Tarefa Geral)')
+                            <option value="{{ $moradorSelecionado }}" selected>{{ $moradorSelecionado }}</option>
+                        @endif
+                    @else
+                        <option value="" disabled selected>Selecione a unidade primeiro</option>
+                    @endif
                 </select>
             </div>
 
@@ -125,11 +159,16 @@
             </div>
 
             <div>
-                <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Local</label>
-                <select name="local" id="selectLocal" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
-                    <option value="" disabled selected>Selecione o local</option>
+                <label for="selectLocal" class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Local</label>
+                <select name="{{ $salvarNaRotina ? 'id_local' : 'local' }}" id="selectLocal" @required($localObrigatorio) class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
+                    <option value="" @disabled($localObrigatorio) @selected(!$salvarNaRotina || blank($localSelecionado))>
+                        {{ $localObrigatorio ? 'Selecione o local' : ($tarefaEmEdicao->local_rotina ?: 'Selecione o local') }}
+                    </option>
+                    @if ($editandoTarefa && $tarefaEmEdicao->id_local !== null && !$locais->contains('id_local', $tarefaEmEdicao->id_local))
+                        <option value="{{ $tarefaEmEdicao->id_local }}" @selected($localSelecionado == $tarefaEmEdicao->id_local)>{{ $tarefaEmEdicao->local_cadastrado ?: $tarefaEmEdicao->local_rotina ?: 'Local atual' }}</option>
+                    @endif
                     @foreach ($locais as $local)
-                        <option value="{{ $local->id_local }}">{{ $local->local }}</option>
+                        <option value="{{ $local->id_local }}" data-unidades="{{ implode(',', $local->ids_empresas) }}" @selected($salvarNaRotina && $localSelecionado == $local->id_local)>{{ $local->local }}</option>
                     @endforeach
                 </select>
             </div>
@@ -138,37 +177,50 @@
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Necessita auxílio?</label>
                 <div class="flex items-center gap-6 pt-2">
                     <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="necessita_auxilio" value="Não" checked onchange="toggleCuidadorAuxiliar(false)" class="w-4 h-4 text-[#1e2d3d] focus:ring-[#1e2d3d]">
+                        <input type="radio" name="{{ $salvarNaRotina ? 'auxilio' : 'necessita_auxilio' }}" value="{{ $salvarNaRotina ? '0' : 'Não' }}" @checked(!$salvarNaRotina || !$auxilioSelecionado) onchange="toggleCuidadorAuxiliar(false)" class="w-4 h-4 text-[#1e2d3d] focus:ring-[#1e2d3d]">
                         <span class="text-sm text-gray-800">Não</span>
                     </label>
                     <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="necessita_auxilio" value="Sim" onchange="toggleCuidadorAuxiliar(true)" class="w-4 h-4 text-[#1e2d3d] focus:ring-[#1e2d3d]">
+                        <input type="radio" name="{{ $salvarNaRotina ? 'auxilio' : 'necessita_auxilio' }}" value="{{ $salvarNaRotina ? '1' : 'Sim' }}" @checked($salvarNaRotina && $auxilioSelecionado) onchange="toggleCuidadorAuxiliar(true)" class="w-4 h-4 text-[#1e2d3d] focus:ring-[#1e2d3d]">
                         <span class="text-sm text-gray-800">Sim</span>
                     </label>
                 </div>
             </div>
 
-            <div id="campoCuidadorAuxiliar" class="hidden">
-                <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Cuidador(a) auxiliar</label>
-                <select name="cuidador_auxiliar" id="selectCuidadorAux" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
-                    <option value="" disabled selected>Selecione se necessário</option>
+            <div id="campoCuidadorAuxiliar" @class(['hidden' => !$salvarNaRotina || !$auxilioSelecionado])>
+                <label for="selectCuidadorAux" class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">{{ $salvarNaRotina ? 'Colaboradores auxiliares' : 'Cuidador(a) auxiliar' }}</label>
+                <select name="{{ $salvarNaRotina ? 'auxiliares[]' : 'cuidador_auxiliar' }}" id="selectCuidadorAux" @if ($salvarNaRotina) multiple size="3" @endif class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
+                    @if ($salvarNaRotina)
+                        @forelse ($colaboradoresEdicao->where('id_usuario', '!=', $rotinaDaTarefa->id_usuario) as $auxiliar)
+                            <option value="{{ $auxiliar->id_usuario }}" @selected(in_array((int) $auxiliar->id_usuario, $auxiliaresSelecionados, true))>{{ $auxiliar->usuario }}</option>
+                        @empty
+                            <option disabled>Nenhum outro colaborador vinculado à unidade.</option>
+                        @endforelse
+                    @else
+                        <option value="" disabled selected>Selecione se necessário</option>
+                    @endif
                 </select>
             </div>
 
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Observação</label>
-                <textarea name="observacao" id="inputObservacao" rows="3" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]" placeholder="Orientações adicionais (opcional)"></textarea>
+                <textarea name="observacao" id="inputObservacao" rows="3" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]" placeholder="Orientações adicionais (opcional)">{{ is_string($observacaoSelecionada ?? null) ? $observacaoSelecionada : '' }}</textarea>
             </div>
 
             <div class="flex items-center justify-end gap-4 pt-4 sticky bottom-0 bg-white pb-1">
-                <button type="button" onclick="fecharModalTarefa()" class="w-1/2 py-3.5 rounded-2xl border border-[#e5dec9] text-[#1e2d3d] hover:bg-gray-50 text-sm font-bold transition text-center">Cancelar</button>
-                <button type="button" onclick="salvarTarefaDaRotina()" class="w-1/2 py-3.5 rounded-2xl bg-[#1e2d3d] text-white hover:bg-opacity-90 text-sm font-bold transition text-center">Adicionar à rotina</button>
+                @if ($salvarNaRotina)
+                    <a href="{{ $voltarParaRotina }}" class="{{ $classeCancelar }}">Cancelar</a>
+                @else
+                    <button type="button" onclick="fecharModalTarefa()" class="{{ $classeCancelar }}">Cancelar</button>
+                @endif
+                <button type="{{ $salvarNaRotina ? 'submit' : 'button' }}" @unless ($salvarNaRotina) onclick="salvarTarefaDaRotina()" @endunless class="w-1/2 py-3.5 rounded-2xl bg-[#1e2d3d] text-white hover:bg-[#1e2d3d]/90 text-sm font-bold transition text-center">{{ $editandoTarefa ? 'Salvar tarefa' : 'Adicionar à rotina' }}</button>
             </div>
         </form>
     </div>
 </div>
 
 <script>
+    @unless ($salvarNaRotina)
     let listaTarefasMemoria = [];
 
     @if ($emergencial)
@@ -203,6 +255,7 @@
         const selectCuidador = document.getElementById('selectCuidadorAux');
         carregarUsuariosPorUnidade(selectCuidador, unidadeId, 'Selecione se necessário', valorSelecionado);
     }
+    @endunless
 
     function toggleDiasDropdown() {
         const lista = document.getElementById('diasDropdownList');
@@ -254,6 +307,13 @@
         }
     }
 
+    function escaparTexto(texto) {
+        const elemento = document.createElement('span');
+        elemento.textContent = texto;
+        return elemento.innerHTML;
+    }
+
+    @unless ($salvarNaRotina)
     function salvarTarefaDaRotina() {
         const indexEdicao = document.getElementById('tarefaIndexEdicao').value;
         const campoData = document.getElementById('inputDataEmergencial');
@@ -305,12 +365,6 @@
 
         renderizarTarefasNaTela();
         fecharModalTarefa();
-    }
-
-    function escaparTexto(texto) {
-        const elemento = document.createElement('span');
-        elemento.textContent = texto;
-        return elemento.innerHTML;
     }
 
     function renderizarTarefasNaTela() {
@@ -371,7 +425,18 @@
         if (icone) icone.classList.toggle('rotate-180');
     }
 
+    function filtrarCatalogoDaRotina(unidade) {
+        for (const campo of ['selectTarefa', 'selectLocal']) {
+            const select = document.getElementById(campo);
+            for (const opcao of select.querySelectorAll('[data-unidades]')) {
+                opcao.disabled = opcao.hidden = !opcao.dataset.unidades.split(',').includes(unidade);
+            }
+            if (select.selectedOptions[0]?.disabled) select.value = '';
+        }
+    }
+
     function editarTarefa(index) {
+        filtrarCatalogoDaRotina(document.getElementById('selectUnidadeRotina').value);
         const unidadeSelect = document.getElementById('selectUnidadeRotina');
         const unidadeId = unidadeSelect ? unidadeSelect.value : '';
         const t = listaTarefasMemoria[index];
@@ -444,24 +509,33 @@
 
         esconderCardMorador();
     }
+    @endunless
 
     function carregarMoradoresPorUnidade(unidadeNome) {
         const selectMorador = document.getElementById('selectMorador');
         if (!selectMorador) return;
 
+        @unless ($salvarNaRotina)
         const tarefaGeral = 'Nenhum (Tarefa Geral)';
         selectMorador.replaceChildren(new Option(tarefaGeral, tarefaGeral, true, true));
         esconderCardMorador();
+        @endunless
 
         fetch(`https://adm.gestaoseniorexpert.com.br/consulta_moradores.php/${encodeURIComponent(unidadeNome)}`)
             .then(response => response.json())
             .then(data => {
+                @unless ($salvarNaRotina)
                 const unidade = document.getElementById('selectUnidadeRotina');
                 if (unidade.selectedOptions[0]?.dataset.nome !== unidadeNome) {
                     return;
                 }
+                @endunless
+                const cadastrados = new Set([...selectMorador.options].map(opcao => opcao.text));
                 for (const nomeMorador of Array.isArray(data) ? data : []) {
-                    selectMorador.add(new Option(nomeMorador, nomeMorador));
+                    if (!cadastrados.has(nomeMorador)) {
+                        selectMorador.add(new Option(nomeMorador, nomeMorador));
+                        cadastrados.add(nomeMorador);
+                    }
                 }
             })
             .catch(() => {
@@ -511,6 +585,11 @@
         if (card) card.classList.add('hidden');
     }
 
+    @if ($salvarNaRotina)
+    atualizarContagemDias();
+    aoMudarMorador(document.getElementById('selectMorador').value);
+    carregarMoradoresPorUnidade(@js($rotinaDaTarefa->empresa));
+    @else
     function enviarRotinasParaBanco() {
         const unidade = document.getElementById('selectUnidadeRotina');
         const colaborador = document.getElementById('selectColaboradorModalRotina');
@@ -525,7 +604,7 @@
         form.elements.id_empresa.value = unidade.value;
         form.elements.colaborador_id.value = colaborador.value;
         if (form.elements.status_rotina) {
-            form.elements.status_rotina.value = document.querySelector('input[type="radio"][name="status_rotina"]:checked')?.value ?? 'Ativa';
+            form.elements.status_rotina.value = document.getElementById('situacaoRotina').value;
         }
 
         const inputJson = form.querySelector('#tarefasJsonInput');
@@ -538,4 +617,5 @@
 
         form.submit();
     }
+    @endif
 </script>

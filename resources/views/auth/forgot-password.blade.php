@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('content')
-<div class="max-w-xl mx-auto px-4 py-12">
+<div class="max-w-xl">
     <div class="mb-6">
         <h1 class="text-xl font-bold text-gray-900">Meu Perfil</h1>
         <p class="text-sm text-gray-500 mt-0.5">Atualize a sua senha de acesso</p>

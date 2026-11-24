@@ -63,6 +63,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/centro-monitoramento', [MonitoramentoController::class, 'index'])->can('visualizar-modulo', "'monitoramento'")->name('monitoramento.index');
     Route::post('/rotinas/atribuir', [MonitoramentoController::class, 'atribuir'])->can('editar-modulo', "'monitoramento'")->name('rotinas.atribuir');
     Route::post('/rotinas/salvar', [RotinasController::class, 'store'])->can('editar-modulo', "'rotinas'")->name('rotinas.store');
+    Route::put('/rotinas/{grupo}', [RotinasController::class, 'update'])->can('editar-modulo', "'rotinas'")->name('rotinas.update');
+    Route::post('/rotinas/{grupo}/tarefas', [RotinasController::class, 'adicionarTarefa'])
+        ->can('editar-modulo', "'rotinas'")->name('rotinas.tarefas.store');
+    Route::put('/rotinas/{grupo}/tarefas/{tarefa}', [RotinasController::class, 'atualizarTarefa'])->whereNumber('tarefa')
+        ->can('editar-modulo', "'rotinas'")->name('rotinas.tarefas.update');
+    Route::delete('/rotinas/{grupo}', [RotinasController::class, 'excluir'])->can('editar-modulo', "'rotinas'")->name('rotinas.destroy');
+    Route::delete('/rotinas/{grupo}/tarefas/{tarefa}', [RotinasController::class, 'excluir'])->whereNumber('tarefa')
+        ->can('editar-modulo', "'rotinas'")->name('rotinas.tarefas.destroy');
     Route::post('/rotinas-emergenciais', [RotinasEmergenciaisController::class, 'store'])
         ->can('editar-modulo', "'processos'")->can('editar-modulo', "'rotinas'")->name('rotinas.emergenciais.store');
     Route::post('/ferramentas', [FerramentasController::class, 'store'])->can('editar-modulo', "'ferramentas'")->name('ferramentas.store');

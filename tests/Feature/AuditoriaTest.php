@@ -81,17 +81,20 @@ class AuditoriaTest extends TestCase
     public function test_catalogos_registram_antes_e_depois_sem_duplicar_a_operacao(): void
     {
         $usuario = $this->usuario('lara-auditoria');
+        $unidade = Empresa::create(['empresa' => 'Unidade Centro']);
+        $usuario->empresas()->attach($unidade, ['empresa_nome' => $unidade->empresa]);
         $id = DB::table('locais')->insertGetId(['local' => 'Sala de estar', 'status' => true], 'id_local');
+        DB::table('locais_empresas')->insert(['id_local' => $id, 'id_empresa' => $unidade->getKey()]);
 
-        $this->actingAs($usuario)->post(route('locais.store'), ['id' => $id, 'nome_local' => 'Sala de convivência'])
+        $this->actingAs($usuario)->post(route('locais.store'), ['id' => $id, 'nome_local' => 'Sala de convivência', 'id_empresa' => $unidade->getKey()])
             ->assertRedirect()->assertSessionHasNoErrors();
 
         $registros = DB::table('logs_auditoria')->where('rota', 'locais.store')->get();
         $this->assertCount(1, $registros);
         $this->assertSame('UPDATE', $registros->first()->acao);
         $this->assertSame((string) $id, $registros->first()->registro_id);
-        $this->assertSame(['local' => 'Sala de estar'], json_decode($registros->first()->dados_anteriores, true));
-        $this->assertSame(['local' => 'Sala de convivência'], json_decode($registros->first()->dados_novos, true));
+        $this->assertSame(['local' => 'Sala de estar', 'id_empresas' => [$unidade->getKey()]], json_decode($registros->first()->dados_anteriores, true));
+        $this->assertSame(['local' => 'Sala de convivência', 'id_empresas' => [$unidade->getKey()]], json_decode($registros->first()->dados_novos, true));
     }
 
     public function test_execucao_registra_inicio_conclusao_e_repeticao_sem_alteracao(): void

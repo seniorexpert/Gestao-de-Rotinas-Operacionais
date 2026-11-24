@@ -7,7 +7,7 @@
 @endpush
 
 @section('content')
-    <div class="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6 lg:py-8">
+    <div class="max-w-4xl">
         <a href="{{ $voltar }}"
            class="mb-4 inline-flex items-center gap-2 rounded-lg border border-[#b39359]/30 bg-[#f4f1ea]/60 px-3 py-2 text-sm font-semibold text-[#1e2d3d] transition hover:bg-[#f4f1ea]">
             <i class="fa-solid fa-arrow-left text-xs" aria-hidden="true"></i>

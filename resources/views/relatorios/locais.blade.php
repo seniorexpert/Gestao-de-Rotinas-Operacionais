@@ -3,7 +3,7 @@
 @section('title', 'Relatório de Locais')
 
 @section('content')
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div>
     
     <div class="mb-8">
         <h1 class="text-3xl font-bold text-gray-900 tracking-tight">Relatório de Locais</h1>
@@ -35,6 +35,8 @@
                     <tr class="bg-[#fcfbf9] border-b border-gray-200 text-xs font-bold uppercase tracking-wider text-gray-500">
                         <th class="py-4 px-6 w-24">ID</th>
                         <th class="py-4 px-6">Local</th>
+                        <th class="py-4 px-6">Unidade</th>
+                        <th class="py-4 px-6">Situação</th>
                         <th class="py-4 px-6 w-28 text-right">Ação</th>
                     </tr>
                 </thead>
@@ -47,21 +49,23 @@
                                     <span class="font-bold text-gray-800 uppercase">{{ $local->local }}</span>
                                 </div>
                             </td>
+                            <td class="py-4 px-6 text-gray-600">{{ $local->unidades->pluck('empresa')->join(', ') ?: 'Sem unidade' }}</td>
+                            <td class="py-4 px-6 text-gray-600">{{ $local->status ? 'Ativo' : 'Inativo' }}</td>
                             <td class="py-4 px-6 text-right">
-                                @php($dadosEdicao = ['id' => $local->id_local, 'nome' => $local->local])
-                                @can('editar-modulo', 'locais')
+                                @php($dadosEdicao = ['id' => $local->id_local, 'nome' => $local->local, 'status' => (int) $local->status, 'unidades' => $local->ids_empresas])
+                                @if ($local->editavel && auth()->user()->can('editar-modulo', 'locais'))
                                 <button type="button"
                                     onclick="abrirModalEdicao(@js($dadosEdicao))"
                                     class="inline-flex items-center space-x-1 text-sm font-semibold text-gray-700 hover:text-gray-900 transition">
                                     <span>Editar</span>
                                     <i class="fa-solid fa-chevron-right text-xs"></i>
                                 </button>
-                                @endcan
+                                @endif
                             </td>
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="3" class="py-8 text-center text-gray-400">
+                            <td colspan="5" class="py-8 text-center text-gray-400">
                                 Nenhum local cadastrado no momento.
                             </td>
                         </tr>
@@ -120,6 +124,9 @@
     }
 
     function abrirModalEdicao(dados) {
+        const formulario = document.querySelector('#localModal form');
+        preencherUnidadesCadastro(formulario, dados.unidades);
+        formulario.elements.status.value = dados.status;
         const modalId = 'localModal'; 
         
         const inputId = document.getElementById('local_id');

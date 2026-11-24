@@ -27,6 +27,11 @@ class RegistrarAtividadeHttp
         'processos.usuarios-por-unidade' => ['CONSULTAR', 'usuarios', 'Consulta de colaboradores da unidade'],
         'monitoramento.index' => ['CONSULTAR', 'rotinas', 'Consulta do Centro de Monitoramento'],
         'rotinas.store' => ['CREATE', 'rotinas', 'Cadastro de rotina'],
+        'rotinas.update' => ['UPDATE', 'rotinas', 'Edição de rotina'],
+        'rotinas.destroy' => ['DELETE', 'rotinas', 'Exclusão de rotina'],
+        'rotinas.tarefas.destroy' => ['DELETE', 'rotinas', 'Remoção de tarefa da rotina'],
+        'rotinas.tarefas.update' => ['UPDATE', 'rotinas', 'Edição de tarefa da rotina'],
+        'rotinas.tarefas.store' => ['CREATE', 'rotinas', 'Inclusão de tarefa na rotina'],
         'rotinas.emergenciais.store' => ['CREATE', 'rotinas', 'Cadastro de tarefa emergencial'],
         'rotinas.atribuir' => ['UPDATE', 'rotinas', 'Atribuição de rotinas'],
         'execucoes.iniciar' => ['INICIAR', 'rotinas_execucoes', 'Início de execução'],
@@ -88,7 +93,7 @@ class RegistrarAtividadeHttp
 
         if ($resultado === 'sucesso' && in_array($rota, [
             'execucoes.iniciar', 'execucoes.concluir', 'execucoes.nao-realizada', 'execucoes.auxilio',
-            'acompanhamento.store', 'users.update', 'rotinas.atribuir',
+            'acompanhamento.store', 'users.update', 'rotinas.atribuir', 'rotinas.update', 'rotinas.tarefas.update',
         ], true)) {
             $resultado = 'sem_alteracao';
         }

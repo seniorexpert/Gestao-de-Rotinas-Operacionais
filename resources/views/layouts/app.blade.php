@@ -473,7 +473,7 @@
     </aside>
 
     <div>
-        <header class="border-b border-gray-100 px-4 sm:px-6 py-4 flex items-center justify-between relative">
+        <header class="relative flex items-center justify-between border-b px-4 sm:px-6 @yield('estilo-cabecalho', 'border-gray-100 py-4')">
             <div class="flex items-center space-x-4">
                 <button type="button" id="openSidebar" class="text-gray-700 hover:text-gray-900 focus:outline-none" aria-label="Abrir menu lateral" aria-controls="sidebar" aria-expanded="false">
                     <i class="fa-solid fa-bars text-xl"></i>
@@ -537,15 +537,15 @@
             </div>
         </header>
 
-        <main>
+        <main class="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
             @if (request()->routeIs('home', 'execucoes.realizando', 'processos.*', 'monitoramento.index', 'relatorios.rotinas', 'relatorios.tarefas', 'relatorios.locais', 'relatorios.ferramentas'))
                 @if (session('success'))
-                    <p class="mx-auto mt-4 max-w-6xl rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
+                    <p class="mb-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800" role="status">
                         {{ session('success') }}
                     </p>
                 @endif
                 @if ($errors->any())
-                    <ul class="mx-auto mt-4 max-w-6xl rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
+                    <ul class="mb-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-800" role="alert">
                         @foreach ($errors->all() as $erro)
                             <li>{{ $erro }}</li>
                         @endforeach

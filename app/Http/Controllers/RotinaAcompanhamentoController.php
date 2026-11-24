@@ -318,7 +318,9 @@ class RotinaAcompanhamentoController extends Controller
                 'g.grupo_acesso as grupo_origem',
             ]);
 
-        return $this->rotinas->filtrarEmergenciaisDisponiveis($consulta);
+        return $this->rotinas->filtrarExecucoesVisiveis($consulta)
+            ->where(fn (Builder $visiveis) => $visiveis->where('r.status', true)
+                ->orWhereIn('e.status', ['concluida', 'nao_realizada']));
     }
 
     private function itens(User $usuario, string $tipo): Builder

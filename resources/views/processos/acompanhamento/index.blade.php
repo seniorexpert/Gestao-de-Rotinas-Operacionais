@@ -7,7 +7,7 @@
 @endpush
 
 @section('content')
-    <div class="mx-auto w-full max-w-7xl px-4 py-7 sm:px-6 lg:px-8 lg:py-9">
+    <div>
         <header class="mb-5 lg:mb-6">
             <h1 class="text-[1.8rem] font-semibold leading-tight text-[#1e2d3d] lg:text-[2rem]"
                 style="font-family: 'Fraunces', Georgia, serif;">

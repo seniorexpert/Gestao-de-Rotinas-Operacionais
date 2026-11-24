@@ -8,16 +8,22 @@ use Illuminate\Http\Request;
 
 class FerramentasController extends Controller
 {
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request, CadastroCatalogo $catalogo): RedirectResponse
     {
         $dados = $request->validate([
-            'id' => 'nullable|integer|exists:ferramentas,id_ferramenta',
+            'id' => 'nullable|integer|min:1',
             'nome_ferramenta' => 'required|string|max:100',
+            'id_empresas' => ['required', 'array', 'list', 'min:1'],
+            'id_empresas.*' => ['required', 'integer', 'min:1', 'distinct'],
+            'status' => ['sometimes', 'boolean'],
+        ], [
+            'id_empresas.required' => 'Selecione pelo menos uma unidade.',
         ]);
 
-        CadastroCatalogo::salvar('ferramentas', 'id_ferramenta', $dados['id'] ?? null, [
+        $catalogo->salvar($request->user(), 'ferramentas', $dados['id'] ?? null, [
             'ferramenta' => $dados['nome_ferramenta'],
-        ], 'ferramenta');
+            ...isset($dados['status']) ? ['status' => (bool) $dados['status']] : [],
+        ], $dados['id_empresas'], 'ferramenta');
 
         return back()->with('success', 'Ferramenta salva com sucesso.');
     }

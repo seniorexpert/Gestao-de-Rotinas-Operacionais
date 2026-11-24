@@ -12,6 +12,9 @@
             
             <input type="hidden" name="id" id="local_id">
 
+            <x-unidades-cadastro id="unidadeLocal" :empresas="$empresas" :padrao="$unidadePadrao" />
+            <x-situacao-cadastro id="situacaoLocal" />
+
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Nome do local</label>
                 <input type="text" name="nome_local" id="nome_local" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]" placeholder="Informe nome do local">

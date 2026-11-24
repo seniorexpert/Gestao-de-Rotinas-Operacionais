@@ -3,7 +3,7 @@
 @section('title', $titulo)
 
 @section('content')
-<div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+<div>
     <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
         <h1 class="font-serif text-3xl font-bold text-[#1e2d3d]">{{ $titulo }}</h1>
         <a href="{{ route('relatorios.logs.excel.exportar', $filtros) }}"

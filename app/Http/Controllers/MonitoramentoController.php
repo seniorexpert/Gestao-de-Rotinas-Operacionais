@@ -8,10 +8,10 @@ use App\Services\ConsultaRotinas;
 use App\Services\ExecucoesDiarias;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
-use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
@@ -86,11 +86,11 @@ class MonitoramentoController extends Controller
         ]);
 
         DB::transaction(function () use ($request, $dados) {
-            $rotinas = DB::table('rotinas')
-                ->whereIn('id_empresa', $this->consultaRotinas->empresas($request->user()))
+            $rotinas = $this->consultaRotinas->cadastrosDeRotinas($request->user())
                 ->whereIn('id_rotina', $dados['rotinas_ids'])
+                ->orderBy('id_rotina')
                 ->lockForUpdate()
-                ->get(['id_rotina', 'id_empresa', 'id_usuario']);
+                ->get(['id_rotina', 'id_empresa', 'id_usuario', 'grupo_rotina']);
 
             abort_unless($rotinas->count() === count($dados['rotinas_ids']), 404);
 
@@ -108,17 +108,19 @@ class MonitoramentoController extends Controller
 
             $novoResponsavel = (int) $dados['novo_colaborador_id'];
             $alteradas = $rotinas->reject(fn (object $rotina): bool => (int) $rotina->id_usuario === $novoResponsavel);
-            $ids = $alteradas->pluck('id_rotina');
-            $agora = now()->toImmutable();
-            [$inicioDoDia] = ExecucoesDiarias::janela($agora);
+            $agora = now('UTC')->toImmutable();
 
-            DB::table('rotinas')->whereIn('id_rotina', $ids)
-                ->update(['id_usuario' => $novoResponsavel, 'updated_at' => $agora]);
-            DB::table('rotinas_execucoes')->whereIn('id_rotina', $ids)
-                ->where(fn (Builder $consulta) => $consulta->where('previsto_em', '>=', $inicioDoDia)
-                    ->orWhere('agenda_ate', '>', $agora->utc()))
-                ->where('status', 'pendente')->whereNull('iniciado_em')->whereNull('concluido_em')
-                ->update(['id_usuario_responsavel' => $novoResponsavel, 'updated_at' => $agora]);
+            foreach ($alteradas->groupBy('grupo_rotina') as $grupo => $tarefas) {
+                DB::table('rotinas')->whereIntegerInRaw('id_rotina', $tarefas->pluck('id_rotina')->all())
+                    ->update([
+                        'id_usuario' => $novoResponsavel,
+                        'grupo_rotina' => $grupo === '' ? null : (string) Str::uuid(),
+                        'updated_at' => $agora,
+                    ]);
+            }
+            if ($alteradas->isNotEmpty()) {
+                $this->execucoesDiarias->reatribuirPendentes($alteradas->pluck('id_rotina')->all(), $novoResponsavel, $agora);
+            }
 
             foreach ($alteradas as $rotina) {
                 AuditoriaService::registrar(
@@ -128,7 +130,7 @@ class MonitoramentoController extends Controller
                     idRotina: (int) $rotina->id_rotina,
                 );
             }
-        });
+        }, 3);
 
         return back()->with('success', 'Tarefas atribuídas com sucesso!');
     }

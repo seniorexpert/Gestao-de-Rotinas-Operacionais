@@ -3,7 +3,7 @@
 @section('title', 'Centro de Monitoramento')
 
 @section('content')
-<div class="mx-auto max-w-7xl px-4 py-8 text-slate-800 sm:px-6">
+<div class="text-slate-800">
     <div class="mb-7 flex flex-wrap items-center justify-between gap-4">
         <h1 class="font-serif text-3xl font-bold">Centro de Monitoramento</h1>
         @can('editar-modulo', 'monitoramento')

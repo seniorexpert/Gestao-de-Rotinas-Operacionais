@@ -68,14 +68,14 @@ class HomeController extends Controller
         foreach ($rotinas as $rotina) {
             $rotina->local = trim($rotina->local_rotina ?? '') ?: (trim($rotina->local_cadastrado ?? '') ?: 'Não informado');
             $previsto = CarbonImmutable::parse($rotina->previsto_em, 'UTC')->setTimezone(ExecucoesDiarias::FUSO);
-            $horario = $rotina->horario ? substr($rotina->horario, 0, 5) : $previsto->format('H:i');
-            $rotina->horario = $horario.' · '.$previsto->format('d/m/Y');
+            $rotina->horario = $previsto->format('H:i · d/m/Y');
             $rotina->data_conclusao = $rotina->status === 'concluida'
                 ? CarbonImmutable::parse($rotina->concluido_em, 'UTC')->setTimezone(ExecucoesDiarias::FUSO)
                 : null;
             $rotina->url_documentacao = $rotina->documentacao ? Storage::disk('public')->url($rotina->documentacao) : null;
             $rotina->situacao_sla = null;
             $rotina->prazo_execucao = null;
+            $rotina->execucao_bloqueada = ! $rotina->rotina_ativa && in_array($rotina->status, ['pendente', 'em_andamento'], true);
             $rotina->acao_execucao = match (true) {
                 $editar && $rotina->status === 'pendente' && (bool) $rotina->rotina_ativa => [
                     'url' => route('execucoes.iniciar', $rotina->id_execucao), 'rotulo' => 'Iniciar tarefa',
@@ -83,7 +83,7 @@ class HomeController extends Controller
                 default => null,
             };
 
-            if ($rotina->status === 'nao_realizada') {
+            if ($rotina->execucao_bloqueada || $rotina->status === 'nao_realizada') {
                 continue;
             }
 

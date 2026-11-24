@@ -30,7 +30,7 @@ class ExecucoesController extends Controller
     public function realizando(Request $request, int $id): View
     {
         $execucao = $this->consultarExecucao($request, $id);
-        abort_unless($execucao->status === 'em_andamento' && $execucao->iniciado_em, 404);
+        abort_unless($execucao->rotina_ativa && $execucao->status === 'em_andamento' && $execucao->iniciado_em, 404);
         $limite = $execucao->tipo_rotina === ExecucoesDiarias::TIPO_EMERGENCIAL
             ? $this->sla->calcular($execucao)['prazo_em']
             : $execucao->prazo_em;
@@ -45,7 +45,7 @@ class ExecucoesController extends Controller
     public function formulario(Request $request, int $id, string $acao): View
     {
         $execucao = $this->consultarExecucao($request, $id);
-        abort_unless($execucao->status === 'em_andamento' && $execucao->iniciado_em, 404);
+        abort_unless($execucao->rotina_ativa && $execucao->status === 'em_andamento' && $execucao->iniciado_em, 404);
 
         $protocolo = $acao === 'auxilio' ? (string) Str::uuid() : null;
 
@@ -253,7 +253,7 @@ class ExecucoesController extends Controller
         $execucao = $this->rotinas->execucoesPessoais($request->user())->where('e.id_execucao', $id)->first();
         abort_unless($execucao, 404);
 
-        $execucao->horario = $execucao->horario ? substr($execucao->horario, 0, 5) : 'Não informado';
+        $execucao->horario = Carbon::parse($execucao->previsto_em, 'UTC')->setTimezone(ExecucoesDiarias::FUSO)->format('H:i');
         $execucao->local = trim($execucao->local_rotina ?? '') ?: (trim($execucao->local_cadastrado ?? '') ?: 'Não informado');
 
         return $execucao;
@@ -304,8 +304,10 @@ class ExecucoesController extends Controller
         $usuario = $request->user();
 
         $consulta = DB::table('rotinas_execucoes as e')
-            ->join('rotinas as r', 'r.id_rotina', '=', 'e.id_rotina')
+            ->join('rotinas as r', fn ($vinculo) => $vinculo
+                ->on('r.id_rotina', '=', 'e.id_rotina')->on('r.id_empresa', '=', 'e.id_empresa'))
             ->where('e.id_execucao', $id)
+            ->where('r.status', true)->whereNull('r.excluida_em')
             ->when(! $usuario->isAdmin(), fn ($consulta) => $consulta->where('e.id_usuario_responsavel', $usuario->getKey()))
             ->whereIn('e.id_empresa', $this->rotinas->empresas($usuario));
         $execucao = $this->rotinas->filtrarEmergenciaisDisponiveis($consulta)->lockForUpdate()->first(['e.*', 'r.tipo_rotina']);

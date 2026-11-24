@@ -12,6 +12,9 @@
             
             <input type="hidden" name="id" id="ferramenta_id">
 
+            <x-unidades-cadastro id="unidadesFerramenta" :empresas="$empresas" :padrao="$unidadePadrao" multiplo />
+            <x-situacao-cadastro id="situacaoFerramenta" />
+
             <div>
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Nome da ferramenta</label>
                 <input type="text" name="nome_ferramenta" id="nome_ferramenta" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]" placeholder="Informe nome da ferramenta">

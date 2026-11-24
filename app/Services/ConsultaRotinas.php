@@ -8,10 +8,17 @@ use Illuminate\Database\Query\Builder;
 use Illuminate\Database\Query\JoinClause;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use stdClass;
 
 class ConsultaRotinas
 {
+    public const CHAVES_CATALOGO = [
+        'tarefas' => 'id_tarefa',
+        'ferramentas' => 'id_ferramenta',
+        'locais' => 'id_local',
+    ];
+
     public function empresas(User $usuario): Builder
     {
         if ($usuario->isAdmin()) {
@@ -23,31 +30,54 @@ class ConsultaRotinas
             ->where('id_usuario', $usuario->getKey());
     }
 
-    public function colaboradores(User $usuario): Builder
+    public function colaboradores(User $usuario, ?int $idEmpresa = null): Builder
     {
         return DB::table('usuarios as u')
             ->leftJoin('grupos_acesso as g', 'u.id_grupo_acesso', '=', 'g.id_grupo_acesso')
             ->whereIn('u.id_usuario', DB::table('empresa_usuario')
                 ->select('id_usuario')
+                ->when($idEmpresa !== null, fn (Builder $vinculos) => $vinculos->where('id_empresa', $idEmpresa))
                 ->whereIn('id_empresa', $this->empresas($usuario)))
             ->select('u.id_usuario', 'u.usuario', 'g.grupo_acesso')
             ->orderBy('u.usuario');
     }
 
-    public function rotinas(User $usuario): Builder
+    public function cadastrosDeRotinas(User $usuario): Builder
     {
         return DB::table('rotinas as r')
+            ->whereIn('r.id_empresa', $this->empresas($usuario))
+            ->whereNull('r.excluida_em');
+    }
+
+    public function rotinas(User $usuario): Builder
+    {
+        return $this->cadastrosDeRotinas($usuario)
             ->join('usuarios as u', 'r.id_usuario', '=', 'u.id_usuario')
             ->join('empresas as e', 'r.id_empresa', '=', 'e.id_empresa')
             ->leftJoin('grupos_acesso as g', 'u.id_grupo_acesso', '=', 'g.id_grupo_acesso')
             ->leftJoin('tarefas as t', 'r.id_tarefa', '=', 't.id_tarefa')
-            ->leftJoin('locais as l', 'r.id_local', '=', 'l.id_local')
-            ->whereIn('r.id_empresa', $this->empresas($usuario));
+            ->leftJoin('locais as l', 'r.id_local', '=', 'l.id_local');
     }
 
     public function rotinasDiarias(User $usuario): Builder
     {
         return $this->rotinas($usuario)->where('r.tipo_rotina', ExecucoesDiarias::TIPO_DIARIA);
+    }
+
+    public function grupoDaRotina(Builder $consulta, string $grupo): Builder
+    {
+        $grupoIdentificado = Str::isUuid($grupo);
+        abort_unless($grupoIdentificado || (ctype_digit($grupo) && filter_var($grupo, FILTER_VALIDATE_INT) > 0), 404);
+
+        return $consulta->where('r.tipo_rotina', ExecucoesDiarias::TIPO_DIARIA)
+            ->when($grupoIdentificado, fn (Builder $rotinas) => $rotinas->where('r.grupo_rotina', $grupo),
+                fn (Builder $rotinas) => $rotinas->whereNull('r.grupo_rotina')->where('r.id_rotina', (int) $grupo));
+    }
+
+    public function filtrarExecucoesVisiveis(Builder $consulta): Builder
+    {
+        return $this->filtrarEmergenciaisDisponiveis($consulta)
+            ->whereNull('r.excluida_em');
     }
 
     public function filtrarEmergenciaisDisponiveis(Builder $consulta): Builder
@@ -81,7 +111,7 @@ class ConsultaRotinas
                 'r.status as rotina_ativa', 'r.id_usuario as rotina_responsavel',
             ]);
 
-        return $this->filtrarEmergenciaisDisponiveis($consulta);
+        return $this->filtrarExecucoesVisiveis($consulta);
     }
 
     public function execucoesDaAgenda(User $usuario, CarbonImmutable $agora): Builder
@@ -102,7 +132,10 @@ class ConsultaRotinas
         $consulta = $agora ? $this->execucoesDaAgenda($usuario, $agora) : $this->execucoes($usuario);
 
         return $consulta->when(! $usuario->isAdmin(), fn (Builder $consulta) => $consulta->where('e.id_usuario_responsavel', $usuario->getKey()))
-            ->leftJoin('ferramentas as f', 't.id_ferramenta', '=', 'f.id_ferramenta')
+            ->leftJoin('ferramentas_empresas as fe', fn (JoinClause $join) => $join
+                ->on('fe.id_ferramenta', '=', 't.id_ferramenta')
+                ->on('fe.id_empresa', '=', 'e.id_empresa'))
+            ->leftJoin('ferramentas as f', 'fe.id_ferramenta', '=', 'f.id_ferramenta')
             ->addSelect('e.agenda_ate', 'r.horario', 'r.obs', 'r.auxilio', 't.descricao', 't.documentacao', 't.icone', 't.cor_icone', 'f.ferramenta',
                 'e.comentario_conclusao', 'e.foto_conclusao', 'e.justificativa_nao_realizada');
     }
@@ -117,6 +150,7 @@ class ConsultaRotinas
         $jornadas = DB::table('rotinas_execucoes as e')
             ->join('rotinas as r', 'r.id_rotina', '=', 'e.id_rotina')
             ->where('r.tipo_rotina', ExecucoesDiarias::TIPO_DIARIA)
+            ->whereNull('r.excluida_em')
             ->whereIn('e.id_empresa', $this->empresas($usuario))
             ->when(! $usuario->isAdmin(), fn (Builder $consulta) => $consulta->where('e.id_usuario_responsavel', $usuario->getKey()))
             ->where('e.agenda_ate', '>', $agora)
@@ -161,14 +195,75 @@ class ConsultaRotinas
             });
     }
 
-    /** @return array{empresas: Collection, tarefas: Collection, locais: Collection} */
+    /** @return array{empresas: Collection, unidadePadrao: ?int} */
+    public function unidadesParaCadastro(User $usuario): array
+    {
+        $empresas = DB::table('empresas')->whereIn('id_empresa', $this->empresas($usuario))
+            ->orderBy('empresa')->get(['id_empresa', 'empresa']);
+        $vinculada = DB::table('empresa_usuario')->where('id_usuario', $usuario->getKey())
+            ->orderBy('id_empresa')->value('id_empresa');
+        $padrao = $vinculada ?? ($empresas->count() === 1 ? $empresas->first()->id_empresa : null);
+
+        return ['empresas' => $empresas, 'unidadePadrao' => $padrao === null ? null : (int) $padrao];
+    }
+
+    public function catalogo(string $tabela, User $usuario): Builder
+    {
+        $chave = self::CHAVES_CATALOGO[$tabela];
+
+        return DB::table($tabela.' as c')->when(! $usuario->isAdmin(), fn (Builder $consulta) => $consulta
+            ->whereExists(fn (Builder $vinculo) => $vinculo->from($tabela.'_empresas as v')
+                ->whereColumn('v.'.$chave, 'c.'.$chave)
+                ->whereIn('v.id_empresa', $this->empresas($usuario))));
+    }
+
+    public function catalogoNaUnidade(string $tabela, int $unidade): Builder
+    {
+        $chave = self::CHAVES_CATALOGO[$tabela];
+
+        return DB::table($tabela.' as c')->join($tabela.'_empresas as v', 'v.'.$chave, '=', 'c.'.$chave)
+            ->where('v.id_empresa', $unidade)->where('c.status', true);
+    }
+
+    /** @return Collection<int, stdClass> */
+    public function comUnidades(string $tabela, User $usuario, Collection $registros): Collection
+    {
+        if ($registros->isEmpty()) {
+            return $registros;
+        }
+        $chave = self::CHAVES_CATALOGO[$tabela];
+        $vinculos = DB::table($tabela.'_empresas as v')->join('empresas as e', 'e.id_empresa', '=', 'v.id_empresa')
+            ->whereIntegerInRaw('v.'.$chave, $registros->pluck($chave)->all());
+        $totais = $usuario->isAdmin() ? collect() : (clone $vinculos)->groupBy('v.'.$chave)
+            ->select('v.'.$chave)->selectRaw('COUNT(*) as total')->pluck('total', $chave);
+        $unidades = $vinculos->whereIn('v.id_empresa', $this->empresas($usuario))
+            ->orderBy('e.empresa')->get(['v.'.$chave, 'v.id_empresa', 'e.empresa'])->groupBy($chave);
+
+        foreach ($registros as $registro) {
+            $registro->unidades = $unidades->get($registro->{$chave}, collect());
+            $registro->ids_empresas = $registro->unidades->pluck('id_empresa')->map(fn ($id): int => (int) $id)->all();
+            $registro->editavel = $usuario->isAdmin() || $registro->unidades->count() === (int) $totais->get($registro->{$chave});
+        }
+
+        return $registros;
+    }
+
+    /** @return array{empresas: Collection, unidadePadrao: ?int, tarefas: Collection, locais: Collection} */
     public function catalogos(User $usuario): array
     {
         return [
-            'empresas' => DB::table('empresas')->whereIn('id_empresa', $this->empresas($usuario))
-                ->orderBy('empresa')->get(['id_empresa', 'empresa']),
-            'tarefas' => DB::table('tarefas')->orderBy('tarefa')->get(['id_tarefa', 'tarefa']),
-            'locais' => DB::table('locais')->orderBy('local')->get(['id_local', 'local']),
+            ...$this->unidadesParaCadastro($usuario),
+            'tarefas' => $this->comUnidades('tarefas', $usuario, $this->catalogo('tarefas', $usuario)
+                ->where('c.status', true)->orderBy('c.tarefa')->get(['c.id_tarefa', 'c.tarefa'])),
+            'locais' => $this->comUnidades('locais', $usuario, $this->catalogo('locais', $usuario)
+                ->where('c.status', true)->orderBy('c.local')->get(['c.id_local', 'c.local'])),
         ];
+    }
+
+    /** @return Collection<int, stdClass> */
+    public function ferramentasParaCadastro(User $usuario): Collection
+    {
+        return $this->comUnidades('ferramentas', $usuario, $this->catalogo('ferramentas', $usuario)
+            ->orderBy('c.ferramenta')->get(['c.id_ferramenta', 'c.ferramenta', 'c.status']));
     }
 }
