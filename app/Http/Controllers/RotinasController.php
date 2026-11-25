@@ -339,11 +339,16 @@ class RotinasController extends Controller
 
         $dias = collect($dados['dias'])->map(fn ($dia): int => (int) $dia)->sort()->values()->all();
         $auxiliares = collect($dados['auxiliares'] ?? [])->map(fn ($id): int => (int) $id)->sort()->values()->all();
+        $horario = $dados['horario'];
+        if (strlen($horario) === 5) {
+            $horarioAtual = substr($registro?->horario ?? '', 0, 8);
+            $horario = substr($horarioAtual, 0, 5) === $horario ? $horarioAtual : $horario.':00';
+        }
 
         return [[
             'dias_semanas' => $registro && $dias === $this->execucoes->diasDaSemana($registro->dias_semanas)
                 ? $registro->dias_semanas : implode(', ', array_map(fn (int $dia): string => ExecucoesDiarias::DIAS_DA_SEMANA[$dia], $dias)),
-            'horario' => strlen($dados['horario']) === 5 ? $dados['horario'].':00' : $dados['horario'],
+            'horario' => $horario,
             'id_tarefa' => $idTarefa,
             'id_local' => $idLocal,
             'local' => $local,

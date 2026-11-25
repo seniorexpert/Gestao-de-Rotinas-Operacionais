@@ -241,8 +241,8 @@ class EsquemaRotinasTest extends TestCase
         $edicao = route('relatorios.rotinas', ['editar' => $grupo, 'tarefa' => $primeira]);
         $url = route('rotinas.tarefas.update', [$grupo, $primeira]);
         $this->get(route('relatorios.rotinas', ['editar' => $grupo]))->assertSee($edicao);
-        $this->get($edicao)->assertOk()->assertSee('id="tarefaRotinaModal"', false)
-            ->assertSeeTextInOrder(['Dados da tarefa', 'Dia(s) da semana', 'Observação', 'Salvar tarefa'])->assertSee('08:00:00');
+        $this->get($edicao)->assertOk()->assertSee('id="tarefaRotinaModal"', false)->assertSee('step="60" value="08:00"', false)
+            ->assertSeeTextInOrder(['Dados da tarefa', 'Dia(s) da semana', 'Observação', 'Salvar tarefa']);
 
         $this->from($edicao)->put($url, [
             'dias' => ['2', '3'], 'horario' => '10:30', 'id_tarefa' => $catalogo['tarefa'], 'id_local' => $catalogo['local'],
@@ -258,6 +258,24 @@ class EsquemaRotinasTest extends TestCase
 
         $this->travelTo($agora->addDay()->setTime(8, 0));
         $this->get(route('home'))->assertViewHas('rotinas', fn ($rotinas) => $rotinas->firstWhere('id_rotina', $primeira)->horario === '10:30 · 25/11/2026');
+    }
+
+    public function test_edicao_exibe_horas_e_minutos_e_preserva_o_horario_quando_o_minuto_nao_muda(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $usuario = $this->usuario('Joana Exemplo', $empresa);
+        $catalogo = $this->catalogo($empresa);
+        $tarefa = $this->rotina($empresa, $usuario, $catalogo);
+        DB::table('rotinas')->where('id_rotina', $tarefa)->update(['horario' => '08:15:30']);
+        $edicao = route('relatorios.rotinas', ['editar' => $tarefa, 'tarefa' => $tarefa]);
+
+        $this->actingAs($usuario)->get($edicao)->assertOk()->assertSee('step="60" value="08:15"', false);
+        $this->from($edicao)->put(route('rotinas.tarefas.update', [$tarefa, $tarefa]), [
+            'dias' => ['1'], 'horario' => '08:15', 'id_tarefa' => $catalogo['tarefa'], 'id_local' => $catalogo['local'],
+            'auxilio' => '0', 'observacao' => 'Conferir material',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('rotinas', ['id_rotina' => $tarefa, 'horario' => '08:15:30', 'obs' => 'Conferir material']);
     }
 
     public function test_edicao_de_tarefa_da_rotina_valida_o_grupo_e_o_catalogo_da_unidade(): void
@@ -312,7 +330,7 @@ class EsquemaRotinasTest extends TestCase
         $adicionar = route('relatorios.rotinas', ['editar' => $grupo, 'adicionar_tarefa' => '1']);
         $salvar = route('rotinas.tarefas.store', $grupo);
         $this->get($edicao)->assertSee($adicionar);
-        $this->get($adicionar)->assertOk()->assertSee('id="tarefaRotinaModal"', false)->assertSee($salvar)
+        $this->get($adicionar)->assertOk()->assertSee('id="tarefaRotinaModal"', false)->assertSee('step="60" value=""', false)->assertSee($salvar)
             ->assertSeeTextInOrder(['Dados da tarefa', 'Dia(s) da semana', 'Observação', 'Adicionar à rotina']);
 
         $this->from($adicionar)->post($salvar, [

@@ -22,7 +22,7 @@
         $diasSelecionados = array_map('intval', array_filter((array) old('dias', $errors->any() ? [] : ($edicaoTarefa['dias'] ?? [])), 'is_scalar'));
         $auxiliaresSelecionados = array_map('intval', array_filter((array) old('auxiliares', $errors->any() ? [] : ($edicaoTarefa['auxiliares'] ?? [])), 'is_scalar'));
         $auxilioSelecionado = in_array(old('auxilio', (int) ($tarefaEmEdicao->auxilio ?? 0)), [1, '1'], true);
-        $horarioSelecionado = old('horario', substr($tarefaEmEdicao->horario ?? '', 0, 8));
+        $horarioSelecionado = old('horario', $tarefaEmEdicao->horario ?? '');
         $tarefaSelecionada = old('id_tarefa', $tarefaEmEdicao->id_tarefa ?? null);
         $localSelecionado = old('id_local', $tarefaEmEdicao->id_local ?? null);
         $moradorSelecionado = old('morador', $tarefaEmEdicao->morador ?? null);
@@ -109,7 +109,7 @@
             <div>
                 <label for="inputHorario" class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Horário</label>
                 <input type="time" name="horario" id="inputHorario" required
-                       @if ($salvarNaRotina) step="1" value="{{ is_string($horarioSelecionado) ? $horarioSelecionado : '' }}"
+                       @if ($salvarNaRotina) step="60" value="{{ is_string($horarioSelecionado) ? substr($horarioSelecionado, 0, 5) : '' }}"
                        @elseif ($emergencial) value="{{ $agoraEmergencial->format('H:i') }}" @endif
                        class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
                 @if ($editandoTarefa)
