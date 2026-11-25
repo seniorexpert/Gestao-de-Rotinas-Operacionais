@@ -3,7 +3,7 @@ name: Auto Deploy na VPS
 on:
   push:
     branches:
-      - main
+      - dev
 
 jobs:
   deploy:
@@ -13,18 +13,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Copy files to production folder
+      - name: Copy files to homologation folder
         shell: powershell
         run: |
-          if (!(Test-Path "C:\www\gest-rotinas")) {
-              New-Item -ItemType Directory -Force -Path "C:\www\gest-rotinas"
+          if (!(Test-Path "C:\www\gest-rotinas-homologa")) {
+              New-Item -ItemType Directory -Force -Path "C:\www\gest-rotinas-homologa"
           }
-          Copy-Item -Path ".\*" -Destination "C:\www\gest-rotinas" -Recurse -Force
+          Copy-Item -Path ".\*" -Destination "C:\www\gest-rotinas-homologa" -Recurse -Force
 
       - name: Install Dependencies and Run Migrations
         shell: powershell
         run: |
-          cd C:\www\gest-rotinas
+          cd C:\www\gest-rotinas-homologa
           C:\Users\Administrator\.config\herd-lite\bin\composer.bat install --no-interaction --prefer-dist --optimize-autoloader
           & "C:\Users\Administrator\.config\herd-lite\bin\php.exe" artisan migrate --force
           & "C:\Users\Administrator\.config\herd-lite\bin\php.exe" artisan optimize:clear
