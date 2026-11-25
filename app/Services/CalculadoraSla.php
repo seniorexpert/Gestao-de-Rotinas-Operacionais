@@ -287,14 +287,14 @@ class CalculadoraSla
         ];
     }
 
-    private function duracaoPrevista(object $execucao): int
+    public function duracaoPrevista(object $execucao): int
     {
         $duracao = (int) ($execucao->duracao_prevista_segundos ?? 0);
         if ($duracao > 0) {
             return $duracao;
         }
 
-        if (! empty($execucao->prazo_em)) {
+        if (! empty($execucao->iniciado_em) && ! empty($execucao->prazo_em)) {
             $inicio = $this->data($execucao->iniciado_em);
             $duracao = (int) $inicio->diffInSeconds($this->data($execucao->prazo_em));
         }

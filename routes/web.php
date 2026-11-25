@@ -15,6 +15,7 @@ use App\Http\Controllers\RelatorioController;
 use App\Http\Controllers\RotinaAcompanhamentoController;
 use App\Http\Controllers\RotinasController;
 use App\Http\Controllers\RotinasEmergenciaisController;
+use App\Http\Controllers\RotinasFinalizadasController;
 use App\Http\Controllers\TarefasController;
 use App\Http\Controllers\UsuarioController;
 use App\Services\AuditoriaService;
@@ -36,7 +37,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/tarefas', [RelatorioController::class, 'tarefas'])->can('visualizar-modulo', "'tarefas'")->name('tarefas');
         Route::get('/ferramentas', [RelatorioController::class, 'ferramentas'])->can('visualizar-modulo', "'ferramentas'")->name('ferramentas');
         Route::get('/locais', [RelatorioController::class, 'locais'])->can('visualizar-modulo', "'locais'")->name('locais');
-        Route::get('/rotinas-finalizadas', [RelatorioController::class, 'rotinasFinalizadas'])->can('visualizar-modulo', "'rotinas_finalizadas'")->name('rotinas-finalizadas');
+        Route::middleware("can:visualizar-modulo,'rotinas_finalizadas'")->prefix('rotinas-finalizadas')->group(function () {
+            Route::get('/', [RotinasFinalizadasController::class, 'index'])->name('rotinas-finalizadas');
+            Route::get('/exportar', [RotinasFinalizadasController::class, 'exportar'])->name('rotinas-finalizadas.exportar');
+            Route::get('/{id}', [RotinasFinalizadasController::class, 'detalhes'])->whereNumber('id')->name('rotinas-finalizadas.detalhes');
+            Route::get('/{id}/foto', [RotinasFinalizadasController::class, 'foto'])->whereNumber('id')->name('rotinas-finalizadas.foto');
+        });
         Route::get('/estatisticas', [EstatisticasController::class, 'index'])->can('visualizar-modulo', "'estatisticas'")->name('estatisticas');
         Route::middleware("can:visualizar-modulo,'auditoria'")->group(function () {
             Route::get('/logs-rotinas', [AuditoriaController::class, 'index'])->name('logs-rotinas');

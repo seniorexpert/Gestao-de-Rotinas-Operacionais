@@ -2,48 +2,68 @@
 
 @section('title', 'Relatório de Tarefas')
 
+@push('head')
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@600;700&display=swap" rel="stylesheet">
+@endpush
+
 @section('content')
-<div>
-    
-    <div class="mb-8">
-        <h1 class="text-3xl font-bold text-gray-900 tracking-tight">Relatório de Tarefas</h1>
-        <p class="text-sm text-gray-500 mt-1">Visualize, busque e gerencie as tarefas cadastradas no sistema</p>
+@php
+    $classeCampo = 'h-11 w-full rounded-xl border border-[#e8d6bf] bg-white px-4 text-sm focus:border-[#8b6b43] focus:outline-none focus:ring-1 focus:ring-[#8b6b43]';
+    $classeBotao = 'inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-xl bg-[#17384b] text-sm font-semibold text-white transition-colors hover:bg-[#244d64] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#17384b]';
+@endphp
+
+<div class="min-w-0 text-[#17384b]">
+    <div class="mb-5 sm:mb-6">
+        <h1 class="font-['Fraunces',Georgia,serif] text-[1.8rem] font-semibold leading-tight tracking-[-0.01em] sm:text-[2rem]">Relatório de Tarefas</h1>
+        <p class="mt-1 text-sm text-[#536b7b] sm:text-[0.95rem]">Visualize, busque e gerencie as tarefas cadastradas no sistema</p>
     </div>
 
-    <div class="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-gray-200 mb-6">
-        <label class="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">Nome da Tarefa</label>
-        <div class="flex flex-col sm:flex-row items-center gap-3">
-            <div class="relative w-full">
-                <span class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none text-gray-400">
-                    <i class="fa-solid fa-magnifying-glass"></i>
-                </span>
-                <input type="text" id="filtroNomeTarefa" placeholder="Buscar pelo nome..." class="w-full pl-11 pr-4 py-3 bg-white border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent transition">
+    <form id="filtrosTarefas" action="{{ route('relatorios.tarefas') }}" method="GET" role="search" aria-label="Filtros de tarefas"
+          class="mb-4 grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(9rem,12rem)_auto] md:items-end md:gap-2">
+        <div class="min-w-0">
+            <label for="filtroNomeTarefa" class="mb-1 block text-[0.8125rem] font-semibold">Nome da Tarefa</label>
+            <input type="search" id="filtroNomeTarefa" placeholder="Buscar pelo nome..." class="{{ $classeCampo }} placeholder:text-[#64748b]">
+        </div>
+        <div class="min-w-0">
+            <label for="filtroSituacaoTarefa" class="mb-1 block text-[0.8125rem] font-semibold">Situação</label>
+            <div class="relative">
+                <select id="filtroSituacaoTarefa" data-filtro-situacao class="{{ $classeCampo }} appearance-none pr-10">
+                    <option value="">Todas</option>
+                    <option value="1">Ativas</option>
+                    <option value="0">Inativas</option>
+                </select>
+                <i class="fa-solid fa-chevron-down pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-[0.65rem]" aria-hidden="true"></i>
             </div>
+        </div>
+        <div class="flex items-center justify-end gap-2">
+            <button type="submit" title="Buscar tarefas" aria-label="Buscar tarefas" class="{{ $classeBotao }} w-11">
+                <i class="fa-solid fa-magnifying-glass text-base" aria-hidden="true"></i>
+            </button>
             @can('editar-modulo', 'tarefas')
-            <a href="#" onclick="event.preventDefault(); abrirModalNovo('taskModal')" class="w-full sm:w-auto inline-flex items-center justify-center space-x-2 bg-[#1b2a38] hover:bg-[#111c26] text-white px-5 py-3 rounded-xl font-medium text-sm transition shrink-0">
-                <i class="fa-solid fa-plus"></i>
-                <span>Novo registro</span>
-            </a>
+                <button type="button" onclick="abrirModalNovo('taskModal')" aria-haspopup="dialog" class="{{ $classeBotao }} px-4">
+                    <i class="fa-solid fa-plus" aria-hidden="true"></i> Novo registro
+                </button>
             @endcan
         </div>
-    </div>
+    </form>
 
-    <div class="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-        <div class="overflow-x-auto">
-            <table id="tabelaTarefas" class="w-full text-left border-collapse">
-                <thead>
-                    <tr class="bg-[#fcfbf9] border-b border-gray-200 text-xs font-bold uppercase tracking-wider text-gray-500">
-                        <th class="py-4 px-6 w-24">ID</th>
-                        <th class="py-4 px-6">Nome da Tarefa</th>
-                        <th class="py-4 px-6 w-40">Duração</th>
-                        <th class="py-4 px-6 w-44">Ferramentas</th>
-                        <th class="py-4 px-6">Unidades</th>
-                        <th class="py-4 px-6">Situação</th>
-                        <th class="py-4 px-6 w-28 text-right">Ação</th>
+    <div class="overflow-hidden rounded-xl border border-[#e4ceb2] bg-white shadow-sm">
+        <div class="overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-[#17384b]"
+             role="region" aria-label="Tarefas encontradas" tabindex="0">
+            <table id="tabelaTarefas" class="w-full min-w-[55rem] border-collapse text-left text-sm">
+                <thead class="border-b border-[#e8d6bf] bg-[#f9f7f2] text-xs font-semibold uppercase text-[#536b7b]">
+                    <tr>
+                        <th scope="col" class="w-20 px-4 py-3.5">ID</th>
+                        <th scope="col" class="px-4 py-3.5">Nome da Tarefa</th>
+                        <th scope="col" class="w-28 px-4 py-3.5">Duração</th>
+                        <th scope="col" class="w-36 px-4 py-3.5">Ferramentas</th>
+                        <th scope="col" class="w-36 px-4 py-3.5">Unidades</th>
+                        <th scope="col" class="w-28 px-4 py-3.5">Situação</th>
+                        <th scope="col" class="w-24 px-4 py-3.5 text-right">Ação</th>
                     </tr>
                 </thead>
-                <tbody class="divide-y divide-gray-100 text-sm">
-                    @forelse($tarefas as $tarefa)
+                <tbody>
+                    @foreach ($tarefas as $tarefa)
                         @php
                             [$horas, $minutos, $segundos] = array_pad(explode(':', $tarefa->tempo_realizar_tarefa ?? ''), 3, 0);
                             $iconeRaw = $tarefa->icone ?? '';
@@ -61,61 +81,54 @@
                                 'cor_icone' => $corIconeTarefa,
                             ];
                         @endphp
-                        <tr class="linha-tarefa hover:bg-gray-50/60 transition">
-                            <td class="py-4 px-6 font-medium text-gray-500">#{{ $tarefa->id_tarefa }}</td>
-                            <td class="py-4 px-6">
-                                <div class="flex items-center space-x-3">
-                                    <span class="h-9 w-9 rounded-xl bg-[#fcfbf9] border border-amber-200/70 flex items-center justify-center shrink-0">
-                                        <x-icone-tarefa :icone="$iconeTarefa" :cor="$corIconeTarefa" class="h-6 w-6 text-xl" />
-                                    </span>
-                                    <span class="font-bold text-gray-800 uppercase">{{ $tarefa->tarefa ?? 'Sem nome' }}</span>
+                        <tr class="linha-tarefa border-b border-[#f0e9df]" data-situacao="{{ $tarefa->status ? '1' : '0' }}">
+                            <td class="px-4 py-4 font-semibold tabular-nums text-[#536b7b]">#{{ $tarefa->id_tarefa }}</td>
+                            <td class="px-4 py-4">
+                                <div class="flex items-center gap-3">
+                                    <x-icone-tarefa :icone="$iconeTarefa" :cor="$corIconeTarefa" class="h-8 w-8 text-2xl" />
+                                    <span data-nome-catalogo class="min-w-0 break-words font-semibold uppercase">{{ $tarefa->tarefa ?? 'Sem nome' }}</span>
                                 </div>
                             </td>
-                            <td class="py-4 px-6 text-gray-500">
-                                {{ $tarefa->tempo_realizar_tarefa ? substr($tarefa->tempo_realizar_tarefa, 0, 8) : 'Não informada' }}
+                            <td class="px-4 py-4 tabular-nums">
+                                {{ $tarefa->tempo_realizar_tarefa ? substr($tarefa->tempo_realizar_tarefa, 0, 5) : 'Não informada' }}
                             </td>
-                            <td class="py-4 px-6 text-gray-500">
+                            <td class="px-4 py-4">
                                 {{ $tarefa->ferramenta ?? '—' }}
                             </td>
-                            <td class="py-4 px-6 text-gray-600">{{ $tarefa->unidades->pluck('empresa')->join(', ') ?: 'Sem unidade' }}</td>
-                            <td class="py-4 px-6 text-gray-600">{{ $tarefa->status ? 'Ativo' : 'Inativo' }}</td>
-                            <td class="py-4 px-6 text-right">
+                            <td class="px-4 py-4">{{ $tarefa->unidades->pluck('empresa')->join(', ') ?: 'Sem unidade' }}</td>
+                            <td class="px-4 py-4">
+                                <span @class([
+                                    'inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold',
+                                    'bg-[#e2f1e6] text-[#176b39]' => $tarefa->status,
+                                    'bg-[#f0ebe2] text-[#536b7b]' => !$tarefa->status,
+                                ])>
+                                    <span class="h-2 w-2 rounded-full bg-current opacity-70" aria-hidden="true"></span>
+                                    {{ $tarefa->status ? 'Ativo' : 'Inativo' }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-4 text-right">
                                 @if ($tarefa->editavel && auth()->user()->can('editar-modulo', 'tarefas'))
-                                <button type="button"
-                                    onclick="abrirModalEdicao(@js($dadosEdicao))"
-                                    class="inline-flex items-center space-x-1 text-sm font-semibold text-gray-700 hover:text-gray-900 transition">
-                                    <span>Editar</span>
-                                    <i class="fa-solid fa-chevron-right text-xs"></i>
-                                </button>
+                                    <button type="button" onclick="abrirModalEdicao(@js($dadosEdicao))" aria-haspopup="dialog"
+                                            class="inline-flex items-center gap-2 whitespace-nowrap text-xs font-semibold transition-colors hover:text-[#8b6b43] hover:underline">
+                                        Editar <i class="fa-solid fa-chevron-right text-[0.625rem] text-[#a36f39]" aria-hidden="true"></i>
+                                    </button>
                                 @endif
                             </td>
                         </tr>
-                    @empty
-                        <tr class="linha-vazia">
-                            <td colspan="7" class="py-8 text-center text-gray-400">
-                                Nenhuma tarefa cadastrada no momento.
-                            </td>
-                        </tr>
-                    @endforelse
+                    @endforeach
                 </tbody>
             </table>
         </div>
-
-        <div class="px-6 py-4 bg-white border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div id="contadorResultados" class="text-xs text-gray-500 font-medium"></div>
-            
-            <div class="flex items-center space-x-2">
-                <button id="btnAnterior" onclick="mudarPagina(-1)" class="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition">
-                    <i class="fa-solid fa-chevron-left text-xs"></i>
-                </button>
-                <span id="infoPaginacao" class="text-xs font-semibold text-gray-700 px-2">1 / 1</span>
-                <button id="btnProximo" onclick="mudarPagina(1)" class="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-gray-500 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition">
-                    <i class="fa-solid fa-chevron-right text-xs"></i>
-                </button>
-            </div>
-        </div>
+        <p id="mensagemSemResultadoTarefas" @if ($tarefas->isNotEmpty()) hidden @endif class="px-4 py-8 text-center text-sm text-[#536b7b]">
+            {{ $tarefas->isEmpty() ? 'Nenhuma tarefa cadastrada no momento.' : 'Nenhuma tarefa encontrada.' }}
+        </p>
     </div>
-
+    @include('relatorios.partials.paginacao-catalogo', [
+        'idFormulario' => 'filtrosTarefas',
+        'idTabela' => 'tabelaTarefas',
+        'idMensagemVazia' => 'mensagemSemResultadoTarefas',
+        'rotulo' => 'tarefa',
+    ])
 </div>
 
 @can('editar-modulo', 'tarefas')
@@ -123,10 +136,6 @@
 @endcan
 
 <script>
-    const itensPorPagina = 10; 
-    let paginaAtual = 1;
-    let linhasFiltradas = [];
-
     function sincronizarModalTarefa(icone, corIcone) {
         const emoji = icone || '📋';
         const cor = corIcone || 'original';
@@ -212,49 +221,5 @@
         sincronizarModalTarefa(dados.icone || '📋', dados.cor_icone || 'original');
     }
 
-    function atualizarTabela() {
-        const todasLinhas = Array.from(document.querySelectorAll('#tabelaTarefas tbody tr.linha-tarefa'));
-        const termo = document.getElementById('filtroNomeTarefa').value.toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-        linhasFiltradas = todasLinhas.filter(linha => {
-            const colunaNome = linha.cells[1];
-            if (!colunaNome) return false;
-            const texto = colunaNome.textContent.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-            return texto.includes(termo);
-        });
-
-        todasLinhas.forEach(l => l.style.display = 'none');
-
-        const totalItens = linhasFiltradas.length;
-        const totalPaginas = Math.ceil(totalItens / itensPorPagina) || 1;
-        
-        if (paginaAtual > totalPaginas) paginaAtual = totalPaginas;
-        if (paginaAtual < 1) paginaAtual = 1;
-
-        const inicio = (paginaAtual - 1) * itensPorPagina;
-        const fim = inicio + itensPorPagina;
-        const itensPagina = linhasFiltradas.slice(inicio, fim);
-
-        itensPagina.forEach(l => l.style.display = '');
-
-        document.getElementById('contadorResultados').textContent = `${totalItens} tarefa${totalItens !== 1 ? 's' : ''} encontrada${totalItens !== 1 ? 's' : ''}`;
-        document.getElementById('infoPaginacao').textContent = `${paginaAtual} / ${totalPaginas}`;
-        document.getElementById('btnAnterior').disabled = paginaAtual === 1;
-        document.getElementById('btnProximo').disabled = paginaAtual === totalPaginas || totalPaginas === 0;
-    }
-
-    function mudarPagina(direcao) {
-        paginaAtual += direcao;
-        atualizarTabela();
-    }
-
-    document.getElementById('filtroNomeTarefa').addEventListener('input', function() {
-        paginaAtual = 1; 
-        atualizarTabela();
-    });
-
-    document.addEventListener('DOMContentLoaded', function() {
-        atualizarTabela();
-    });
 </script>
 @endsection

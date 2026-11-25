@@ -435,11 +435,10 @@ class ExecucoesDiariasTest extends TestCase
             'id_rotina' => $idRotina, 'status' => true, 'tipo_rotina' => 'emergencial', 'agendada_em' => '2026-11-24 12:00:00',
             'dias_semanas' => 'Terça-feira',
         ]);
-        foreach (['relatorios.rotinas', 'relatorios.rotinas-finalizadas'] as $relatorio) {
-            $this->get(route($relatorio))->assertOk()
-                ->assertViewHas('rotinas', fn ($rotinas) => (int) $rotinas->sole()->id_rotina_principal === $recorrente
-                    && (int) $rotinas->sole()->total_tarefas === 1);
-        }
+        $this->get(route('relatorios.rotinas'))->assertOk()
+            ->assertViewHas('rotinas', fn ($rotinas) => (int) $rotinas->sole()->id_rotina_principal === $recorrente
+                && (int) $rotinas->sole()->total_tarefas === 1);
+        $this->get(route('relatorios.rotinas-finalizadas'))->assertOk()->assertSeeText('Nenhum registro encontrado');
         $exportacao = $this->get(route('relatorios.excel.exportar'))->assertDownload()->streamedContent();
         $this->assertStringContainsString('Ronda recorrente', $exportacao);
         $this->assertStringNotContainsString('Atendimento urgente', $exportacao);
@@ -482,6 +481,7 @@ class ExecucoesDiariasTest extends TestCase
             ->assertViewHas('rotinas', fn ($rotinas) => $rotinas->sole()->situacao_sla === 'atrasado');
         $this->post(route('execucoes.concluir', $id), ['comentario' => 'Atendimento realizado.'])->assertSessionHasNoErrors();
         $this->get(route('home', ['aba' => 'concluida']))->assertOk()->assertSeeText('Atendimento urgente');
+        $this->get(route('relatorios.rotinas-finalizadas'))->assertOk()->assertDontSeeText('Atendimento urgente');
 
         $this->travelTo($inicio->addWeek()->addHour());
         $this->artisan('rotinas:gerar-execucoes')->assertSuccessful();

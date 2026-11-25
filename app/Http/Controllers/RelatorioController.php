@@ -138,28 +138,6 @@ class RelatorioController extends Controller
         ]);
     }
 
-    public function rotinasFinalizadas(Request $request): View
-    {
-        $colaboradorFiltro = $request->validate(['colaborador' => 'nullable|string|max:255'])['colaborador'] ?? null;
-        $usuario = $request->user();
-        $rotinas = $this->consultaRotinas->rotinasDiarias($usuario)
-            ->where('r.status', 1)
-            ->when($colaboradorFiltro && $colaboradorFiltro !== 'Todas', fn (Builder $query) => $query->where('u.usuario', $colaboradorFiltro))
-            ->select('r.id_usuario', 'u.usuario as nome_colaborador', 'e.empresa as unidade_colaborador', 'g.grupo_acesso as cargo_colaborador')
-            ->selectRaw('MIN(r.id_rotina) as id_rotina_principal, MIN(r.horario) as horario_inicio, MAX(r.horario) as horario_fim')
-            ->selectRaw('COUNT(r.id_rotina) as total_tarefas, MAX(CASE WHEN r.status = 1 THEN 1 ELSE 0 END) as status_rotina')
-            ->groupBy('r.id_usuario', 'u.usuario', 'e.id_empresa', 'e.empresa', 'g.grupo_acesso')
-            ->orderBy('u.usuario')->orderBy('e.empresa')->get();
-        $colaboradores = $this->nomesDosColaboradores($usuario);
-
-        return view('relatorios.rotinas-finalizadas', [
-            ...$this->consultaRotinas->catalogos($usuario),
-            'rotinas' => $rotinas,
-            'colaboradores' => $colaboradores,
-            'colaboradorFiltro' => $colaboradorFiltro,
-        ]);
-    }
-
     public function rotinasExcel(Request $request, ExecucoesDiarias $execucoes): View
     {
         return view('relatorios.rotinas-excel', $this->gradeDeRotinas($request, $execucoes));
