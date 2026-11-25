@@ -12,10 +12,10 @@
     $idFormulario = 'formSalvarRotina';
     if ($salvarNaRotina) {
         $acaoFormulario = $editandoTarefa
-            ? route('rotinas.tarefas.update', [$grupoEdicao, $tarefaEmEdicao->id_rotina])
-            : route('rotinas.tarefas.store', $grupoEdicao);
+            ? route('rotinas.tarefas.update', ['grupo' => $grupoEdicao, 'tarefa' => $tarefaEmEdicao->id_rotina, ...$filtrosRelatorio])
+            : route('rotinas.tarefas.store', ['grupo' => $grupoEdicao, ...$filtrosRelatorio]);
         $idFormulario = $editandoTarefa ? 'formEditarTarefaRotina' : 'formAdicionarTarefaRotina';
-        $voltarParaRotina = route('relatorios.rotinas', array_filter(['colaborador' => $colaboradorFiltro, 'editar' => $grupoEdicao]));
+        $voltarParaRotina = route('relatorios.rotinas', [...$filtrosRelatorio, 'editar' => $grupoEdicao]);
         $unidadeDaTarefa = (int) $rotinaDaTarefa->id_empresa;
         $tarefas = $tarefas->filter(fn ($tarefa) => in_array($unidadeDaTarefa, $tarefa->ids_empresas, true));
         $locais = $locais->filter(fn ($local) => in_array($unidadeDaTarefa, $local->ids_empresas, true));

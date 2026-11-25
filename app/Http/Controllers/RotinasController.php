@@ -174,7 +174,7 @@ class RotinasController extends Controller
             }
         }, 3);
 
-        return to_route('relatorios.rotinas')->with('success', 'Rotina atualizada com sucesso.');
+        return to_route('relatorios.rotinas', $this->filtrosDoRelatorio($request))->with('success', 'Rotina atualizada com sucesso.');
     }
 
     public function atualizarTarefa(Request $request, ConsultaRotinas $catalogo, string $grupo, int $tarefa): RedirectResponse
@@ -211,7 +211,8 @@ class RotinasController extends Controller
             );
         }, 3);
 
-        return to_route('relatorios.rotinas', ['editar' => $grupo])->with('success', 'Tarefa da rotina atualizada com sucesso.');
+        return to_route('relatorios.rotinas', [...$this->filtrosDoRelatorio($request), 'editar' => $grupo])
+            ->with('success', 'Tarefa da rotina atualizada com sucesso.');
     }
 
     public function adicionarTarefa(Request $request, ConsultaRotinas $catalogo, string $grupo): RedirectResponse
@@ -264,7 +265,8 @@ class RotinasController extends Controller
             return $grupoRotina;
         }, 3);
 
-        return to_route('relatorios.rotinas', ['editar' => $grupoRotina])->with('success', 'Tarefa adicionada à rotina com sucesso.');
+        return to_route('relatorios.rotinas', [...$this->filtrosDoRelatorio($request), 'editar' => $grupoRotina])
+            ->with('success', 'Tarefa adicionada à rotina com sucesso.');
     }
 
     public function excluir(Request $request, ConsultaRotinas $consultaRotinas, string $grupo, ?int $tarefa = null): RedirectResponse
@@ -292,8 +294,17 @@ class RotinasController extends Controller
             return $tarefa !== null && $rotina->exists();
         }, 3);
 
-        return to_route('relatorios.rotinas', $grupoRestante ? ['editar' => $grupo] : [])
+        $filtros = $this->filtrosDoRelatorio($request);
+
+        return to_route('relatorios.rotinas', $grupoRestante ? [...$filtros, 'editar' => $grupo] : $filtros)
             ->with('success', $tarefa === null ? 'Rotina excluída com sucesso.' : 'Tarefa removida da rotina.');
+    }
+
+    /** @return array<string, string> */
+    private function filtrosDoRelatorio(Request $request): array
+    {
+        return array_filter(Arr::only($request->query(), ['colaborador', 'morador']),
+            fn ($filtro): bool => is_string($filtro) && filled($filtro) && mb_strlen($filtro) <= 255);
     }
 
     /** @return array{array{dias_semanas: string, horario: string, id_tarefa: int, id_local: ?int, local: ?string, morador: ?string, auxilio: bool, obs: ?string}, list<int>} */

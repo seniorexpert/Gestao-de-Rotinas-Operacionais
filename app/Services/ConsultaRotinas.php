@@ -74,6 +74,19 @@ class ConsultaRotinas
                 fn (Builder $rotinas) => $rotinas->whereNull('r.grupo_rotina')->where('r.id_rotina', (int) $grupo));
     }
 
+    public function filtrarPorMorador(Builder $consulta, string $morador, bool $rotinaInteira = false): Builder
+    {
+        $busca = '%'.strtr($morador, ['~' => '~~', '%' => '~%', '_' => '~_', '[' => '~[', ']' => '~]']).'%';
+        $correspondencia = $consulta->getConnection()->getDriverName() === 'sqlsrv'
+            ? 'r.morador COLLATE Latin1_General_100_CI_AI LIKE ?'
+            : 'LOWER(r.morador) LIKE LOWER(?)';
+        $condicao = "{$correspondencia} ESCAPE '~'";
+
+        return $rotinaInteira
+            ? $consulta->havingRaw("MAX(CASE WHEN {$condicao} THEN 1 ELSE 0 END) = 1", [$busca])
+            : $consulta->whereRaw($condicao, [$busca]);
+    }
+
     public function filtrarExecucoesVisiveis(Builder $consulta): Builder
     {
         return $this->filtrarEmergenciaisDisponiveis($consulta)

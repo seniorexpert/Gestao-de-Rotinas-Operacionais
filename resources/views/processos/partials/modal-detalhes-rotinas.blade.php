@@ -3,8 +3,8 @@
     $statusDasTarefas = $tarefasEdicao->map(fn ($tarefa) => (int) $tarefa->status)->unique();
     $situacao = old('status', $statusDasTarefas->count() === 1 ? (string) $statusDasTarefas->first() : '');
     $responsavel = old('colaborador_id', $primeiraTarefa->id_usuario);
-    $voltar = route('relatorios.rotinas', array_filter(['colaborador' => $colaboradorFiltro]));
-    $parametrosEdicao = array_filter(['colaborador' => $colaboradorFiltro, 'editar' => $grupoEdicao]);
+    $voltar = route('relatorios.rotinas', $filtrosRelatorio);
+    $parametrosEdicao = [...$filtrosRelatorio, 'editar' => $grupoEdicao];
 @endphp
 
 @push('head')
@@ -29,7 +29,7 @@
                 <p role="status" class="rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ session('success') }}</p>
             @endif
 
-            <form id="formEditarRotina" action="{{ route('rotinas.update', $grupoEdicao) }}" method="POST" class="grid gap-3 sm:grid-cols-2">
+            <form id="formEditarRotina" action="{{ route('rotinas.update', ['grupo' => $grupoEdicao, ...$filtrosRelatorio]) }}" method="POST" class="grid gap-3 sm:grid-cols-2">
                 @csrf
                 @method('PUT')
 
@@ -101,7 +101,7 @@
                                 <a href="{{ route('relatorios.rotinas', [...$parametrosEdicao, 'tarefa' => $tarefa->id_rotina]) }}" class="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold hover:underline">
                                     <i class="fa-solid fa-pen text-[#a77a41]" aria-hidden="true"></i> Editar
                                 </a>
-                                <form action="{{ route('rotinas.tarefas.destroy', [$grupoEdicao, $tarefa->id_rotina]) }}" method="POST" onsubmit="return confirm('Remover esta tarefa da rotina?')">
+                                <form action="{{ route('rotinas.tarefas.destroy', ['grupo' => $grupoEdicao, 'tarefa' => $tarefa->id_rotina, ...$filtrosRelatorio]) }}" method="POST" onsubmit="return confirm('Remover esta tarefa da rotina?')">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" class="inline-flex min-h-9 items-center gap-1.5 text-sm font-semibold text-red-700 hover:underline">
@@ -120,7 +120,7 @@
         </div>
 
         <div class="mt-3 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-gray-200 pt-3 text-xs font-bold sm:text-sm">
-            <form action="{{ route('rotinas.destroy', $grupoEdicao) }}" method="POST" onsubmit="return confirm('Excluir esta rotina e todas as suas tarefas?')">
+            <form action="{{ route('rotinas.destroy', ['grupo' => $grupoEdicao, ...$filtrosRelatorio]) }}" method="POST" onsubmit="return confirm('Excluir esta rotina e todas as suas tarefas?')">
                 @csrf
                 @method('DELETE')
                 <button type="submit" class="inline-flex min-h-10 items-center gap-2 rounded-xl border border-red-200 px-3 py-2 text-red-700 hover:bg-red-50">

@@ -15,6 +15,8 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class RelatorioController extends Controller
 {
+    private const INICIO_DIA_GRADE = '06:00';
+
     public function __construct(private ConsultaRotinas $consultaRotinas) {}
 
     public function tarefas(Request $request): View
@@ -62,10 +64,19 @@ class RelatorioController extends Controller
     public function rotinas(Request $request, ExecucoesDiarias $execucoes): View
     {
         $filtros = $request->validate([
-            'colaborador' => 'nullable|string|max:255', 'editar' => 'nullable|string|max:36', 'tarefa' => 'nullable|integer|min:1',
+            'colaborador' => 'nullable|string|max:255', 'morador' => 'nullable|string|max:255',
+            'editar' => 'nullable|string|max:36', 'tarefa' => 'nullable|integer|min:1',
             'adicionar_tarefa' => 'nullable|boolean',
+        ], [
+            'morador.string' => 'Informe o nome do morador em texto.',
+            'morador.max' => 'Digite até 255 caracteres para buscar por morador.',
         ]);
         $colaboradorFiltro = $filtros['colaborador'] ?? null;
+        $moradorFiltro = trim($filtros['morador'] ?? '');
+        $filtrosRelatorio = array_filter([
+            'colaborador' => $colaboradorFiltro === 'Todas' ? null : $colaboradorFiltro,
+            'morador' => $moradorFiltro,
+        ], filled(...));
         $usuario = $request->user();
         $grupoEdicao = $filtros['editar'] ?? null;
         $tarefasEdicao = collect();
@@ -108,6 +119,7 @@ class RelatorioController extends Controller
             ->selectRaw('MIN(CASE WHEN r.status = 1 THEN 1 ELSE 0 END) as todas_ativas')
             ->groupBy('r.grupo_rotina', 'r.id_usuario', 'u.usuario', 'e.id_empresa', 'e.empresa', 'g.grupo_acesso')
             ->groupByRaw('CASE WHEN r.grupo_rotina IS NULL THEN r.id_rotina END')
+            ->when($moradorFiltro !== '', fn (Builder $consulta) => $this->consultaRotinas->filtrarPorMorador($consulta, $moradorFiltro, rotinaInteira: true))
             ->orderBy('u.usuario')->orderBy('e.empresa')->orderBy('id_rotina_principal')->get();
         $colaboradores = $this->nomesDosColaboradores($usuario);
 
@@ -116,6 +128,8 @@ class RelatorioController extends Controller
             'rotinas' => $rotinas,
             'colaboradores' => $colaboradores,
             'colaboradorFiltro' => $colaboradorFiltro,
+            'moradorFiltro' => $moradorFiltro,
+            'filtrosRelatorio' => $filtrosRelatorio,
             'grupoEdicao' => $grupoEdicao,
             'tarefasEdicao' => $tarefasEdicao,
             'colaboradoresEdicao' => $colaboradoresEdicao,
@@ -146,36 +160,18 @@ class RelatorioController extends Controller
         ]);
     }
 
-    public function rotinasExcel(Request $request): View
+    public function rotinasExcel(Request $request, ExecucoesDiarias $execucoes): View
     {
-        return view('relatorios.rotinas-excel', $this->gradeDeRotinas($request));
+        return view('relatorios.rotinas-excel', $this->gradeDeRotinas($request, $execucoes));
     }
 
-    public function exportarExcel(Request $request): StreamedResponse
+    public function exportarExcel(Request $request, ExecucoesDiarias $execucoes): StreamedResponse
     {
-        ['colaboradores' => $colaboradores, 'horarios' => $horarios, 'rotinas' => $rotinas] = $this->gradeDeRotinas($request);
-        $porHorario = $rotinas->groupBy(['horario', 'id_usuario']);
+        $grade = $this->gradeDeRotinas($request, $execucoes);
 
-        return response()->streamDownload(function () use ($colaboradores, $horarios, $porHorario) {
-            echo '<table border="1"><thead><tr><th>HORA</th>';
-            foreach ($colaboradores as $colaborador) {
-                echo '<th>'.e($colaborador->usuario).'</th>';
-            }
-            echo '</tr></thead><tbody>';
-
-            foreach ($horarios as $horario) {
-                echo '<tr><th>'.e($horario).'</th>';
-                foreach ($colaboradores as $colaborador) {
-                    echo '<td>';
-                    foreach ($porHorario->get($horario)?->get($colaborador->id_usuario, []) ?? [] as $tarefa) {
-                        echo '<div><b>'.e($tarefa->tarefa ?? 'Tarefa de rotina').'</b><br>'.e($tarefa->dias_semanas).'</div>';
-                    }
-                    echo '</td>';
-                }
-                echo '</tr>';
-            }
-            echo '</tbody></table>';
-        }, 'relatorio-rotinas-grade-'.now()->format('Y-m-d').'.xls', ['Content-Type' => 'application/vnd.ms-excel; charset=utf-8']);
+        return response()->streamDownload(function () use ($grade): void {
+            echo view('relatorios.rotinas-excel-exportacao', $grade)->render();
+        }, 'relatorio-rotinas-grade-'.now(ExecucoesDiarias::FUSO)->format('Y-m-d').'.xls', ['Content-Type' => 'application/vnd.ms-excel; charset=utf-8']);
     }
 
     public function estatisticas(): View
@@ -183,29 +179,64 @@ class RelatorioController extends Controller
         return view('relatorios.estatisticas');
     }
 
-    /** @return array{colaboradores: Collection, rotinas: Collection, horarios: Collection, todosColaboradoresFiltro: Collection, colaboradorFiltro: ?string} */
-    private function gradeDeRotinas(Request $request): array
+    /** @return array{colaboradores: Collection, horarios: Collection, tarefasPorHorario: Collection, opcoesColaboradores: Collection, grupos: Collection, filtros: array, totalTarefas: int, textoTotal: string} */
+    private function gradeDeRotinas(Request $request, ExecucoesDiarias $execucoes): array
     {
-        $colaboradorFiltro = $request->validate(['colaborador' => 'nullable|string|max:255'])['colaborador'] ?? null;
+        $filtrosValidados = $request->validate([
+            'colaborador' => 'nullable|string|max:255',
+            'morador' => 'nullable|string|max:255',
+            'grupo' => 'nullable|integer|min:1',
+        ]);
+        $colaboradorFiltro = $filtrosValidados['colaborador'] ?? null;
+        $filtros = array_filter([
+            'colaborador' => $colaboradorFiltro === 'Todas' ? null : $colaboradorFiltro,
+            'morador' => trim($filtrosValidados['morador'] ?? ''),
+            'grupo' => isset($filtrosValidados['grupo']) ? (int) $filtrosValidados['grupo'] : null,
+        ], filled(...));
         $usuario = $request->user();
-        $colaboradores = $this->consultaRotinas->colaboradores($usuario)
-            ->when($colaboradorFiltro && $colaboradorFiltro !== 'Todas', fn (Builder $query) => $query->where('u.usuario', $colaboradorFiltro))
-            ->get();
+        $opcoesColaboradores = $this->consultaRotinas->colaboradores($usuario)->addSelect('g.id_grupo_acesso')->get();
         $rotinas = $this->consultaRotinas->rotinasDiarias($usuario)->where('r.status', true)
-            ->whereIn('r.id_usuario', $colaboradores->pluck('id_usuario'))->orderBy('r.horario')
-            ->get(['r.id_usuario', 'r.horario', 'r.dias_semanas', 'r.morador', 'r.local', 'l.local as local_cadastrado', 't.tarefa', 't.descricao']);
+            ->whereIntegerInRaw('r.id_usuario', $opcoesColaboradores->pluck('id_usuario')->all())
+            ->when(isset($filtros['colaborador']), fn (Builder $consulta) => $consulta->where('u.usuario', $filtros['colaborador']))
+            ->when(isset($filtros['grupo']), fn (Builder $consulta) => $consulta->where('g.id_grupo_acesso', $filtros['grupo']))
+            ->when(isset($filtros['morador']), fn (Builder $consulta) => $this->consultaRotinas->filtrarPorMorador($consulta, $filtros['morador']))
+            ->orderBy('r.horario')->orderBy('r.id_rotina')
+            ->get([
+                'r.id_usuario', 'r.horario', 'r.dias_semanas', 'r.morador', 'r.local', 'l.local as local_cadastrado',
+                't.tarefa', 't.descricao', 't.icone', 't.cor_icone',
+            ]);
 
         foreach ($rotinas as $rotina) {
             $rotina->horario = substr($rotina->horario, 0, 5);
-            $rotina->local = $rotina->local ?: $rotina->local_cadastrado;
+            $rotina->tarefa = $rotina->tarefa ?? $rotina->descricao ?? 'Tarefa de rotina';
+            $rotina->detalhes = implode(' · ', array_filter([trim((string) $rotina->morador), trim((string) ($rotina->local ?: $rotina->local_cadastrado))], filled(...)));
+            $rotina->dias_formatados = count($execucoes->diasDaSemana($rotina->dias_semanas)) === 7 ? 'Todos os dias' : $rotina->dias_semanas;
         }
+
+        [$horariosDoDia, $horariosDaMadrugada] = $rotinas->pluck('horario')->unique()->sort(SORT_STRING)
+            ->partition(fn (string $horario): bool => $horario >= self::INICIO_DIA_GRADE);
+        $horarios = $horariosDoDia->concat($horariosDaMadrugada)->values();
+        $posicoes = $horarios->flip();
+        $tarefasPorColaborador = $rotinas->sortBy(fn (object $rotina): int => $posicoes[$rotina->horario])->groupBy('id_usuario');
+        $colaboradores = $opcoesColaboradores->whereIn('id_usuario', $tarefasPorColaborador->keys())->values();
+        foreach ($colaboradores as $colaborador) {
+            $colaborador->tarefas = $tarefasPorColaborador->get($colaborador->id_usuario);
+            $quantidade = $colaborador->tarefas->count();
+            $colaborador->texto_quantidade = $quantidade === 1 ? '1 tarefa' : "{$quantidade} tarefas";
+            $colaborador->resumo = implode(' · ', array_filter([$colaborador->grupo_acesso, $colaborador->texto_quantidade], filled(...)));
+        }
+
+        $totalTarefas = $rotinas->count();
 
         return [
             'colaboradores' => $colaboradores,
-            'rotinas' => $rotinas,
-            'horarios' => $rotinas->pluck('horario')->unique()->values(),
-            'todosColaboradoresFiltro' => $this->nomesDosColaboradores($usuario),
-            'colaboradorFiltro' => $colaboradorFiltro,
+            'horarios' => $horarios,
+            'tarefasPorHorario' => $rotinas->groupBy(['horario', 'id_usuario']),
+            'opcoesColaboradores' => $opcoesColaboradores->pluck('usuario')->unique()->values(),
+            'grupos' => $opcoesColaboradores->whereNotNull('id_grupo_acesso')->unique('id_grupo_acesso')->sortBy('grupo_acesso'),
+            'filtros' => $filtros,
+            'totalTarefas' => $totalTarefas,
+            'textoTotal' => $totalTarefas === 1 ? '1 tarefa encontrada' : "{$totalTarefas} tarefas encontradas",
         ];
     }
 

@@ -1,12 +1,13 @@
-@props(['icone' => null, 'cor' => null])
+@props(['icone' => null, 'cor' => null, 'planilha' => false])
 
 @php
     $icone = trim((string) $icone);
     $icone = in_array($icone, ['', '0', '1'], true) ? '📋' : $icone;
     $cor = trim((string) $cor);
+    $corHexadecimal = preg_match('/\A#(?:[\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})\z/i', $cor) ? $cor : null;
     $mascara = null;
 
-    if (preg_match('/\A#(?:[\da-f]{3,4}|[\da-f]{6}|[\da-f]{8})\z/i', $cor)) {
+    if ($corHexadecimal && !$planilha) {
         $emoji = htmlspecialchars($icone, ENT_XML1 | ENT_QUOTES, 'UTF-8');
         $svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">'
             .'<text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-size="52">'
@@ -15,6 +16,9 @@
     }
 @endphp
 
+@if ($planilha)
+<span style="font-family: 'Segoe UI Emoji'{{ $corHexadecimal ? '; color: '.$corHexadecimal : '' }}">{{ $icone }}</span>
+@else
 <span {{ $attributes->class('inline-flex shrink-0 items-center justify-center leading-none') }} aria-hidden="true">
     @if ($mascara)
         <span class="inline-block h-full w-full"
@@ -23,3 +27,4 @@
         {{ $icone }}
     @endif
 </span>
+@endif
