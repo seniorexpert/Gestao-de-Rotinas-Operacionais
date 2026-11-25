@@ -101,9 +101,7 @@ Route::post('/logout', function (Request $request) {
 Route::get('/login', [AuthController::class, 'showLoginForm'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.autenticar');
 
-Route::get('/', function () {
-    return view('welcome');
-})->name('inicio');
+Route::redirect('/', '/home');
 
 Route::middleware(['auth', "can:editar-modulo,'rotinas_diarias'"])->group(function () {
     Route::post('/execucoes/{id}/iniciar', [ExecucoesController::class, 'iniciar'])
