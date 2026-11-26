@@ -5,11 +5,11 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Services\ConsultaRotinas;
 use App\Services\ExecucoesDiarias;
+use App\Services\VisibilidadeGrupos;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -17,7 +17,7 @@ class RelatorioController extends Controller
 {
     private const INICIO_DIA_GRADE = '06:00';
 
-    public function __construct(private ConsultaRotinas $consultaRotinas) {}
+    public function __construct(private ConsultaRotinas $consultaRotinas, private VisibilidadeGrupos $visibilidade) {}
 
     public function tarefas(Request $request): View
     {
@@ -94,8 +94,13 @@ class RelatorioController extends Controller
             abort_if($tarefasEdicao->isEmpty(), 404);
             $rotina = $tarefasEdicao->first();
             $colaboradoresEdicao = $this->consultaRotinas->colaboradores($usuario, (int) $rotina->id_empresa)->get();
+            $auxiliaresPorRotina = $this->consultaRotinas->auxiliaresDeRotinas($tarefasEdicao->pluck('id_rotina')->all())
+                ->when($this->visibilidade->grupos($usuario), fn (Builder $consulta, array $grupos) => $consulta->whereIntegerInRaw('u.id_grupo_acesso', $grupos))
+                ->get(['a.id_rotina', 'a.id_usuario', 'u.usuario'])->groupBy('id_rotina');
             foreach ($tarefasEdicao as $tarefa) {
                 $tarefa->dias_programados = $execucoes->diasDaSemana($tarefa->dias_semanas);
+                $tarefa->auxiliares = $auxiliaresPorRotina->get($tarefa->id_rotina)
+                    ?->where('id_usuario', '!=', $tarefa->id_usuario)->pluck('usuario')->all() ?? [];
             }
 
             if (isset($filtros['tarefa'])) {
@@ -104,7 +109,7 @@ class RelatorioController extends Controller
                 $edicaoTarefa = [
                     'registro' => $tarefa,
                     'dias' => $tarefa->dias_programados,
-                    'auxiliares' => DB::table('rotina_auxiliares')->where('id_rotina', $tarefa->id_rotina)->pluck('id_usuario')->all(),
+                    'auxiliares' => $auxiliaresPorRotina->get($tarefa->id_rotina)?->pluck('id_usuario')->all() ?? [],
                 ];
             } elseif ($request->boolean('adicionar_tarefa')) {
                 $rotinaParaAdicionarTarefa = $rotina;

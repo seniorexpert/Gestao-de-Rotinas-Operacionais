@@ -94,7 +94,7 @@ class AuditoriaTest extends TestCase
         $this->assertSame('UPDATE', $registros->first()->acao);
         $this->assertSame((string) $id, $registros->first()->registro_id);
         $this->assertSame(['local' => 'Sala de estar', 'id_empresas' => [$unidade->getKey()]], json_decode($registros->first()->dados_anteriores, true));
-        $this->assertSame(['local' => 'Sala de convivência', 'id_empresas' => [$unidade->getKey()]], json_decode($registros->first()->dados_novos, true));
+        $this->assertSame(['local' => 'Sala de Convivência', 'id_empresas' => [$unidade->getKey()]], json_decode($registros->first()->dados_novos, true));
     }
 
     public function test_execucao_registra_inicio_conclusao_e_repeticao_sem_alteracao(): void
@@ -128,6 +128,10 @@ class AuditoriaTest extends TestCase
         $this->assertSame($rotina, $eventos->last()->id_rotina);
         $this->assertSame('em_andamento', json_decode($eventos->last()->dados_anteriores, true)['status']);
         $this->assertSame('concluida', json_decode($eventos->last()->dados_novos, true)['status']);
+
+        $this->get(route('relatorios.logs-rotinas', [
+            'colaborador_original' => 'Usuária De Exemplo', 'grupo_acesso' => 'CUIDADOR',
+        ]))->assertOk()->assertSeeText('Abrir a sala');
     }
 
     public function test_consulta_detalhes_e_exportacao_respeitam_o_escopo_da_unidade(): void

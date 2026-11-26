@@ -14,7 +14,7 @@
     <table cellpadding="0" cellspacing="0">
         <thead>
             <tr>
-                @foreach (['Finalizado em', 'Dia da semana', 'Hora', 'Colaborador(a)', 'Grupo de acesso', 'Tarefa', 'Quem (morador)', 'Onde', 'Tempo de execução', 'Tempo planejado', 'Justificativa'] as $coluna)
+                @foreach (['Finalizado em', 'Dia da semana', 'Hora', 'Tipo de processo', 'Colaborador(a)', 'Grupo de acesso', 'Tarefa', 'Quem (morador)', 'Onde', 'Tempo de execução', 'Tempo planejado', $rotuloResultado] as $coluna)
                     <td class="cabecalho" x:str>{{ $coluna }}</td>
                 @endforeach
             </tr>
@@ -25,6 +25,7 @@
                     <td x:str>{{ $registro->finalizado_em->format('d/m/Y') }}</td>
                     <td x:str>{{ ucfirst($registro->finalizado_em->dayName) }}</td>
                     <td x:str>{{ $registro->finalizado_em->format('H:i') }}</td>
+                    <td x:str>{{ $registro->processo_nome }}</td>
                     <td x:str>{{ $registro->finalizador }}</td>
                     <td x:str>{{ $registro->grupo_finalizador }}</td>
                     <td x:str>{{ $registro->tarefa }}</td>

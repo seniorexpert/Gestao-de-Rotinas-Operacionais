@@ -41,8 +41,7 @@ class ProcessoController extends Controller
         abort_unless($idEmpresa, 404);
         $request->attributes->set(AuditoriaService::UNIDADE_HTTP, (int) $idEmpresa);
 
-        return response()->json($this->consultaRotinas->colaboradores($usuario)
-            ->whereIn('u.id_usuario', DB::table('empresa_usuario')->select('id_usuario')->where('id_empresa', $idEmpresa))
+        return response()->json($this->consultaRotinas->colaboradores($usuario, (int) $idEmpresa)
             ->select('u.id_usuario', 'u.usuario')
             ->get());
     }

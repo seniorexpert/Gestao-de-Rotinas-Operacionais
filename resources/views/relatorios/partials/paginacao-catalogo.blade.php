@@ -21,10 +21,10 @@
     (() => {
         const formulario = document.getElementById(@js($idFormulario));
         const tabela = document.getElementById(@js($idTabela));
+        const cartoes = document.getElementById(@js($idCartoes));
         const mensagemVazia = document.getElementById(@js($idMensagemVazia));
         const filtroNome = formulario.querySelector('input[type="search"]');
         const filtroSituacao = formulario.querySelector('[data-filtro-situacao]');
-        const linhas = [...tabela.querySelectorAll('tbody tr[data-situacao]')];
         const contador = document.getElementById('contadorResultados');
         const indicadorPagina = document.getElementById('infoPaginacao');
         const anterior = document.getElementById('btnAnterior');
@@ -36,25 +36,32 @@
         let paginaAtual = 1;
 
         const normalizar = texto => texto.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const cartoesPorId = new Map([...cartoes.children].map(cartao => [cartao.dataset.idRegistro, cartao]));
+        const registros = [...tabela.querySelectorAll('tbody tr[data-situacao]')].map(linha => ({
+            linha,
+            cartao: cartoesPorId.get(linha.dataset.idRegistro),
+            nome: normalizar(linha.querySelector('[data-nome-catalogo]').textContent),
+            situacao: linha.dataset.situacao,
+        }));
 
-        function atualizarTabela() {
+        function atualizarResultados() {
             const termo = normalizar(filtroNome.value);
             const situacao = filtroSituacao.value;
-            const filtradas = linhas.filter(linha =>
-                (situacao === '' || linha.dataset.situacao === situacao)
-                && normalizar(linha.querySelector('[data-nome-catalogo]').textContent).includes(termo)
+            const filtrados = registros.filter(registro =>
+                (situacao === '' || registro.situacao === situacao)
+                && registro.nome.includes(termo)
             );
 
-            const totalItens = filtradas.length;
+            const totalItens = filtrados.length;
             const totalPaginas = Math.max(1, Math.ceil(totalItens / itensPorPagina));
             paginaAtual = Math.min(totalPaginas, Math.max(1, paginaAtual));
             const inicio = (paginaAtual - 1) * itensPorPagina;
 
-            linhas.forEach(linha => {
-                linha.hidden = true;
-            });
-            filtradas.slice(inicio, inicio + itensPorPagina).forEach(linha => {
-                linha.hidden = false;
+            const visiveis = new Set(filtrados.slice(inicio, inicio + itensPorPagina));
+            registros.forEach(registro => {
+                const ocultar = !visiveis.has(registro);
+                registro.linha.hidden = ocultar;
+                registro.cartao.hidden = ocultar;
             });
 
             const plural = totalItens !== 1;
@@ -67,12 +74,12 @@
 
         function mudarPagina(direcao) {
             paginaAtual += direcao;
-            atualizarTabela();
+            atualizarResultados();
         }
 
         function aplicarFiltros() {
             paginaAtual = 1;
-            atualizarTabela();
+            atualizarResultados();
         }
 
         filtroNome.addEventListener('input', aplicarFiltros);
@@ -84,6 +91,6 @@
         anterior.addEventListener('click', () => mudarPagina(-1));
         proximo.addEventListener('click', () => mudarPagina(1));
 
-        atualizarTabela();
+        atualizarResultados();
     })();
 </script>

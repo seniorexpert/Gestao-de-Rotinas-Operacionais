@@ -152,7 +152,7 @@ class ExecucoesDiariasTest extends TestCase
         $this->assertDatabaseCount('rotinas_execucoes', 5);
 
         $this->travelTo(CarbonImmutable::parse('2026-11-20 21:00:00', 'America/Sao_Paulo'));
-        $this->get($concluidas)->assertOk()->assertViewHas('rotinas', fn ($rotinas) => $rotinas->count() === 5
+        $this->get($concluidas)->assertOk()->assertViewHas('rotinas', fn ($rotinas) => $rotinas->where('status', 'pendente')->count() === 9
             && $rotinas->where('status', 'concluida')->isEmpty());
         $this->assertDatabaseHas('rotinas_execucoes', ['id_execucao' => $recepcao, 'status' => 'concluida']);
         $this->assertDatabaseCount('rotinas_execucoes', 10);
@@ -168,6 +168,41 @@ class ExecucoesDiariasTest extends TestCase
         $this->get($concluidas)->assertOk()
             ->assertViewHas('rotinas', fn ($rotinas) => $rotinas->where('status', 'concluida')->sole()->id_execucao === $rondaAtrasada)
             ->assertSeeTextInOrder(['00:00 · 20/11/2026', 'Concluída em', '20/11/2026 21:00']);
+    }
+
+    public function test_home_preserva_rotinas_abertas_apos_a_virada_do_dia_ate_o_encerramento(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-23 23:59:59', ExecucoesDiarias::FUSO));
+        $unidade = Empresa::create(['empresa' => 'Unidade Santana']);
+        $usuario = $this->usuario('ana', $unidade);
+        $colega = $this->usuario('bia', $unidade);
+        $pendente = $this->rotina($usuario, $unidade, $this->tarefa('Organizar o salão'), '09:00:00', 'Seg');
+        $emAndamento = $this->rotina($usuario, $unidade, $this->tarefa('Conferir as chaves'), '10:00:00', 'Seg');
+        $this->rotina($colega, $unidade, $this->tarefa('Tarefa de outro colaborador'), '11:00:00', 'Seg');
+        $this->artisan('rotinas:gerar-execucoes')->assertSuccessful();
+        $ids = DB::table('rotinas_execucoes')->pluck('id_execucao', 'id_rotina');
+
+        $this->actingAs($usuario)->post(route('execucoes.iniciar', $ids[$emAndamento]))->assertSessionHasNoErrors();
+        DB::table('rotinas_execucoes')->where('id_execucao', $ids[$emAndamento])->update(['agenda_ate' => null]);
+        $this->travel(1)->second();
+
+        $this->get(route('home', ['aba' => 'todas']))->assertOk()
+            ->assertSeeTextInOrder(['Organizar o salão', '09:00 · 23/11/2026', 'Em atraso', 'Conferir as chaves'])
+            ->assertDontSeeText('Tarefa de outro colaborador')
+            ->assertViewHas('rotinas', fn ($rotinas) => $rotinas->pluck('status', 'id_execucao')->all() === [
+                $ids[$pendente] => 'pendente',
+                $ids[$emAndamento] => 'em_andamento',
+            ]);
+        $this->get(route('home'), ['X-Painel-Rotinas-Diarias' => '1'])->assertOk()
+            ->assertSeeText('Organizar o salão');
+
+        $this->post(route('execucoes.iniciar', $ids[$pendente]), ['fluxo_diario' => '1'])
+            ->assertRedirectToRoute('execucoes.realizando', $ids[$pendente]);
+        $this->post(route('execucoes.concluir', $ids[$pendente]), ['comentario' => 'Salão organizado.'])->assertSessionHasNoErrors();
+
+        $this->get(route('home'))->assertOk()
+            ->assertViewHas('rotinas', fn ($rotinas) => $rotinas->whereIn('status', ['pendente', 'em_andamento'])
+                ->sole()->id_execucao === $ids[$emAndamento]);
     }
 
     public function test_concluidas_inclui_agenda_liberada_antes_do_previsto_e_emergencial_anterior_a_liberacao(): void
@@ -229,6 +264,34 @@ class ExecucoesDiariasTest extends TestCase
         $this->assertDatabaseCount('rotinas_execucoes', 2);
     }
 
+    public function test_detalhes_das_rotinas_diarias_mostram_os_colaboradores_auxiliares_da_tarefa(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-26 12:00:00', 'UTC'));
+        $unidade = Empresa::create(['empresa' => 'Unidade Santana']);
+        $responsavel = $this->usuario('ana', $unidade);
+        $rita = $this->usuario('rita', $unidade);
+        $beatriz = $this->usuario('beatriz', $unidade);
+        $rotina = $this->rotina($responsavel, $unidade, $this->tarefa('Acompanhar a refeição'), '09:00:00');
+        $outraRotina = $this->rotina($responsavel, $unidade, $this->tarefa('Organizar a sala'), '10:00:00');
+        DB::table('rotinas')->where('id_rotina', $rotina)->update(['auxilio' => true]);
+        DB::table('rotina_auxiliares')->insert([
+            ['id_rotina' => $rotina, 'id_usuario' => $rita->getKey()],
+            ['id_rotina' => $rotina, 'id_usuario' => $beatriz->getKey()],
+        ]);
+
+        $this->actingAs($responsavel)->get(route('home'))->assertOk()
+            ->assertSeeText('Auxílio previsto para esta tarefa de:')
+            ->assertViewHas('rotinas', fn ($rotinas) => $rotinas->firstWhere('id_rotina', $rotina)->auxiliares === ['Beatriz', 'Rita']
+                && $rotinas->firstWhere('id_rotina', $outraRotina)->auxiliares === []);
+        $this->get(route('home'), ['X-Painel-Rotinas-Diarias' => '1'])->assertOk()
+            ->assertSeeTextInOrder(['Acompanhar a refeição', 'Auxílio:', 'Sim - Beatriz; Rita', 'Organizar a sala', 'Auxílio:', 'Não']);
+
+        $execucao = DB::table('rotinas_execucoes')->where('id_rotina', $rotina)->value('id_execucao');
+        $this->post(route('execucoes.iniciar', $execucao), ['fluxo_diario' => '1'])->assertRedirectToRoute('execucoes.realizando', $execucao);
+        $this->get(route('execucoes.realizando', $execucao))->assertOk()
+            ->assertSeeTextInOrder(['Auxílio previsto para esta tarefa de:', 'Beatriz, Rita']);
+    }
+
     public function test_central_calcula_no_prazo_expirando_e_atrasada_com_as_execucoes_do_dia(): void
     {
         $this->travelTo(CarbonImmutable::parse('2026-11-19 12:00:00', 'UTC'));
@@ -277,14 +340,16 @@ class ExecucoesDiariasTest extends TestCase
 
         $this->travelTo($agora->addSeconds(95));
         $estatisticas = route('relatorios.estatisticas', ['detalhe' => 'usuario-'.$usuario->getKey()]);
-        $this->get($estatisticas)->assertOk()->assertSeeText('Comentário (obrigatório)')
-            ->assertSee('name="comentario" rows="3" maxlength="2000" required', false);
-        $this->from($estatisticas)->followingRedirects()
-            ->post(route('execucoes.concluir', $id), ['id_execucao' => (string) $id])
-            ->assertOk()->assertSeeText('Informe um comentário sobre a execução.')
-            ->assertSee('aria-describedby="erros-estatisticas"', false);
-        $this->from($estatisticas)->post(route('execucoes.concluir', $id), ['comentario' => 'Salão preparado.'])
-            ->assertRedirect($estatisticas)->assertSessionHasNoErrors();
+        $this->get($estatisticas)->assertOk()->assertSeeTextInOrder(['Preparar o salão', 'Iniciada'])
+            ->assertDontSeeText(['Ver SLA', 'Comentário (obrigatório)'])
+            ->assertDontSee('action="'.route('execucoes.concluir', $id).'"', false);
+
+        $formulario = route('execucoes.formulario', [$id, 'finalizar']);
+        $this->get($formulario)->assertOk()->assertSeeText('Comentário');
+        $this->from($formulario)->post(route('execucoes.concluir', $id))
+            ->assertRedirect($formulario)->assertSessionHasErrors(['comentario' => 'Informe um comentário sobre a execução.']);
+        $this->from($formulario)->post(route('execucoes.concluir', $id), ['comentario' => 'Salão preparado.', 'fluxo_diario' => 1])
+            ->assertRedirectToRoute('home', ['aba' => 'concluida'])->assertSessionHasNoErrors();
         $this->get(route('monitoramento.index'))->assertOk()->assertSeeText('1 de 1 concluídas')
             ->assertViewHas('execucoes', fn ($registros) => $registros->sole()->situacao_sla === 'atrasado');
     }
@@ -317,7 +382,7 @@ class ExecucoesDiariasTest extends TestCase
 
         $caminho = DB::table('rotinas_execucoes')->where('id_execucao', $id)->value('foto_conclusao');
         Storage::disk('local')->assertExists($caminho);
-        $this->assertDatabaseHas('rotinas_execucoes', ['id_execucao' => $id, 'status' => 'concluida', 'comentario_conclusao' => 'Assistência registrada.']);
+        $this->assertDatabaseHas('rotinas_execucoes', ['id_execucao' => $id, 'status' => 'concluida', 'comentario_conclusao' => 'Assistência Registrada.']);
         $this->get(route('execucoes.foto', $id))->assertDownload();
         $this->actingAs($colega)->get(route('execucoes.foto', $id))->assertNotFound();
     }
@@ -356,7 +421,7 @@ class ExecucoesDiariasTest extends TestCase
         $this->post(route('execucoes.nao-realizada', $id), ['justificativa' => 'Morador ausente.'])
             ->assertRedirectToRoute('home', ['aba' => 'todas']);
         $this->assertDatabaseHas('rotinas_execucoes', [
-            'id_execucao' => $id, 'status' => 'nao_realizada', 'justificativa_nao_realizada' => 'Morador ausente.',
+            'id_execucao' => $id, 'status' => 'nao_realizada', 'justificativa_nao_realizada' => 'Morador Ausente.',
         ]);
         $this->get(route('home', ['aba' => 'todas']))->assertOk()->assertSeeText('Não realizada');
         $this->get(route('home', ['aba' => 'concluida']))->assertOk()

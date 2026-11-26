@@ -2,25 +2,42 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\User;
 use App\Services\CalculadoraSla;
 use App\Services\ConsultaRotinas;
+use App\Services\EscalonamentoAcompanhamento;
 use App\Services\ExecucoesDiarias;
+use App\Services\VisibilidadeGrupos;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
+use Illuminate\Contracts\View\View;
 use Illuminate\Database\Query\Builder;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use InvalidArgumentException;
+use stdClass;
 
 class EstatisticasController extends Controller
 {
+    private const PROCESSOS = [
+        'processo-diarias' => 'Rotinas Diárias',
+        'processo-acompanhamento' => 'Rotinas de Acompanhamento',
+        'processo-auxilio' => 'Solicitações de Auxílio',
+        'processo-emergenciais' => 'Tarefas Emergenciais',
+    ];
+
     public function __construct(
         private ConsultaRotinas $rotinas,
         private ExecucoesDiarias $execucoesDiarias,
         private CalculadoraSla $sla,
+        private EscalonamentoAcompanhamento $escalonamento,
+        private VisibilidadeGrupos $visibilidade,
     ) {}
 
-    public function index(Request $request)
+    public function index(Request $request): View|RedirectResponse
     {
         $opcoesPeriodo = [
             'todos' => 'Todos',
@@ -35,7 +52,7 @@ class EstatisticasController extends Controller
         ];
 
         $filtros = $request->validate([
-            'aba' => ['nullable', Rule::in(['usuarios', 'grupos'])],
+            'aba' => ['nullable', Rule::in(['usuarios', 'grupos', 'processos'])],
             'busca' => ['nullable', 'string', 'max:150'],
             'pendentes' => ['nullable', 'boolean'],
             'andamento' => ['nullable', 'boolean'],
@@ -50,7 +67,9 @@ class EstatisticasController extends Controller
                 'nullable',
                 'string',
                 'max:80',
-                'regex:/\A(?:usuario|grupo)-(?:[0-9]+|sem)\z/',
+                $request->input('aba') === 'processos'
+                    ? Rule::in(array_keys(self::PROCESSOS))
+                    : 'regex:/\A(?:usuario|grupo)-(?:[0-9]+|sem)\z/',
             ],
             'busca_rotinas' => ['nullable', 'string', 'max:150'],
         ]);
@@ -127,11 +146,12 @@ class EstatisticasController extends Controller
 
         $consulta = $this->rotinas->execucoes($usuario)
             ->whereIn('e.status', $status)
+            ->addSelect('t.icone', 't.cor_icone')
             ->orderBy('e.previsto_em', 'desc');
 
+        $faixas = [];
         if ($finalizados) {
             $hoje = $agora->setTimezone(ExecucoesDiarias::FUSO)->startOfDay();
-            $faixas = [];
 
             foreach (['inicio' => 'iniciado_em', 'fim' => 'concluido_em'] as $etapa => $coluna) {
                 [$de, $ate] = $this->intervalo(
@@ -157,75 +177,34 @@ class EstatisticasController extends Controller
         }
 
         $inconsistentes = 0;
+        $execucoes = $consulta->get()->filter(function (stdClass $execucao) use ($agora, &$inconsistentes): bool {
+            try {
+                $execucao->situacao = $this->sla->calcular($execucao, $agora)['sla_atual'];
 
-        $execucoes = $consulta->get()
-            ->map(function ($execucao) use ($agora, &$inconsistentes) {
-                try {
-                    $resultado = $this->sla->calcular($execucao, $agora);
+                return true;
+            } catch (InvalidArgumentException) {
+                $inconsistentes++;
 
-                    $execucao->situacao = $resultado['sla_atual'];
-                    $execucao->sla_inicio = $resultado['sla_inicio'];
-                    $execucao->sla_conclusao = $resultado['sla_conclusao'];
+                return false;
+            }
+        })->map($this->formatarExecucao(...));
 
-                    $execucao->prazo_em = $resultado['prazo_em']->utc()->format('Y-m-d H:i:s');
+        if ($aba === 'processos') {
+            $acompanhamentos = $this->agruparAcompanhamentos($usuario, $agora, $status, $faixas, $inconsistentes);
+            $resultados = $this->agruparPorProcesso($execucoes, $acompanhamentos);
+        } else {
+            $resultados = $this->agruparPorResponsavel($execucoes, $aba);
+        }
 
-                    $execucao->tarefa = trim($execucao->tarefa ?? '')
-                        ?: 'Tarefa não localizada';
-                    $execucao->morador = trim($execucao->morador ?? '') ?: 'Não informado';
-                    $execucao->local = trim($execucao->local_rotina ?? '')
-                        ?: (trim($execucao->local_cadastrado ?? '') ?: 'Não informado');
+        $termo = Str::ascii($busca);
+        $resultados = $resultados->filter(fn (array $item): bool => $termo === '' || mb_stripos(Str::ascii($item['nome']), $termo) !== false);
+        $grupos = $aba === 'processos' ? $resultados : $resultados
+            ->sortBy(fn (array $item): string => mb_strtolower(Str::ascii($item['nome'])))
+            ->groupBy(function (array $item): string {
+                $inicial = strtoupper(substr(Str::ascii($item['nome']), 0, 1));
 
-                    return $execucao;
-                } catch (\InvalidArgumentException $erro) {
-                    $inconsistentes++;
-
-                    return null;
-                }
-            })
-            ->filter()
-            ->values();
-
-        $resultados = $execucoes
-            ->groupBy(function ($execucao) use ($aba) {
-                return $aba === 'usuarios'
-                    ? 'usuario-'.($execucao->id_usuario_responsavel ?? 'sem')
-                    : 'grupo-'.($execucao->id_grupo_acesso ?? 'sem');
-            })
-            ->map(function ($itens, $chave) use ($aba) {
-                $primeiro = $itens->first();
-                $nome = $aba === 'usuarios'
-                    ? ($primeiro->responsavel ?? 'Usuário não localizado')
-                    : ($primeiro->grupo_acesso ?? 'Sem grupo');
-
-                $total = $itens->count();
-                $indicadores = [];
-
-                foreach (['atrasado', 'expirando', 'noPrazo'] as $situacao) {
-                    $quantidade = $itens->where('situacao', $situacao)->count();
-
-                    $indicadores[$situacao] = [
-                        'quantidade' => $quantidade,
-                        'percentual' => round($quantidade * 100 / $total, 1),
-                    ];
-                }
-
-                return [
-                    'chave' => $chave,
-                    'nome' => $nome,
-                    'total' => $total,
-                    'indicadores' => $indicadores,
-                    'execucoes' => $itens,
-                ];
-            })
-            ->filter(fn ($item) => $busca === ''
-                || mb_stripos($item['nome'], $busca) !== false)
-            ->sortBy(fn ($item) => mb_strtolower(Str::ascii($item['nome'])));
-
-        $grupos = $resultados->groupBy(function ($item) {
-            $inicial = strtoupper(substr(Str::ascii($item['nome']), 0, 1));
-
-            return preg_match('/^[A-Z]$/', $inicial) ? $inicial : '#';
-        });
+                return preg_match('/^[A-Z]$/', $inicial) ? $inicial : '#';
+            });
 
         // A chave só abre resultados já limitados às empresas autorizadas.
         $detalhe = $chaveDetalhe ? $resultados->get($chaveDetalhe) : null;
@@ -270,6 +249,152 @@ class EstatisticasController extends Controller
             'opcoesPeriodo',
             'periodos'
         ));
+    }
+
+    private function formatarExecucao(stdClass $execucao): stdClass
+    {
+        $execucao->tarefa = trim($execucao->tarefa ?? '') ?: 'Tarefa não localizada';
+        $execucao->morador = trim($execucao->morador ?? '') ?: 'Não informado';
+        $execucao->local = trim($execucao->local_rotina ?? '')
+            ?: (trim($execucao->local_cadastrado ?? '') ?: 'Não informado');
+
+        return $execucao;
+    }
+
+    private function agruparPorResponsavel(Collection $execucoes, string $aba): Collection
+    {
+        return $execucoes->groupBy(fn (stdClass $execucao): string => $aba === 'usuarios'
+            ? 'usuario-'.($execucao->id_usuario_responsavel ?? 'sem')
+            : 'grupo-'.($execucao->id_grupo_acesso ?? 'sem'))
+            ->map(function (Collection $itens, string $chave) use ($aba): array {
+                $primeiro = $itens->first();
+                $nome = $aba === 'usuarios'
+                    ? ($primeiro->responsavel ?? 'Usuário não localizado')
+                    : ($primeiro->grupo_acesso ?? 'Sem grupo');
+
+                return $this->resumirExecucoes($chave, $nome, $itens);
+            });
+    }
+
+    private function agruparPorProcesso(Collection $execucoes, Collection $acompanhamentos): Collection
+    {
+        $porTipo = $execucoes->groupBy(fn (stdClass $execucao): string => $execucao->tipo_rotina === ExecucoesDiarias::TIPO_EMERGENCIAL
+            ? 'processo-emergenciais'
+            : 'processo-diarias')->merge($acompanhamentos);
+
+        return collect(self::PROCESSOS)->map(fn (string $nome, string $chave): array => $this->resumirExecucoes(
+            $chave,
+            $nome,
+            $porTipo->get($chave, collect()),
+        ));
+    }
+
+    /** @return array{chave: string, nome: string, total: int, indicadores: array<string, array{quantidade: int, percentual: float}>, execucoes: Collection} */
+    private function resumirExecucoes(string $chave, string $nome, Collection $execucoes): array
+    {
+        $total = $execucoes->count();
+        $quantidades = $execucoes->countBy('situacao');
+        $indicadores = [];
+
+        foreach (['atrasado', 'expirando', 'noPrazo'] as $situacao) {
+            $quantidade = $quantidades->get($situacao, 0);
+            $indicadores[$situacao] = [
+                'quantidade' => $quantidade,
+                'percentual' => round($quantidade * 100 / max(1, $total), 1),
+            ];
+        }
+
+        return [
+            'chave' => $chave,
+            'nome' => $nome,
+            'total' => $total,
+            'indicadores' => $indicadores,
+            'execucoes' => $execucoes,
+        ];
+    }
+
+    /**
+     * @param  list<string>  $status
+     * @param  list<array{string, string, CarbonImmutable}>  $faixas
+     */
+    private function agruparAcompanhamentos(
+        User $usuario,
+        CarbonImmutable $agora,
+        array $status,
+        array $faixas,
+        int &$inconsistentes,
+    ): Collection {
+        $pendentes = in_array('pendente', $status, true);
+        $concluidos = in_array('concluida', $status, true);
+        if ((! $pendentes && ! $concluidos) || ! $usuario->can('visualizar-modulo', 'acompanhamento')) {
+            return collect();
+        }
+
+        $caixa = $usuario->isAdmin() ? null : $this->escalonamento->caixaDoUsuario($usuario);
+        $consulta = $this->rotinas->filaDeAcompanhamento($usuario, $agora)
+            ->when($this->visibilidade->colaboradores($usuario), fn (Builder $consulta, Builder $visiveis) => $consulta->whereIn('fila.id_usuario_responsavel', $visiveis))
+            ->when(! $pendentes, fn (Builder $itens) => $itens->whereNotNull('fila.verificado_em'))
+            ->when(! $concluidos, fn (Builder $itens) => $itens->whereNull('fila.verificado_em'));
+
+        if ($faixas !== []) {
+            $faixasAcompanhamento = array_map(fn (array $faixa): array => [
+                $faixa[0] === 'e.iniciado_em' ? 'fila.iniciado_em' : 'fila.verificado_em', $faixa[1], $faixa[2],
+            ], $faixas);
+            $consulta->where(fn (Builder $itens) => $itens->whereNull('fila.verificado_em')
+                ->orWhere(fn (Builder $verificados) => $verificados->where($faixasAcompanhamento)));
+        }
+
+        return $consulta->cursor()->map(function (stdClass $item) use ($usuario, $caixa, $agora, &$inconsistentes): ?stdClass {
+            $verificado = $item->verificado_em !== null;
+            if ($verificado && ! $this->escalonamento->podeConsultarVerificacao($item, $caixa, $usuario)) {
+                return null;
+            }
+
+            try {
+                $referencia = $verificado ? CarbonImmutable::parse($item->verificado_em, 'UTC') : $agora;
+                $item->situacao = $this->classificarAcompanhamento($item, $caixa, $referencia);
+            } catch (InvalidArgumentException) {
+                $inconsistentes++;
+
+                return null;
+            }
+
+            if ($item->situacao === null) {
+                $inconsistentes += (int) $verificado;
+
+                return null;
+            }
+
+            $item->status = $verificado ? 'concluida' : 'pendente';
+            $item->concluido_em = $item->verificado_em;
+            $item->responsavel = $item->colaborador;
+
+            return $this->formatarExecucao($item);
+        })->filter()->collect()->groupBy(fn (stdClass $item): string => $item->tipo === 'auxilio' ? 'processo-auxilio' : 'processo-acompanhamento');
+    }
+
+    private function classificarAcompanhamento(stdClass $item, ?string $caixa, CarbonImmutable $referencia): ?string
+    {
+        $recebimentos = $item->verificado_em !== null && $item->encaminhamentos !== null
+            ? json_decode($item->encaminhamentos, true)
+            : [];
+        if (! is_array($recebimentos) || $recebimentos === []) {
+            $recebimentos = $this->escalonamento->encaminharItem($item, $referencia)['recebimentos'] ?? [];
+        }
+
+        $recebidoEm = $caixa !== null ? ($recebimentos[$caixa] ?? null) : null;
+        if ($recebidoEm === null && ($caixa === null || $item->verificado_em !== null)) {
+            $recebidoEm = reset($recebimentos);
+        }
+        if (is_string($recebidoEm) && trim($recebidoEm) !== '') {
+            $recebidoEm = CarbonImmutable::parse($recebidoEm, 'UTC');
+        }
+
+        if (! $recebidoEm instanceof CarbonImmutable || $recebidoEm->greaterThan($referencia)) {
+            return null;
+        }
+
+        return $this->escalonamento->classificarSla($recebidoEm, $referencia, $item->tipo === 'auxilio');
     }
 
     private function intervalo(

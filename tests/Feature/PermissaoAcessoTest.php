@@ -122,7 +122,7 @@ class PermissaoAcessoTest extends TestCase
         $pedido = DB::table('rotinas_acomp_auxilios')->sole();
         $this->assertSame('Enfermagem', $pedido->caixa);
         $this->get(route('acompanhamento.index'))->assertOk()
-            ->assertSeeText(['Todas as caixas', 'Apoio para revisar a agenda.']);
+            ->assertSeeText(['Todas as caixas', 'Apoio para Revisar a Agenda.']);
         $this->post(route('acompanhamento.store', $pedido->id_solicitacao), [
             'tipo' => 'auxilio', 'acao' => 'Apoio providenciado',
         ])->assertSessionHasNoErrors();
@@ -158,7 +158,7 @@ class PermissaoAcessoTest extends TestCase
         $this->put(route('users.update', $externo->getKey()), ['usuario' => 'Nome alterado'])->assertForbidden();
         $this->put(route('users.update', $editor->getKey()), ['usuario' => 'editor', 'empresas' => [$norte->getKey()]])->assertForbidden();
         $this->put(route('users.update', $editor->getKey()), ['usuario' => 'editor', 'id_grupo_acesso' => $gerencia->getKey()])->assertForbidden();
-        $this->assertDatabaseHas('usuarios', ['id_usuario' => $colega->getKey(), 'usuario' => 'Colega revisado']);
+        $this->assertDatabaseHas('usuarios', ['id_usuario' => $colega->getKey(), 'usuario' => 'Colega Revisado']);
     }
 
     private function usuario(string $login, ?GrupoAcesso $grupo = null): User

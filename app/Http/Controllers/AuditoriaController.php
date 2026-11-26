@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Services\AuditoriaService;
 use App\Services\ConsultaRotinas;
+use App\Services\VisibilidadeGrupos;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Query\Builder;
@@ -39,6 +40,7 @@ class AuditoriaController extends Controller
         'empresa_usuario' => 'Vínculos de unidade',
         'permissoes_grupos_acesso' => 'Permissões de grupos',
         'permissoes_usuarios' => 'Permissões individuais',
+        VisibilidadeGrupos::TABELA => 'Visibilidade entre grupos',
         'tarefas' => 'Tarefas',
         'locais' => 'Locais',
         'ferramentas' => 'Ferramentas',
@@ -86,12 +88,12 @@ class AuditoriaController extends Controller
         'historico' => 'Registro anterior',
     ];
 
-    public function __construct(private ConsultaRotinas $rotinas) {}
+    public function __construct(private ConsultaRotinas $rotinas, private VisibilidadeGrupos $visibilidade) {}
 
     public function index(Request $request): View
     {
         $usuario = $request->user();
-        $visaoGeral = $usuario->can('auditoria-geral');
+        $visaoGeral = $this->visaoGeral($usuario);
         $filtros = $this->filtros($request);
         $logs = $this->projetar($this->filtrar($this->consulta($usuario, $visaoGeral), $filtros))
             ->orderByDesc('a.id_log')->paginate(25)->appends($filtros)
@@ -101,7 +103,11 @@ class AuditoriaController extends Controller
             'logs' => $logs,
             'filtros' => $filtros,
             'titulo' => $visaoGeral ? 'Logs e Auditoria' : 'Logs de Rotinas',
-            'recursos' => $visaoGeral ? self::RECURSOS : Arr::only(self::RECURSOS, self::ROTINAS),
+            'recursos' => match (true) {
+                $usuario->isAdmin() => self::RECURSOS,
+                $visaoGeral => Arr::except(self::RECURSOS, VisibilidadeGrupos::TABELA),
+                default => Arr::only(self::RECURSOS, self::ROTINAS),
+            },
             'acoes' => self::ACOES,
             'resultados' => self::RESULTADOS,
             'unidades' => DB::table('empresas')
@@ -113,7 +119,7 @@ class AuditoriaController extends Controller
     public function detalhes(Request $request, int $id): View
     {
         $usuario = $request->user();
-        $visaoGeral = $usuario->can('auditoria-geral');
+        $visaoGeral = $this->visaoGeral($usuario);
         $log = $this->buscarLog($usuario, $visaoGeral, $id);
         abort_unless($log, 404);
 
@@ -140,7 +146,7 @@ class AuditoriaController extends Controller
     public function apiDetalhes(Request $request, int $id): JsonResponse
     {
         $usuario = $request->user();
-        $log = $this->buscarLog($usuario, $usuario->can('auditoria-geral'), $id);
+        $log = $this->buscarLog($usuario, $this->visaoGeral($usuario), $id);
 
         return $log ? response()->json(Arr::only((array) $log, [
             'id', 'created_at', 'data_evento', 'tarefa', 'detalhe_tarefa', 'colaborador_original',
@@ -153,7 +159,7 @@ class AuditoriaController extends Controller
         $usuario = $request->user();
         $filtros = $this->filtros($request);
         $ultimoId = DB::table('logs_auditoria')->max('id_log') ?? 0;
-        $logs = $this->projetar($this->filtrar($this->consulta($usuario, $usuario->can('auditoria-geral')), $filtros))
+        $logs = $this->projetar($this->filtrar($this->consulta($usuario, $this->visaoGeral($usuario)), $filtros))
             ->where('a.id_log', '<=', $ultimoId)->lazyByIdDesc(250, 'a.id_log', 'id');
 
         return response()->streamDownload(function () use ($logs) {
@@ -180,6 +186,11 @@ class AuditoriaController extends Controller
         }, 'relatorio-logs-rotinas-'.now(self::FUSO)->format('Y-m-d').'.xls', ['Content-Type' => 'application/vnd.ms-excel; charset=utf-8']);
     }
 
+    private function visaoGeral(User $usuario): bool
+    {
+        return $usuario->can('auditoria-geral') && $this->visibilidade->grupos($usuario) === null;
+    }
+
     private function consulta(User $usuario, bool $visaoGeral): Builder
     {
         return DB::table('logs_auditoria as a')
@@ -193,9 +204,15 @@ class AuditoriaController extends Controller
             ->leftJoin('usuarios as colaborador', 'r.id_usuario', '=', 'colaborador.id_usuario')
             ->leftJoin('grupos_acesso as grupo', 'colaborador.id_grupo_acesso', '=', 'grupo.id_grupo_acesso')
             ->leftJoin('usuarios as executor', 'a.id_usuario', '=', 'executor.id_usuario')
+            ->when(! $usuario->isAdmin(), fn (Builder $consulta) => $consulta->where('a.tabela', '<>', VisibilidadeGrupos::TABELA))
             ->when(! $visaoGeral, fn (Builder $consulta) => $consulta
                 ->whereIn('a.tabela', self::ROTINAS)
-                ->whereIn(DB::raw(self::UNIDADE), $this->rotinas->empresas($usuario)));
+                ->whereIn(DB::raw(self::UNIDADE), $this->rotinas->empresas($usuario)))
+            ->when($this->visibilidade->colaboradores($usuario), fn (Builder $consulta, Builder $visiveis) => $consulta
+                ->where(fn (Builder $responsaveis) => $responsaveis->whereNull('r.id_usuario')->orWhereIn('r.id_usuario', $visiveis))
+                ->where(fn (Builder $autores) => $autores->whereIn('a.id_usuario', $visiveis)
+                    ->orWhere(fn (Builder $sistema) => $sistema->whereNotNull('r.id_usuario')
+                        ->whereNull('a.id_usuario')->whereNull('a.usuario_nome')->whereNull('a.usuario_login'))));
     }
 
     private function projetar(Builder $consulta): Builder
@@ -277,9 +294,17 @@ class AuditoriaController extends Controller
             $consulta->where('t.tarefa', 'like', '%'.$filtros['tarefa'].'%');
         }
 
+        foreach (['colaborador_original' => 'colaborador.usuario', 'grupo_acesso' => self::GRUPO] as $campo => $coluna) {
+            if (isset($filtros[$campo]) && ! in_array($filtros[$campo], ['Todos', 'Todas'], true)) {
+                $comparacao = $consulta->getConnection()->getDriverName() === 'sqlsrv'
+                    ? "{$coluna} COLLATE Latin1_General_100_CI_AS = ?"
+                    : "LOWER({$coluna}) = LOWER(?)";
+                $consulta->whereRaw($comparacao, [$filtros[$campo]]);
+            }
+        }
+
         foreach ([
             'id_empresa' => DB::raw(self::UNIDADE), 'tabela' => 'a.tabela', 'registro_id' => 'a.registro_id',
-            'colaborador_original' => 'colaborador.usuario', 'grupo_acesso' => DB::raw(self::GRUPO),
             'descricao_evento' => DB::raw(self::EVENTO),
         ] as $campo => $coluna) {
             if (isset($filtros[$campo]) && ! in_array($filtros[$campo], ['Todos', 'Todas'], true)) {

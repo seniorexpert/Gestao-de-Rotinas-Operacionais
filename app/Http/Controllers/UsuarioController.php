@@ -8,6 +8,8 @@ use App\Models\User;
 use App\Services\AuditoriaService;
 use App\Services\ConsultaRotinas;
 use App\Services\PermissoesAcesso;
+use App\Services\TextoEmTitulo;
+use App\Services\VisibilidadeGrupos;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\RedirectResponse;
@@ -25,22 +27,31 @@ class UsuarioController extends Controller
 {
     private const LOGIN_EXISTENTE = 'Já existe um usuário com esse login.';
 
-    public function __construct(private PermissoesAcesso $permissoes, private ConsultaRotinas $rotinas) {}
+    public function __construct(
+        private PermissoesAcesso $permissoes,
+        private ConsultaRotinas $rotinas,
+        private VisibilidadeGrupos $visibilidade,
+    ) {}
 
     public function index(Request $request): View
     {
         $operador = $request->user();
         $visaoGeral = $this->permissoes->gerenciaGeral($operador);
+        $gruposVisiveis = $this->visibilidade->grupos($operador);
         $nasUnidades = fn ($consulta) => $consulta->whereIn('empresas.id_empresa', $this->rotinas->empresas($operador));
 
         return view('auth.user-management', [
             'usuarios' => User::query()
                 ->with(['grupoAcesso:id_grupo_acesso,grupo_acesso', 'empresas:id_empresa,empresa'])
                 ->when(! $visaoGeral, fn ($consulta) => $consulta->whereHas('empresas', $nasUnidades))
+                ->when($gruposVisiveis, fn ($consulta) => $consulta->whereIntegerInRaw('id_grupo_acesso', $gruposVisiveis))
                 ->orderBy('usuario')
                 ->get(['id_usuario', 'usuario', 'username', 'id_grupo_acesso', 'grupo_acesso_nome', 'photo', 'status']),
             'gruposAcesso' => GrupoAcesso::withCount(['usuarios' => fn ($consulta) => $consulta
-                ->when(! $visaoGeral, fn ($usuarios) => $usuarios->whereHas('empresas', $nasUnidades))])->orderBy('grupo_acesso')->get(),
+                ->when(! $visaoGeral, fn ($usuarios) => $usuarios->whereHas('empresas', $nasUnidades))])
+                ->when($gruposVisiveis, fn ($consulta) => $consulta->whereIntegerInRaw('id_grupo_acesso', $gruposVisiveis))
+                ->orderBy('grupo_acesso')->get(),
+            'grupoObrigatorio' => $gruposVisiveis !== null,
             'empresas' => Empresa::query()->when(! $visaoGeral, fn ($consulta) => $consulta->whereIn('id_empresa', $this->rotinas->empresas($operador)))
                 ->orderBy('empresa')->get(['id_empresa', 'empresa', 'status']),
         ]);
@@ -75,6 +86,7 @@ class UsuarioController extends Controller
     /** @return array{usuario: string, username?: string, status?: bool|int|string, password?: ?string, id_grupo_acesso?: int|string|null, empresas?: list<int|string>|null, photo?: ?UploadedFile, remove_photo?: bool|int|string} */
     private function validar(Request $request, bool $cadastro): array
     {
+        TextoEmTitulo::naRequisicao($request, 'usuario');
         $regras = [
             'usuario' => ['required', 'string', 'max:255'],
             'status' => ['sometimes', 'boolean'],
@@ -153,6 +165,11 @@ class UsuarioController extends Controller
             return;
         }
 
+        $gruposVisiveis = $this->visibilidade->grupos($operador);
+        $destino = array_key_exists('id_grupo_acesso', $dados) ? $dados['id_grupo_acesso'] : $usuario->id_grupo_acesso;
+        abort_if($gruposVisiveis !== null && (! in_array((int) $destino, $gruposVisiveis, true)
+            || ($usuario->exists && ! in_array((int) $usuario->id_grupo_acesso, $gruposVisiveis, true))), 403);
+
         if (! $this->permissoes->gerenciaGeral($operador)) {
             $unidades = $operador->empresas()->pluck('empresas.id_empresa');
             $atuais = $usuario->exists ? $usuario->empresas()->pluck('empresas.id_empresa') : collect();
@@ -168,6 +185,7 @@ class UsuarioController extends Controller
 
         if (array_key_exists('id_grupo_acesso', $dados)) {
             $grupo = $dados['id_grupo_acesso'] === null ? null : GrupoAcesso::findOrFail($dados['id_grupo_acesso']);
+            $alvo->id_grupo_acesso = $grupo?->getKey();
             $alvo->setRelation('grupoAcesso', $grupo);
             $this->autorizarNiveisDoUsuario($operador, $alvo);
         }
@@ -176,6 +194,11 @@ class UsuarioController extends Controller
     private function autorizarNiveisDoUsuario(User $operador, User $alvo): void
     {
         abort_if($this->permissoes->gerenciaGeral($alvo) && ! $this->permissoes->gerenciaGeral($operador), 403);
+        $gruposDoOperador = $this->visibilidade->grupos($operador);
+        if ($gruposDoOperador !== null) {
+            $gruposDoAlvo = $this->visibilidade->grupos($alvo);
+            abort_if($gruposDoAlvo === null || array_diff($gruposDoAlvo, $gruposDoOperador) !== [], 403);
+        }
 
         foreach (array_keys(PermissoesAcesso::MODULOS) as $modulo) {
             abort_if($this->permissoes->nivel($alvo, $modulo) > $this->permissoes->nivel($operador, $modulo), 403);

@@ -46,12 +46,12 @@ class CatalogosPorUnidadeTest extends TestCase
 
         $this->actingAs($colaborador)->get(route('relatorios.ferramentas'))->assertOk()
             ->assertViewHas('ferramentas', fn ($itens) => $itens->sole()->ids_empresas === [$sul->getKey()] && ! $itens->sole()->editavel)
-            ->assertSeeText('Kit compartilhado')->assertDontSeeText('Unidade Centro');
+            ->assertSeeText('Kit Compartilhado')->assertDontSeeText('Unidade Centro');
         $this->get(route('relatorios.locais'))->assertOk()->assertDontSeeText('Sala do Centro');
         $this->post(route('ferramentas.store'), [
             'id' => $ferramenta->id_ferramenta, 'nome_ferramenta' => 'Nome indevido', 'id_empresas' => [$sul->getKey()],
         ])->assertNotFound();
-        $this->actingAs($externo)->get(route('relatorios.ferramentas'))->assertOk()->assertDontSeeText('Kit compartilhado');
+        $this->actingAs($externo)->get(route('relatorios.ferramentas'))->assertOk()->assertDontSeeText('Kit Compartilhado');
 
         $this->actingAs($responsavel)->post(route('ferramentas.store'), [
             'id' => $ferramenta->id_ferramenta, 'nome_ferramenta' => 'Kit compartilhado', 'id_empresas' => $unidades, 'status' => '0',
@@ -107,7 +107,7 @@ class CatalogosPorUnidadeTest extends TestCase
             ->assertSessionHas('success');
         $this->assertDatabaseHas('tarefas', ['id_tarefa' => $tarefa->id_tarefa, 'id_ferramenta' => $kits['Kit do Sul']]);
         $this->actingAs($externo)->get(route('relatorios.tarefas'))->assertOk()
-            ->assertDontSeeText(['Organizar materiais', 'Kit do Centro', 'Kit do Sul']);
+            ->assertDontSeeText(['Organizar Materiais', 'Kit do Centro', 'Kit do Sul']);
         $this->post(route('tarefas.store'), [...$dados, 'id' => $tarefa->id_tarefa, 'id_empresas' => [$norte->getKey()]])->assertNotFound();
     }
 

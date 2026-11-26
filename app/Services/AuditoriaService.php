@@ -17,6 +17,8 @@ class AuditoriaService
 
     public const ROTINA_HTTP = 'auditoria.rotina';
 
+    public const TABELA_HTTP = 'auditoria.tabela';
+
     public const ALTERACAO_REGISTRADA = 'auditoria.alteracao_registrada';
 
     public static function registrar(

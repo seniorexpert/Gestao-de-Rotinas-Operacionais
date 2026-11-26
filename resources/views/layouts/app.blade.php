@@ -522,6 +522,11 @@
                                     <i class="fa-solid fa-shield-halved" aria-hidden="true"></i>
                                     <span>Permissões de Acesso</span>
                                 </a>
+                                <a href="{{ route('visibilidade-grupos.index') }}" @if (request()->routeIs('visibilidade-grupos.*')) aria-current="page" @endif
+                                   class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 aria-[current=page]:bg-gray-50 flex items-center space-x-2 transition">
+                                    <i class="fa-solid fa-user-group" aria-hidden="true"></i>
+                                    <span>Visibilidade entre Grupos</span>
+                                </a>
                             @endcan
 
                             <form method="POST" action="{{ route('logout') }}">
@@ -561,6 +566,51 @@
     </footer>
 
     <script>
+        (() => {
+            const camposDeTexto = ':is(input:not([type]), input[type="text"], input[type="search"], textarea):not([data-sem-title-case])';
+            const padrao = new RegExp(@js(\App\Services\TextoEmTitulo::PADRAO), 'giu');
+            const palavrasDeLigacao = new Set(@js(\App\Services\TextoEmTitulo::PALAVRAS_DE_LIGACAO));
+
+            function emTitulo(texto) {
+                let inicioDaLinha = true;
+                return texto.replace(padrao, (trecho, primeira, restante, quebraDeLinha) => {
+                    if (quebraDeLinha) {
+                        inicioDaLinha = true;
+                        return trecho;
+                    }
+
+                    const primeiraPalavra = inicioDaLinha;
+                    inicioDaLinha = false;
+                    if (!primeira) return trecho;
+
+                    const minuscula = trecho.toLocaleLowerCase('pt-BR');
+                    if (!primeiraPalavra && palavrasDeLigacao.has(minuscula.normalize())) return minuscula;
+
+                    const [inicial, ...letras] = primeira.toLocaleUpperCase('pt-BR');
+                    return inicial + (letras.join('') + restante).toLocaleLowerCase('pt-BR');
+                });
+            }
+
+            function formatarTexto(evento) {
+                const campo = evento.target;
+                if (evento.isComposing || !campo.matches?.(camposDeTexto)) return;
+
+                const original = campo.value;
+                const formatado = emTitulo(original);
+                if (formatado === original) return;
+
+                const { selectionStart, selectionEnd, selectionDirection } = campo;
+                const tamanhoMudou = formatado.length !== original.length;
+                const inicio = tamanhoMudou ? emTitulo(original.slice(0, selectionStart)).length : selectionStart;
+                const fim = tamanhoMudou ? emTitulo(original.slice(0, selectionEnd)).length : selectionEnd;
+                campo.value = formatado;
+                campo.setSelectionRange(inicio, fim, selectionDirection);
+            }
+
+            document.addEventListener('input', formatarTexto, true);
+            document.addEventListener('compositionend', formatarTexto, true);
+        })();
+
         const sidebar = document.getElementById('sidebar');
         const sidebarOverlay = document.getElementById('sidebarOverlay');
         const openSidebar = document.getElementById('openSidebar');

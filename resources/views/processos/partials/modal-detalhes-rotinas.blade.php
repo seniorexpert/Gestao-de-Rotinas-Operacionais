@@ -92,7 +92,7 @@
                                         </div>
                                         <div class="min-w-0">
                                             <dt class="inline font-semibold"><i class="fa-solid fa-link mr-1 text-[#a77a41]" aria-hidden="true"></i> Auxílio:</dt>
-                                            <dd class="inline">{{ $tarefa->auxilio ? 'Sim' : 'Não' }}</dd>
+                                            <dd class="inline"><x-auxilio-rotina :previsto="$tarefa->auxilio" :auxiliares="$tarefa->auxiliares" /></dd>
                                         </div>
                                     </dl>
                                 </div>

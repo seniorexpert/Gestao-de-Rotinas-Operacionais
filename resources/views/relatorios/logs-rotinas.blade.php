@@ -46,7 +46,7 @@
             </label>
             <label class="block">
                 <span class="{{ $estiloRotulo }}">Registro</span>
-                <input type="search" name="registro_id" maxlength="255" value="{{ $filtros['registro_id'] ?? '' }}"
+                <input type="search" name="registro_id" maxlength="255" value="{{ $filtros['registro_id'] ?? '' }}" data-sem-title-case
                     placeholder="Identificador" class="{{ $estiloCampo }}">
             </label>
 

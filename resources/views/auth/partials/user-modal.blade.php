@@ -46,16 +46,16 @@
 
         <div>
             <label for="loginUsuario" class="block text-xs font-medium text-stone-700 mb-1.5">Nome de usuário</label>
-            <input id="loginUsuario" type="text" name="username" autocomplete="username" required maxlength="100"
+            <input id="loginUsuario" type="text" name="username" autocomplete="username" required maxlength="100" data-sem-title-case
                 class="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-sm text-stone-800 focus:outline-none focus:ring-1 focus:ring-stone-400 read-only:bg-stone-100">
         </div>
 
         <div class="grid gap-4 sm:grid-cols-3">
             <div class="sm:col-span-2">
                 <label for="grupoAcessoUsuario" class="block text-xs font-medium text-stone-700 mb-1.5">Grupo de Acesso</label>
-                <select id="grupoAcessoUsuario" name="id_grupo_acesso"
+                <select id="grupoAcessoUsuario" name="id_grupo_acesso" @required($grupoObrigatorio)
                     class="w-full px-4 py-2.5 bg-white border border-stone-200 rounded-xl text-sm text-stone-800 focus:outline-none focus:ring-1 focus:ring-stone-400">
-                    <option value="">Sem grupo de acesso</option>
+                    <option value="">{{ $grupoObrigatorio ? 'Selecione um grupo' : 'Sem grupo de acesso' }}</option>
                     @foreach ($gruposAcesso as $grupo)
                         <option value="{{ $grupo->id_grupo_acesso }}">{{ $grupo->grupo_acesso }}{{ $grupo->status ? '' : ' (inativo)' }}</option>
                     @endforeach

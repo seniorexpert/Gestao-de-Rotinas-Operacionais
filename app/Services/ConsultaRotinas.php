@@ -19,6 +19,14 @@ class ConsultaRotinas
         'locais' => 'id_local',
     ];
 
+    public const TABELAS_ACOMPANHAMENTO = [
+        'atraso' => 'rotinas_verificacoes',
+        'nao_realizada' => 'rotinas_acomp_nao_realizadas',
+        'auxilio' => 'rotinas_acomp_auxilios',
+    ];
+
+    public function __construct(private VisibilidadeGrupos $visibilidade) {}
+
     public function empresas(User $usuario): Builder
     {
         if ($usuario->isAdmin()) {
@@ -34,6 +42,7 @@ class ConsultaRotinas
     {
         return DB::table('usuarios as u')
             ->leftJoin('grupos_acesso as g', 'u.id_grupo_acesso', '=', 'g.id_grupo_acesso')
+            ->when($this->visibilidade->grupos($usuario), fn (Builder $consulta, array $grupos) => $consulta->whereIntegerInRaw('u.id_grupo_acesso', $grupos))
             ->whereIn('u.id_usuario', DB::table('empresa_usuario')
                 ->select('id_usuario')
                 ->when($idEmpresa !== null, fn (Builder $vinculos) => $vinculos->where('id_empresa', $idEmpresa))
@@ -42,10 +51,20 @@ class ConsultaRotinas
             ->orderBy('u.usuario');
     }
 
+    /** @param list<int|string> $idsRotinas */
+    public function auxiliaresDeRotinas(array $idsRotinas): Builder
+    {
+        return DB::table('rotina_auxiliares as a')
+            ->join('usuarios as u', 'u.id_usuario', '=', 'a.id_usuario')
+            ->whereIntegerInRaw('a.id_rotina', $idsRotinas)
+            ->orderBy('u.usuario');
+    }
+
     public function cadastrosDeRotinas(User $usuario): Builder
     {
         return DB::table('rotinas as r')
             ->whereIn('r.id_empresa', $this->empresas($usuario))
+            ->when($this->visibilidade->colaboradores($usuario), fn (Builder $consulta, Builder $visiveis) => $consulta->whereIn('r.id_usuario', $visiveis))
             ->whereNull('r.excluida_em');
     }
 
@@ -115,6 +134,7 @@ class ConsultaRotinas
             ->leftJoin('locais as l', 'r.id_local', '=', 'l.id_local')
             ->leftJoin('empresas as unidade', 'e.id_empresa', '=', 'unidade.id_empresa')
             ->whereIn('e.id_empresa', $this->empresas($usuario))
+            ->when($this->visibilidade->grupos($usuario), fn (Builder $consulta, array $grupos) => $consulta->whereIntegerInRaw('u.id_grupo_acesso', $grupos))
             ->select([
                 'e.id_execucao', 'e.id_rotina', 'e.id_empresa', 'e.id_usuario_responsavel',
                 'e.previsto_em', 'e.prazo_em', 'e.iniciado_em', 'e.concluido_em',
@@ -127,22 +147,88 @@ class ConsultaRotinas
         return $this->filtrarExecucoesVisiveis($consulta);
     }
 
-    public function execucoesDaAgenda(User $usuario, CarbonImmutable $agora): Builder
+    public function execucoesParaAcompanhamento(User $usuario): Builder
     {
+        $consulta = DB::table('rotinas_execucoes as e')
+            ->join('rotinas as r', fn (JoinClause $join) => $join
+                ->on('e.id_rotina', '=', 'r.id_rotina')
+                ->on('e.id_empresa', '=', 'r.id_empresa'))
+            ->leftJoin('usuarios as u', 'e.id_usuario_responsavel', '=', 'u.id_usuario')
+            ->leftJoin('grupos_acesso as g', 'u.id_grupo_acesso', '=', 'g.id_grupo_acesso')
+            ->whereIn('e.id_empresa', $this->empresas($usuario))
+            ->select([
+                'e.id_execucao', 'e.id_rotina', 'e.id_empresa', 'e.id_usuario_responsavel',
+                'e.previsto_em', 'e.created_at', 'r.tipo_rotina', 'e.prazo_em', 'e.iniciado_em', 'e.concluido_em',
+                'e.duracao_prevista_segundos', 'e.tempo_limite_minutos', 'e.status',
+                'u.usuario as colaborador', 'g.grupo_acesso as grupo_origem',
+            ]);
+
+        return $this->filtrarExecucoesVisiveis($consulta)
+            ->where(fn (Builder $visiveis) => $visiveis->where('r.status', true)
+                ->orWhereIn('e.status', ['concluida', 'nao_realizada']));
+    }
+
+    public function itensDeAcompanhamento(User $usuario, string $tipo): Builder
+    {
+        $consulta = $this->execucoesParaAcompanhamento($usuario)
+            ->leftJoin('tarefas as t', 'r.id_tarefa', '=', 't.id_tarefa')
+            ->leftJoin('locais as l', 'r.id_local', '=', 'l.id_local')
+            ->addSelect([
+                't.tarefa', 't.icone', 't.cor_icone', 'r.morador', 'r.local as local_rotina',
+                'l.local as local_cadastrado', 'r.auxilio', 'v.verificado_em',
+                'v.id_usuario_verificacao', 'v.encaminhamentos',
+            ]);
+
+        if ($tipo === 'atraso') {
+            return $consulta->leftJoin(self::TABELAS_ACOMPANHAMENTO[$tipo].' as v', 'e.id_execucao', '=', 'v.id_execucao')
+                ->selectRaw("'atraso' as tipo, e.id_execucao as id_item, CAST(NULL AS VARCHAR(40)) as caixa_inicial, e.previsto_em as entrada, CAST(NULL AS VARCHAR(2000)) as justificativa");
+        }
+
+        $consulta->join(self::TABELAS_ACOMPANHAMENTO[$tipo].' as v', 'e.id_execucao', '=', 'v.id_execucao');
+
+        return $tipo === 'auxilio'
+            ? $consulta->selectRaw("'auxilio' as tipo, v.id_solicitacao as id_item, v.caixa as caixa_inicial, v.recebido_em as entrada, v.justificativa")
+            : $consulta->where('e.status', 'nao_realizada')
+                ->selectRaw("'nao_realizada' as tipo, e.id_execucao as id_item, v.caixa as caixa_inicial, v.recebido_em as entrada, e.justificativa_nao_realizada as justificativa");
+    }
+
+    public function filaDeAcompanhamento(User $usuario, CarbonImmutable $agora): Builder
+    {
+        $atrasos = $this->itensDeAcompanhamento($usuario, 'atraso')
+            ->where(fn (Builder $consulta) => $consulta->whereNotNull('v.id_execucao')
+                ->orWhere(fn (Builder $pendentes) => $pendentes
+                    ->whereIn('e.status', ['pendente', 'em_andamento', 'concluida'])
+                    ->where(fn (Builder $horarios) => $horarios
+                        ->where('e.previsto_em', '<=', $agora)
+                        ->orWhere('e.iniciado_em', '<=', $agora))));
+        $naoRealizadas = $this->itensDeAcompanhamento($usuario, 'nao_realizada')->where('v.recebido_em', '<=', $agora);
+        $auxilios = $this->itensDeAcompanhamento($usuario, 'auxilio')->where('v.recebido_em', '<=', $agora);
+
+        return DB::query()->fromSub($atrasos->unionAll($naoRealizadas)->unionAll($auxilios), 'fila');
+    }
+
+    public function execucoesDaAgenda(User $usuario, CarbonImmutable $agora, bool $incluirAbertasAnteriores = false): Builder
+    {
+        $agora = $agora->utc();
         [$inicio, $fim] = ExecucoesDiarias::janela($agora);
 
         return $this->execucoes($usuario)->where(fn (Builder $jornada) => $jornada
-            ->where('e.agenda_ate', '>', $agora->utc())
+            ->where('e.agenda_ate', '>', $agora)
             ->orWhere(fn (Builder $legado) => $legado->whereNull('e.agenda_ate')
                 ->where('e.previsto_em', '>=', $inicio)->where('e.previsto_em', '<', $fim))
             ->orWhere(fn (Builder $emergenciais) => $emergenciais->where('r.tipo_rotina', ExecucoesDiarias::TIPO_EMERGENCIAL)
                 ->whereIn('e.status', ['pendente', 'em_andamento']))
-            ->orWhere(fn (Builder $emAndamento) => $emAndamento->whereNotNull('e.agenda_ate')->where('e.status', 'em_andamento')));
+            ->orWhere(fn (Builder $emAndamento) => $emAndamento->whereNotNull('e.agenda_ate')->where('e.status', 'em_andamento'))
+            ->when($incluirAbertasAnteriores, fn (Builder $agenda) => $agenda->orWhere(fn (Builder $abertas) => $abertas
+                ->whereIn('e.status', ['pendente', 'em_andamento'])
+                ->where('e.previsto_em', '<=', $agora))));
     }
 
     public function execucoesPessoais(User $usuario, ?CarbonImmutable $agora = null): Builder
     {
-        $consulta = $agora ? $this->execucoesDaAgenda($usuario, $agora) : $this->execucoes($usuario);
+        $consulta = $agora === null
+            ? $this->execucoes($usuario)
+            : $this->execucoesDaAgenda($usuario, $agora, incluirAbertasAnteriores: true);
 
         return $consulta->when(! $usuario->isAdmin(), fn (Builder $consulta) => $consulta->where('e.id_usuario_responsavel', $usuario->getKey()))
             ->leftJoin('ferramentas_empresas as fe', fn (JoinClause $join) => $join

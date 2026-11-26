@@ -32,7 +32,19 @@
 
         <form method="GET" action="{{ route('relatorios.rotinas-finalizadas') }}" role="search"
               aria-label="Filtros de rotinas finalizadas"
-              class="mb-4 grid items-end gap-2.5 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.1fr)_minmax(0,1.5fr)_auto]">
+              class="mb-4 grid items-end gap-2.5 sm:grid-cols-2 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.6fr)_auto]">
+            <div class="min-w-0 sm:col-span-2 xl:col-span-1">
+                <label for="finalizadas-processo" class="mb-1 block text-[0.8125rem] font-semibold">Tipo de processo</label>
+                <div class="relative">
+                    <select id="finalizadas-processo" name="processo" class="{{ $campo }} appearance-none pr-8">
+                        @foreach ($processos as $valor => $rotulo)
+                            <option value="{{ $valor }}" @selected($processo === $valor)>{{ $rotulo }}</option>
+                        @endforeach
+                    </select>
+                    <i class="fa-solid fa-chevron-down pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[0.65rem]" aria-hidden="true"></i>
+                </div>
+            </div>
+
             <div class="grid grid-cols-2 gap-2.5 sm:col-span-2 xl:contents">
                 <div class="min-w-0">
                     <label for="finalizadas-inicio" class="mb-1 block text-[0.8125rem] font-semibold">Data inicial</label>
@@ -109,7 +121,7 @@
                 <ul class="space-y-3 lg:hidden">
                     @foreach ($registros as $registro)
                         <li>
-                            <a href="{{ route('relatorios.rotinas-finalizadas.detalhes', ['id' => $registro->id_execucao] + $contexto) }}"
+                            <a href="{{ route('relatorios.rotinas-finalizadas.detalhes', ['id' => $registro->id_item] + $contexto) }}"
                                class="group block rounded-2xl border border-[#e8d6bf] bg-white p-4 shadow-sm transition-colors hover:bg-[#fbf9f5] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#17384b]">
                                 <time datetime="{{ $registro->finalizado_em->toIso8601String() }}" class="flex flex-wrap items-center gap-2 text-xs font-semibold">
                                     <span class="rounded-full bg-[#e4eef1] px-3 py-1 font-bold tabular-nums">{{ $registro->finalizado_em->format('H:i') }}</span>
@@ -120,7 +132,7 @@
                                 </div>
                                 <dl class="grid grid-cols-2 gap-3 text-sm">
                                     <div class="col-span-2 min-w-0">
-                                        <dt class="text-xs text-[#536b7b]">Colaborador(a) que finalizou</dt>
+                                        <dt class="text-xs text-[#536b7b]">{{ $registro->verificado ? 'Colaborador(a) que verificou' : 'Colaborador(a) que finalizou' }}</dt>
                                         <dd class="break-words font-bold">{{ $registro->finalizador }}</dd>
                                         @if ($registro->grupo_finalizador)
                                             <dd class="text-xs text-[#536b7b]">{{ $registro->grupo_finalizador }}</dd>
@@ -136,7 +148,7 @@
                                     </div>
                                     @if (filled($registro->justificativa))
                                         <div class="col-span-2 min-w-0">
-                                            <dt class="text-xs text-[#536b7b]">Justificativa</dt>
+                                            <dt class="text-xs text-[#536b7b]">{{ $rotuloResultado }}</dt>
                                             <dd class="whitespace-pre-wrap break-words">{{ $registro->justificativa }}</dd>
                                         </div>
                                     @endif
@@ -159,12 +171,12 @@
                                     <th scope="col" class="w-[17%] px-4 py-3.5">Colaborador(a)</th>
                                     <th scope="col" class="w-[29%] px-4 py-3.5">Tarefa</th>
                                     <th scope="col" class="w-[16%] px-4 py-3.5">Tempo de execução</th>
-                                    <th scope="col" class="px-4 py-3.5">Justificativa</th>
+                                    <th scope="col" class="px-4 py-3.5">{{ $rotuloResultado }}</th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-[#efe6d9]">
                                 @foreach ($registros as $registro)
-                                    @php($urlDetalhes = route('relatorios.rotinas-finalizadas.detalhes', ['id' => $registro->id_execucao] + $contexto))
+                                    @php($urlDetalhes = route('relatorios.rotinas-finalizadas.detalhes', ['id' => $registro->id_item] + $contexto))
                                     <tr class="even:bg-[#fcfaf7] hover:bg-[#f5efe5] focus-within:bg-[#f5efe5]">
                                         <td class="px-4 py-3.5 align-middle">
                                             <time datetime="{{ $registro->finalizado_em->toIso8601String() }}" class="flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
@@ -231,6 +243,7 @@
 
     <script>
         (() => {
+            const processo = document.getElementById('finalizadas-processo');
             const grupo = document.getElementById('finalizadas-grupo');
             const colaborador = document.getElementById('finalizadas-colaborador');
 
@@ -245,6 +258,11 @@
                 }
             };
 
+            processo.addEventListener('change', () => {
+                grupo.value = '';
+                colaborador.value = '';
+                atualizarColaboradores();
+            });
             grupo.addEventListener('change', atualizarColaboradores);
             atualizarColaboradores();
         })();

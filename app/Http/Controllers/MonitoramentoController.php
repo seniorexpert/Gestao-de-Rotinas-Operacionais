@@ -6,8 +6,10 @@ use App\Services\AuditoriaService;
 use App\Services\CalculadoraSla;
 use App\Services\ConsultaRotinas;
 use App\Services\ExecucoesDiarias;
+use App\Services\VisibilidadeGrupos;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\View\View;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +23,7 @@ class MonitoramentoController extends Controller
         private ConsultaRotinas $consultaRotinas,
         private ExecucoesDiarias $execucoesDiarias,
         private CalculadoraSla $sla,
+        private VisibilidadeGrupos $visibilidade,
     ) {}
 
     public function index(Request $request): View
@@ -97,6 +100,7 @@ class MonitoramentoController extends Controller
             $empresas = $rotinas->pluck('id_empresa')->unique();
             $totalVinculos = DB::table('empresa_usuario')
                 ->where('id_usuario', $dados['novo_colaborador_id'])
+                ->when($this->visibilidade->colaboradores($request->user()), fn (Builder $vinculos, Builder $visiveis) => $vinculos->whereIn('id_usuario', $visiveis))
                 ->whereIn('id_empresa', $empresas)
                 ->count();
 

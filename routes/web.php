@@ -18,6 +18,7 @@ use App\Http\Controllers\RotinasEmergenciaisController;
 use App\Http\Controllers\RotinasFinalizadasController;
 use App\Http\Controllers\TarefasController;
 use App\Http\Controllers\UsuarioController;
+use App\Http\Controllers\VisibilidadeGruposController;
 use App\Services\AuditoriaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -93,6 +94,11 @@ Route::middleware('auth')->group(function () {
 Route::middleware(['auth', 'can:administrar-permissoes'])->prefix('permissoes-acesso')->name('permissoes.')->group(function () {
     Route::get('/', [PermissaoAcessoController::class, 'index'])->name('index');
     Route::put('/{tipo}/{id}', [PermissaoAcessoController::class, 'update'])->whereIn('tipo', ['grupo', 'usuario'])->whereNumber('id')->name('update');
+});
+
+Route::middleware(['auth', 'can:administrar-permissoes'])->prefix('visibilidade-grupos')->name('visibilidade-grupos.')->group(function () {
+    Route::get('/', [VisibilidadeGruposController::class, 'index'])->name('index');
+    Route::put('/{grupo}', [VisibilidadeGruposController::class, 'update'])->whereNumber('grupo')->name('update');
 });
 
 Route::post('/logout', function (Request $request) {

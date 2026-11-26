@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\Empresa;
 use App\Models\GrupoAcesso;
 use App\Models\User;
+use App\Services\ExecucoesDiarias;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -27,19 +28,25 @@ class RotinasFinalizadasTest extends TestCase
         $responsavel = $this->usuario('Joana Responsável', $unidade);
         $novoResponsavel = $this->usuario('Marcos Atual', $unidade);
         $admin = $this->usuario('Gestora da Unidade', $unidade, 'Gerente da Unidade', 'admin');
+        $ana = $this->usuario('Ana Auxiliar', $unidade);
+        $paula = $this->usuario('Paula Auxiliar', $unidade);
         $id = $this->execucao($unidade, $responsavel, 'Acompanhamento de pressão', [
             'status' => 'em_andamento', 'concluido_em' => null, 'id_usuario_conclusao' => null,
         ]);
         $lista = route('relatorios.rotinas-finalizadas', ['data_inicio' => '2026-11-24']);
         $detalhes = route('relatorios.rotinas-finalizadas.detalhes', ['id' => $id, 'data_inicio' => '2026-11-24']);
-        $justificativa = 'Aferição concluída com acompanhamento.';
+        $justificativa = 'Aferição Concluída com Acompanhamento.';
         $foto = UploadedFile::fake()->createWithContent('registro.png', base64_decode(self::FOTO_PNG));
 
-        $this->actingAs($admin)->post(route('execucoes.concluir', $id), ['comentario' => $justificativa, 'foto' => $foto])
+        $this->actingAs($admin)->post(route('execucoes.concluir', $id), ['comentario' => 'aferição concluída com acompanhamento.', 'foto' => $foto])
             ->assertSessionHasNoErrors();
         $execucao = DB::table('rotinas_execucoes')->where('id_execucao', $id)->first();
         DB::table('rotinas')->where('id_rotina', $execucao->id_rotina)->update([
-            'id_usuario' => $novoResponsavel->getKey(), 'status' => false,
+            'id_usuario' => $novoResponsavel->getKey(), 'status' => false, 'auxilio' => true,
+        ]);
+        DB::table('rotina_auxiliares')->insert([
+            ['id_rotina' => $execucao->id_rotina, 'id_usuario' => $ana->getKey()],
+            ['id_rotina' => $execucao->id_rotina, 'id_usuario' => $paula->getKey()],
         ]);
 
         $this->get($lista)->assertOk()->assertSee($detalhes)
@@ -48,6 +55,7 @@ class RotinasFinalizadasTest extends TestCase
             ->assertDontSeeText('Joana Responsável');
         $this->get($detalhes)->assertOk()->assertSee($lista)->assertSee(route('relatorios.rotinas-finalizadas.foto', $id))
             ->assertSeeText(['Joana Responsável', 'Gestora da Unidade', 'Foto de comprovação', 'Instrução de trabalho', $justificativa])
+            ->assertSeeTextInOrder(['Auxílio previsto para esta tarefa de:', 'Ana Auxiliar; Paula Auxiliar'])
             ->assertDontSeeText('Marcos Atual');
         $this->get(route('relatorios.rotinas-finalizadas.foto', $id))
             ->assertOk()->assertHeader('Content-Type', 'image/png')->assertStreamedContent(base64_decode(self::FOTO_PNG));
@@ -134,6 +142,116 @@ class RotinasFinalizadasTest extends TestCase
             ->assertSeeText(['Não registrado', '00:15:00', 'Medição registrada no prontuário.', 'Nenhuma foto de comprovação disponível.'])
             ->assertViewHas('registro', fn ($registro) => $registro->tempo_execucao === null);
         $this->get(route('relatorios.rotinas-finalizadas.foto', $id))->assertNotFound();
+    }
+
+    public function test_relatorio_comeca_nas_diarias_e_filtra_emergenciais_e_nao_realizadas_verificadas(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-25 01:15:00', 'UTC'));
+        $unidade = Empresa::create(['empresa' => 'Unidade Centro']);
+        $colaborador = $this->usuario('Ana Centro', $unidade);
+        $enfermeira = $this->usuario('Rita Enfermagem', $unidade, 'Enfermagem');
+        $foto = 'fotos-execucoes/atendimento.png';
+        Storage::fake('local')->put($foto, base64_decode(self::FOTO_PNG));
+        $this->execucao($unidade, $colaborador, 'Conferência do plantão');
+        $urgente = $this->execucao($unidade, $colaborador, 'Atendimento urgente', ['foto_conclusao' => $foto]);
+        DB::table('rotinas')->where('id_rotina', DB::table('rotinas_execucoes')->where('id_execucao', $urgente)->value('id_rotina'))
+            ->update(['tipo_rotina' => ExecucoesDiarias::TIPO_EMERGENCIAL, 'agendada_em' => '2026-11-25 00:45:00']);
+        $impedida = $this->execucao($unidade, $colaborador, 'Entrega interrompida', [
+            'status' => 'em_andamento', 'concluido_em' => null, 'id_usuario_conclusao' => null,
+        ]);
+        $this->actingAs($colaborador)->post(route('execucoes.nao-realizada', $impedida), ['justificativa' => 'Morador ausente.'])
+            ->assertSessionHasNoErrors();
+
+        $this->get(route('relatorios.rotinas-finalizadas'))->assertOk()
+            ->assertSee('value="diaria" selected', false)->assertSeeText('Conferência do plantão')
+            ->assertDontSeeText(['Atendimento urgente', 'Entrega interrompida']);
+
+        $emergenciais = ['processo' => 'emergencial'];
+        $detalhe = route('relatorios.rotinas-finalizadas.detalhes', ['id' => $urgente] + $emergenciais);
+        $urlFoto = route('relatorios.rotinas-finalizadas.foto', ['id' => $urgente] + $emergenciais);
+        $this->get(route('relatorios.rotinas-finalizadas', $emergenciais))->assertOk()
+            ->assertSee($detalhe)->assertSeeText(['1 registro encontrado', 'Atendimento urgente'])
+            ->assertDontSeeText('Conferência do plantão');
+        $this->get($detalhe)->assertOk()->assertSee($urlFoto)->assertSeeText(['Concluída', 'Tarefas Emergenciais']);
+        $this->get($urlFoto)->assertOk()->assertStreamedContent(base64_decode(self::FOTO_PNG));
+
+        $naoRealizadas = ['processo' => 'nao_realizada'];
+        $lista = route('relatorios.rotinas-finalizadas', $naoRealizadas);
+        $detalhe = route('relatorios.rotinas-finalizadas.detalhes', ['id' => $impedida] + $naoRealizadas);
+        $this->actingAs($enfermeira)->get($lista)->assertOk()
+            ->assertSeeText('Nenhum registro encontrado')->assertDontSeeText('Entrega interrompida');
+        $this->get($detalhe)->assertNotFound();
+
+        $this->travelTo(CarbonImmutable::parse('2026-11-25 03:05:00', 'UTC'));
+        $this->post(route('acompanhamento.store', $impedida), ['tipo' => 'nao_realizada', 'acao' => 'Entrega reagendada.'])
+            ->assertSessionHasNoErrors();
+        $filtros = $naoRealizadas + [
+            'data_inicio' => '2026-11-25', 'data_fim' => '2026-11-25', 'colaborador' => $enfermeira->usuario,
+        ];
+        $this->get(route('relatorios.rotinas-finalizadas', $filtros))->assertOk()
+            ->assertSeeText(['1 registro encontrado', 'Entrega interrompida', '00:05', 'Rita Enfermagem', 'Ação realizada', 'Entrega Reagendada.'])
+            ->assertDontSeeText(['Atendimento urgente', 'Morador Ausente.']);
+        $this->get($detalhe)->assertOk()->assertSeeText([
+            'Verificada', '25/11/2026 · 00:05', 'Ana Centro', 'Rita Enfermagem', 'Colaborador(a) que verificou',
+            'Ação realizada', 'Entrega Reagendada.', 'Justificativa da não realização', 'Morador Ausente.', '01:50:00', '00:30:00',
+        ]);
+
+        $planilha = $this->get(route('relatorios.rotinas-finalizadas.exportar', $filtros))->assertDownload()->streamedContent();
+        $this->assertStringContainsString('Entrega Reagendada.', $planilha);
+        $this->assertStringContainsString('Rita Enfermagem', $planilha);
+        $this->actingAs($colaborador)->get($detalhe)->assertForbidden();
+    }
+
+    public function test_relatorio_usa_verificacoes_e_preserva_a_identidade_de_cada_solicitacao_de_auxilio(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-25 02:55:00', 'UTC'));
+        $unidade = Empresa::create(['empresa' => 'Unidade Centro']);
+        $colaborador = $this->usuario('Ana Centro', $unidade);
+        $enfermeira = $this->usuario('Rita Enfermagem', $unidade, 'Enfermagem');
+        $visualizadora = $this->usuario('Bia Enfermagem', $unidade, 'Enfermagem');
+        $coordenador = $this->usuario('Caio Coordenador', $unidade, 'Coordenador');
+        $externa = $this->usuario('Joana Sul', Empresa::create(['empresa' => 'Unidade Sul']), 'Enfermagem');
+        $id = $this->execucao($unidade, $colaborador, 'Hidratação do morador', [
+            'status' => 'em_andamento', 'concluido_em' => null, 'id_usuario_conclusao' => null,
+        ]);
+        $this->actingAs($colaborador);
+        foreach (['Materiais', 'Equipe', 'Pendência'] as $motivo) {
+            $this->post(route('execucoes.auxilio', $id), ['justificativa' => $motivo])->assertSessionHasNoErrors();
+        }
+        $pedidos = DB::table('rotinas_acomp_auxilios')->pluck('id_solicitacao', 'justificativa');
+        $this->travelTo(CarbonImmutable::parse('2026-11-25 03:02:00', 'UTC'));
+        $this->actingAs($enfermeira)->post(route('acompanhamento.store', $id), ['acao' => 'Priorizei o atendimento.'])
+            ->assertSessionHasNoErrors();
+        $this->post(route('acompanhamento.store', $pedidos['Materiais']), ['tipo' => 'auxilio', 'acao' => 'Materiais entregues.'])
+            ->assertSessionHasNoErrors();
+        $this->post(route('acompanhamento.store', $pedidos['Equipe']), ['tipo' => 'auxilio', 'acao' => 'Equipe mobilizada.'])
+            ->assertSessionHasNoErrors();
+
+        $filtros = ['processo' => 'auxilio', 'data_inicio' => '2026-11-25', 'data_fim' => '2026-11-25', 'colaborador' => $enfermeira->usuario];
+        $lista = route('relatorios.rotinas-finalizadas', $filtros);
+        $detalhe = route('relatorios.rotinas-finalizadas.detalhes', ['id' => $pedidos['Equipe']] + $filtros);
+        $this->actingAs($visualizadora)->get($lista)->assertOk()->assertSee($detalhe)
+            ->assertSeeText(['2 registros encontrados', 'Hidratação do morador', '00:02', 'Rita Enfermagem', 'Materiais Entregues.', 'Equipe Mobilizada.'])
+            ->assertDontSeeText('Priorizei o Atendimento.');
+        $this->get($detalhe)->assertOk()->assertSee($lista)
+            ->assertSeeText(['Verificada', 'Solicitações de Auxílio', 'Equipe', 'Equipe Mobilizada.', '00:07:00', '00:10:00'])
+            ->assertDontSeeText('Materiais Entregues.');
+        $this->get(route('relatorios.rotinas-finalizadas.detalhes', ['id' => $pedidos['Pendência'], 'processo' => 'auxilio']))->assertNotFound();
+
+        $planilha = $this->get(route('relatorios.rotinas-finalizadas.exportar', $filtros))->assertDownload()->streamedContent();
+        $this->assertStringContainsString('Solicitações de Auxílio', $planilha);
+        $this->assertStringContainsString('Equipe Mobilizada.', $planilha);
+        $this->assertStringNotContainsString('Priorizei o Atendimento.', $planilha);
+        $this->get(route('relatorios.rotinas-finalizadas', ['processo' => 'acompanhamento']))->assertOk()
+            ->assertSeeText(['1 registro encontrado', 'Priorizei o Atendimento.'])->assertDontSeeText('Equipe Mobilizada.');
+        $this->assertDatabaseHas('logs_auditoria', [
+            'rota' => 'relatorios.rotinas-finalizadas.detalhes', 'tabela' => 'rotinas_acomp_auxilios',
+            'registro_id' => (string) $pedidos['Equipe'], 'id_empresa' => $unidade->getKey(),
+        ]);
+
+        $this->actingAs($coordenador)->get($detalhe)->assertNotFound();
+        $this->actingAs($externa)->get($detalhe)->assertNotFound();
+        $this->actingAs($colaborador)->get($lista)->assertForbidden();
     }
 
     private function usuario(string $nome, Empresa $unidade, string $grupo = 'Cuidador', ?string $login = null): User

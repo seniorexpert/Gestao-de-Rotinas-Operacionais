@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\User;
 use App\Services\PermissoesAcesso;
+use App\Services\VisibilidadeGrupos;
 use Illuminate\Database\Connectors\SqlServerConnector;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
@@ -13,6 +14,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->scoped(PermissoesAcesso::class);
+        $this->app->scoped(VisibilidadeGrupos::class);
 
         $this->app->bind('db.connector.sqlsrv', function () {
             return new class extends SqlServerConnector

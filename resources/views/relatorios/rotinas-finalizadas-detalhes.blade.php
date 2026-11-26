@@ -7,6 +7,10 @@
 @endpush
 
 @section('content')
+    @php
+        $mostrarComprovacao = ! $registro->verificado;
+        $tituloResultado = $registro->verificado ? 'Ação realizada' : 'Justificativa da finalização';
+    @endphp
     <div class="text-[#17384b]">
         <a href="{{ $voltar }}" class="mb-3 inline-flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-semibold transition-colors hover:bg-[#f8f5ef]">
             <i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Voltar
@@ -17,8 +21,9 @@
                 Detalhes do Registro
             </h1>
             <div class="mt-2.5 flex flex-wrap items-center gap-2 text-xs font-bold">
-                <span class="rounded-full bg-emerald-50 px-3.5 py-1 text-emerald-800">Concluída</span>
-                <span class="rounded-lg bg-[#f8f5ef] px-2.5 py-1 tabular-nums text-[#536b7b]">ID #{{ $registro->id_execucao }}</span>
+                <span class="rounded-full bg-emerald-50 px-3.5 py-1 text-emerald-800">{{ $registro->situacao }}</span>
+                <span class="rounded-lg bg-[#f8f5ef] px-2.5 py-1 text-[#536b7b]">{{ $registro->processo_nome }}</span>
+                <span class="rounded-lg bg-[#f8f5ef] px-2.5 py-1 tabular-nums text-[#536b7b]">ID #{{ $registro->id_item }}</span>
             </div>
         </header>
 
@@ -64,13 +69,22 @@
                         @endif
                     </div>
                     <div class="min-w-0">
-                        <dt class="mb-1 text-xs text-[#536b7b]">Colaborador(a) que finalizou</dt>
+                        <dt class="mb-1 text-xs text-[#536b7b]">{{ $registro->verificado ? 'Colaborador(a) que verificou' : 'Colaborador(a) que finalizou' }}</dt>
                         <dd class="break-words font-bold">{{ $registro->finalizador }}</dd>
                         @if ($registro->grupo_finalizador)
                             <dd class="text-xs text-[#536b7b]">{{ $registro->grupo_finalizador }}</dd>
                         @endif
                     </div>
                 </dl>
+
+                @if ($registro->auxilio)
+                    <div class="mt-4 border-t border-[#efe6d9] pt-3 text-sm">
+                        <h3 class="font-semibold text-[#536b7b]">{{ $auxiliares->isNotEmpty() ? 'Auxílio previsto para esta tarefa de:' : 'Auxílio previsto para esta tarefa.' }}</h3>
+                        @if ($auxiliares->isNotEmpty())
+                            <p class="mt-1 break-words font-bold">{{ $auxiliares->implode('; ') }}</p>
+                        @endif
+                    </div>
+                @endif
 
                 <dl class="mt-4 grid grid-cols-2 gap-4 border-t border-[#efe6d9] pt-3 text-sm">
                     <div>
@@ -98,8 +112,8 @@
                 @endif
             </section>
 
-            <section aria-labelledby="titulo-comprovacao" class="min-w-0 rounded-[1.25rem] border-2 border-[#e8d6bf] bg-white p-5 shadow-sm sm:rounded-3xl sm:p-6">
-                <h2 id="titulo-comprovacao" class="mb-3 text-lg font-bold">Foto de comprovação</h2>
+            <section aria-labelledby="titulo-resultado" class="min-w-0 rounded-[1.25rem] border-2 border-[#e8d6bf] bg-white p-5 shadow-sm sm:rounded-3xl sm:p-6">
+                <h2 id="titulo-resultado" class="mb-3 text-lg font-bold">{{ $mostrarComprovacao ? 'Foto de comprovação' : $tituloResultado }}</h2>
 
                 @if ($foto)
                     <button type="button" aria-label="Ampliar foto de comprovação" aria-haspopup="dialog" aria-controls="foto-finalizada-ampliada"
@@ -110,16 +124,25 @@
                             <i class="fa-solid fa-magnifying-glass-plus"></i>
                         </span>
                     </button>
-                @else
+                @elseif ($mostrarComprovacao)
                     <p class="rounded-xl border border-dashed border-[#e8d6bf] bg-[#f8f5ef] px-4 py-9 text-center text-sm text-[#536b7b]">
                         Nenhuma foto de comprovação disponível.
                     </p>
                 @endif
 
-                <div class="mt-4 border-t border-[#efe6d9] pt-3">
-                    <h3 class="mb-1 text-sm font-bold">Justificativa da finalização</h3>
+                <div @class(['mt-4 border-t border-[#efe6d9] pt-3' => $mostrarComprovacao])>
+                    @if ($mostrarComprovacao)
+                        <h3 class="mb-1 text-sm font-bold">{{ $tituloResultado }}</h3>
+                    @endif
                     <p class="whitespace-pre-wrap break-words text-sm leading-relaxed">{{ filled($registro->justificativa) ? $registro->justificativa : 'Sem comentário registrado.' }}</p>
                 </div>
+
+                @if (filled($registro->justificativa_origem ?? null))
+                    <div class="mt-4 border-t border-[#efe6d9] pt-3">
+                        <h3 class="mb-1 text-sm font-bold">{{ $processo === 'nao_realizada' ? 'Justificativa da não realização' : 'Justificativa da solicitação' }}</h3>
+                        <p class="whitespace-pre-wrap break-words text-sm leading-relaxed">{{ $registro->justificativa_origem }}</p>
+                    </div>
+                @endif
             </section>
         </div>
 
@@ -136,7 +159,7 @@
                     </form>
                     <img src="{{ $foto }}" loading="lazy" alt="Foto de comprovação de {{ $registro->tarefa }}" class="max-h-[80vh] max-w-full rounded-lg object-contain">
                     <figcaption class="text-center text-xs font-semibold tabular-nums text-white">
-                        Registro #{{ $registro->id_execucao }} · {{ $registro->finalizado_em->format('d/m/Y H:i') }}
+                        Registro #{{ $registro->id_item }} · {{ $registro->finalizado_em->format('d/m/Y H:i') }}
                     </figcaption>
                 </figure>
             </dialog>

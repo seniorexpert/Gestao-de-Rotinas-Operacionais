@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Services\AuditoriaService;
 use App\Services\ConsultaRotinas;
 use App\Services\ExecucoesDiarias;
+use App\Services\TextoEmTitulo;
+use App\Services\VisibilidadeGrupos;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,7 +19,7 @@ use Illuminate\Validation\ValidationException;
 
 class RotinasController extends Controller
 {
-    public function __construct(private ExecucoesDiarias $execucoes) {}
+    public function __construct(private ExecucoesDiarias $execucoes, private VisibilidadeGrupos $visibilidade) {}
 
     public function store(Request $request, ConsultaRotinas $catalogo): RedirectResponse
     {
@@ -29,8 +31,7 @@ class RotinasController extends Controller
             : Rule::exists('empresa_usuario', 'id_empresa')->where('id_usuario', $usuario->getKey());
         $dados = $request->validate([
             'id_empresa' => ['bail', 'required', 'integer', $empresa],
-            'colaborador_id' => ['bail', 'required', 'integer', Rule::exists('empresa_usuario', 'id_usuario')
-                ->where('id_empresa', $request->integer('id_empresa'))],
+            'colaborador_id' => ['bail', 'required', 'integer', $this->visibilidade->regraDeColaboradorNaUnidade($usuario, $request->integer('id_empresa'))],
             ...($emergencial ? [] : ['status_rotina' => ['nullable', 'in:1,0,Ativa,Inativa']]),
             'tarefas_json' => ['required', 'json'],
         ], [
@@ -39,6 +40,8 @@ class RotinasController extends Controller
             'colaborador_id.required' => 'Selecione um colaborador.',
             'colaborador_id.exists' => 'Selecione um colaborador vinculado à unidade.',
         ]);
+        $regrasAuxiliar = ['integer', Rule::notIn([$dados['colaborador_id']]),
+            $this->visibilidade->regraDeColaboradorNaUnidade($usuario, (int) $dados['id_empresa'])];
         $tarefas = Validator::make(['tarefas' => json_decode($dados['tarefas_json'], true)], [
             'tarefas' => ['required', 'array', 'list', 'min:1'],
             ...($emergencial
@@ -49,12 +52,15 @@ class RotinasController extends Controller
             'tarefas.*.id_local' => ['required', 'integer', 'min:1'],
             'tarefas.*.morador' => ['nullable', 'string', 'max:255'],
             'tarefas.*.auxilio' => ['required', 'in:Sim,Não'],
-            'tarefas.*.cuidador' => ['nullable', 'integer', Rule::notIn([$dados['colaborador_id']]),
-                Rule::exists('empresa_usuario', 'id_usuario')->where('id_empresa', $dados['id_empresa'])],
+            'tarefas.*.auxiliares' => ['nullable', 'array', 'list'],
+            'tarefas.*.auxiliares.*' => ['bail', 'required', ...$regrasAuxiliar],
+            'tarefas.*.cuidador' => ['bail', 'nullable', ...$regrasAuxiliar],
             'tarefas.*.observacao' => ['nullable', 'string'],
         ], [
             'tarefas.*.data.date_format' => 'Informe uma data válida de execução.',
             'tarefas.*.data.after_or_equal' => 'Agende a tarefa emergencial para hoje ou uma data futura.',
+            'tarefas.*.auxiliares.*.exists' => 'Selecione colaboradores auxiliares vinculados à unidade.',
+            'tarefas.*.auxiliares.*.not_in' => 'O responsável da rotina já está vinculado à tarefa.',
         ])->validate()['tarefas'];
         $descricao = $emergencial ? 'Tarefa emergencial cadastrada' : 'Rotina cadastrada';
 
@@ -78,6 +84,8 @@ class RotinasController extends Controller
                     throw ValidationException::withMessages(["tarefas.$indice.id_local" => 'Selecione um local ativo da unidade escolhida.']);
                 }
                 $auxilio = $tarefa['auxilio'] === 'Sim';
+                $idsAuxiliares = $auxilio ? ($tarefa['auxiliares'] ?? Arr::wrap($tarefa['cuidador'] ?? null)) : [];
+                $auxiliares = collect($idsAuxiliares)->filter(filled(...))->map(fn ($id): int => (int) $id)->unique()->sort()->values()->all();
                 $horario = strlen($tarefa['horario']) === 5 ? $tarefa['horario'].':00' : $tarefa['horario'];
                 $agendada = $emergencial
                     ? CarbonImmutable::parse($tarefa['data'] ?? $agora->toDateString(), ExecucoesDiarias::FUSO)
@@ -97,25 +105,20 @@ class RotinasController extends Controller
                     'id_local' => $tarefa['id_local'],
                     'local' => $locais->get($tarefa['id_local']),
                     'auxilio' => $auxilio,
-                    'obs' => $tarefa['observacao'] ?? null,
+                    'obs' => isset($tarefa['observacao']) ? TextoEmTitulo::formatar($tarefa['observacao']) : null,
                     'created_at' => $agora->utc(),
                     'updated_at' => $agora->utc(),
                 ];
                 $idRotina = DB::table('rotinas')->insertGetId($registro, 'id_rotina');
                 $idsRotinas[] = (int) $idRotina;
 
-                if ($auxilio && filled($tarefa['cuidador'] ?? null)) {
-                    DB::table('rotina_auxiliares')->insert([
-                        'id_rotina' => $idRotina,
-                        'id_usuario' => $tarefa['cuidador'],
-                    ]);
-                }
+                $this->inserirAuxiliares((int) $idRotina, $auxiliares);
 
                 AuditoriaService::registrar(
                     'CREATE', 'rotinas', (string) $idRotina,
                     dadosNovos: [
                         ...Arr::only($registro, ['status', 'tipo_rotina', 'agendada_em', 'id_empresa', 'id_usuario', 'dias_semanas', 'horario', 'id_tarefa', 'id_local', 'auxilio']),
-                        'id_usuario_auxiliar' => $auxilio ? ($tarefa['cuidador'] ?? null) : null,
+                        'auxiliares' => $auxiliares,
                     ],
                     descricao: $descricao,
                     idEmpresa: (int) $dados['id_empresa'],
@@ -137,8 +140,8 @@ class RotinasController extends Controller
             abort_if($tarefas->isEmpty(), 404);
 
             $dados = $request->validate([
-                'colaborador_id' => ['bail', 'required', 'integer', Rule::exists('empresa_usuario', 'id_usuario')
-                    ->where('id_empresa', $tarefas->first()->id_empresa)],
+                'colaborador_id' => ['bail', 'required', 'integer',
+                    $this->visibilidade->regraDeColaboradorNaUnidade($request->user(), (int) $tarefas->first()->id_empresa)],
                 'status' => ['required', 'in:0,1'],
             ], [
                 'colaborador_id.required' => 'Selecione um colaborador.',
@@ -187,6 +190,11 @@ class RotinasController extends Controller
             [$alteracoes, $auxiliares] = $this->dadosDaTarefa($request, $catalogo, $unidade, (int) $registro->id_usuario, $registro);
             $vinculos = DB::table('rotina_auxiliares')->where('id_rotina', $tarefa);
             $auxiliaresAnteriores = $vinculos->orderBy('id_usuario')->pluck('id_usuario')->map(fn ($id): int => (int) $id)->all();
+            $visiveis = $this->visibilidade->colaboradores($request->user());
+            if ($alteracoes['auxilio'] && $visiveis !== null) {
+                $auxiliares = (clone $vinculos)->whereNotIn('id_usuario', $visiveis)->pluck('id_usuario')
+                    ->map(fn ($id): int => (int) $id)->merge($auxiliares)->sort()->values()->all();
+            }
             $anteriores = array_intersect_key((array) $registro, $alteracoes);
             $anteriores['horario'] = substr($registro->horario, 0, 8);
             $anteriores['id_tarefa'] = (int) $registro->id_tarefa;
@@ -199,9 +207,7 @@ class RotinasController extends Controller
             DB::table('rotinas')->where('id_rotina', $tarefa)->update([...$alteracoes, 'updated_at' => now('UTC')]);
             if ($auxiliares !== $auxiliaresAnteriores) {
                 DB::table('rotina_auxiliares')->where('id_rotina', $tarefa)->whereIntegerInRaw('id_usuario', array_diff($auxiliaresAnteriores, $auxiliares))->delete();
-                foreach (array_diff($auxiliares, $auxiliaresAnteriores) as $auxiliar) {
-                    DB::table('rotina_auxiliares')->insert(['id_rotina' => $tarefa, 'id_usuario' => $auxiliar]);
-                }
+                $this->inserirAuxiliares($tarefa, array_diff($auxiliares, $auxiliaresAnteriores));
             }
 
             AuditoriaService::registrar(
@@ -245,12 +251,7 @@ class RotinasController extends Controller
                 'updated_at' => $agora,
             ];
             $id = (int) DB::table('rotinas')->insertGetId($novaTarefa, 'id_rotina');
-            if ($auxiliares !== []) {
-                DB::table('rotina_auxiliares')->insert(array_map(fn (int $auxiliar): array => [
-                    'id_rotina' => $id,
-                    'id_usuario' => $auxiliar,
-                ], $auxiliares));
-            }
+            $this->inserirAuxiliares($id, $auxiliares);
 
             AuditoriaService::registrar(
                 'CREATE', 'rotinas', (string) $id,
@@ -267,6 +268,17 @@ class RotinasController extends Controller
 
         return to_route('relatorios.rotinas', [...$this->filtrosDoRelatorio($request), 'editar' => $grupoRotina])
             ->with('success', 'Tarefa adicionada à rotina com sucesso.');
+    }
+
+    /** @param array<int, int> $auxiliares */
+    private function inserirAuxiliares(int $idRotina, array $auxiliares): void
+    {
+        foreach (array_chunk($auxiliares, 100) as $lote) {
+            DB::table('rotina_auxiliares')->insert(array_map(fn (int $auxiliar): array => [
+                'id_rotina' => $idRotina,
+                'id_usuario' => $auxiliar,
+            ], $lote));
+        }
     }
 
     public function excluir(Request $request, ConsultaRotinas $consultaRotinas, string $grupo, ?int $tarefa = null): RedirectResponse
@@ -310,6 +322,7 @@ class RotinasController extends Controller
     /** @return array{array{dias_semanas: string, horario: string, id_tarefa: int, id_local: ?int, local: ?string, morador: ?string, auxilio: bool, obs: ?string}, list<int>} */
     private function dadosDaTarefa(Request $request, ConsultaRotinas $catalogo, int $unidade, int $responsavel, ?object $registro = null): array
     {
+        TextoEmTitulo::naRequisicao($request, 'observacao');
         $dados = $request->validate([
             'dias' => ['required', 'array', 'list', 'max:7'],
             'dias.*' => ['required', 'integer', 'distinct', 'between:0,6'],
@@ -320,7 +333,7 @@ class RotinasController extends Controller
             'auxilio' => ['required', 'in:0,1'],
             'auxiliares' => ['exclude_unless:auxilio,1', 'nullable', 'array', 'list'],
             'auxiliares.*' => ['exclude_unless:auxilio,1', 'integer', 'distinct', Rule::notIn([$responsavel]),
-                Rule::exists('empresa_usuario', 'id_usuario')->where('id_empresa', $unidade)],
+                $this->visibilidade->regraDeColaboradorNaUnidade($request->user(), $unidade)],
             'observacao' => ['nullable', 'string'],
         ], [
             'dias.required' => 'Selecione pelo menos um dia da semana.',

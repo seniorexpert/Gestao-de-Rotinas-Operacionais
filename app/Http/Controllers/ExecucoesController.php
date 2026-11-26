@@ -8,6 +8,7 @@ use App\Services\CalculadoraSla;
 use App\Services\ConsultaRotinas;
 use App\Services\EscalonamentoAcompanhamento;
 use App\Services\ExecucoesDiarias;
+use App\Services\TextoEmTitulo;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\RedirectResponse;
@@ -38,8 +39,11 @@ class ExecucoesController extends Controller
             ? Carbon::parse($limite, 'UTC')->setTimezone(ExecucoesDiarias::FUSO)->format('d/m H:i:s')
             : null;
         $documentacao = $execucao->documentacao ? Storage::disk('public')->url($execucao->documentacao) : null;
+        $auxiliares = $execucao->auxilio ? $this->rotinas->auxiliaresDeRotinas([$execucao->id_rotina])
+            ->where('a.id_usuario', '<>', $execucao->id_usuario_responsavel)
+            ->pluck('u.usuario') : collect();
 
-        return view('execucoes.realizando', compact('execucao', 'prazo', 'documentacao'));
+        return view('execucoes.realizando', compact('execucao', 'prazo', 'documentacao', 'auxiliares'));
     }
 
     public function formulario(Request $request, int $id, string $acao): View
@@ -130,6 +134,7 @@ class ExecucoesController extends Controller
                 }
 
                 $encerramento = $this->encerramento($request, $execucao);
+                TextoEmTitulo::naRequisicao($request, 'comentario');
                 $dados = $request->validate([
                     'comentario' => ['required', 'string', 'max:2000'],
                     'foto' => ['nullable', 'image', 'max:2048'],
@@ -242,6 +247,8 @@ class ExecucoesController extends Controller
 
     private function justificativa(Request $request): string
     {
+        TextoEmTitulo::naRequisicao($request, 'justificativa');
+
         return $request->validate(['justificativa' => ['required', 'string', 'max:2000']], [
             'justificativa.required' => 'Informe a justificativa.',
             'justificativa.max' => 'Escreva uma justificativa de até 2.000 caracteres.',
