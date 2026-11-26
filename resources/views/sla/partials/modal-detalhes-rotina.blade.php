@@ -11,7 +11,7 @@
 
     <div class="mb-3 rounded-[1.25rem] border-2 border-[#d3ae74]/35 bg-white p-4 shadow-sm sm:p-5">
         <h3 class="mb-3 flex items-center gap-2.5 border-b border-slate-100 pb-3 text-lg font-bold sm:text-xl">
-            <span class="relative isolate inline-flex shrink-0 text-2xl leading-none" aria-hidden="true">
+            <span class="relative inline-flex shrink-0 overflow-hidden text-2xl leading-none" aria-hidden="true">
                 <span id="modalIconeDiv"></span>
                 <span id="modalCorIcone" class="pointer-events-none absolute inset-0 hidden mix-blend-color"></span>
             </span>

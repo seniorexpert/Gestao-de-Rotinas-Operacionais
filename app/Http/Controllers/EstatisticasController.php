@@ -126,6 +126,7 @@ class EstatisticasController extends Controller
         }
 
         $consulta = $this->rotinas->execucoes($usuario)
+            ->addSelect('t.icone', 't.cor_icone')
             ->whereIn('e.status', $status)
             ->orderBy('e.previsto_em', 'desc');
 

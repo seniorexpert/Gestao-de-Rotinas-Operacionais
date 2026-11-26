@@ -114,11 +114,7 @@
                         'border-[#d3ae74]/35 hover:border-[#21394e]/40' => ! $emergencial,
                     ])>
                 <span class="mr-2.5 flex h-12 w-10 shrink-0 items-center justify-center text-3xl leading-none transition-transform group-hover:scale-105 sm:mr-4 sm:h-14 sm:w-14 sm:text-[2.75rem]" aria-hidden="true">
-                    <span class="relative isolate inline-flex">{{ $icone }}
-                        @if ($corIcone)
-                            <span class="pointer-events-none absolute inset-0 mix-blend-color" style="background-color: {{ $corIcone }}"></span>
-                        @endif
-                    </span>
+                    <x-icone-tarefa :icone="$icone" :cor="$corIcone" />
                 </span>
                 <span class="min-w-0 flex-1 py-1">
                     <strong class="block truncate text-[1.05rem] leading-tight sm:text-lg" title="{{ $tarefa }}">{{ $tarefa }}</strong>

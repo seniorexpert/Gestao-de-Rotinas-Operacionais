@@ -6,43 +6,7 @@
 
 @php
     $uid = 'seletor-icone-' . \Illuminate\Support\Str::random(8);
-    $listaPadrao = $emojis ?: [
-        ['emoji' => '📋', 'tags' => 'prancheta lista tarefa rotina'],
-        ['emoji' => '🖍️', 'tags' => 'giz cera desenhar cor'],
-        ['emoji' => '📝', 'tags' => 'nota anotacao escrever tarefa'],
-        ['emoji' => '💼', 'tags' => 'maleta trabalho escritorio'],
-        ['emoji' => '📁', 'tags' => 'pasta arquivo documento'],
-        ['emoji' => '📂', 'tags' => 'pasta aberta arquivo'],
-        ['emoji' => '🗂️', 'tags' => 'divisorias pasta organizar'],
-        ['emoji' => '📅', 'tags' => 'calendario data agenda'],
-        ['emoji' => '📆', 'tags' => 'calendario dia mes'],
-        ['emoji' => '🗒️', 'tags' => 'bloco notas anotar'],
-        ['emoji' => '🗓️', 'tags' => 'calendario espiral agenda'],
-        ['emoji' => '📥', 'tags' => 'caixa entrada receber'],
-        ['emoji' => '📈', 'tags' => 'grafico subir relatorio'],
-        ['emoji' => '📉', 'tags' => 'grafico descer queda'],
-        ['emoji' => '📊', 'tags' => 'grafico barras estatistica'],
-        ['emoji' => '📌', 'tags' => 'alfinete fixar marcar'],
-        ['emoji' => '📍', 'tags' => 'localizacao pino mapa'],
-        ['emoji' => '📎', 'tags' => 'clips prender papel'],
-        ['emoji' => '🖇️', 'tags' => 'clips ligados prender'],
-        ['emoji' => '📏', 'tags' => 'regua medir tamanho'],
-        ['emoji' => '📐', 'tags' => 'esquadro angulo medir'],
-        ['emoji' => '✂️', 'tags' => 'tesoura cortar'],
-        ['emoji' => '🗄️', 'tags' => 'arquivo gaveteiro'],
-        ['emoji' => '🗃️', 'tags' => 'caixa arquivo pastas'],
-        ['emoji' => '🗑️', 'tags' => 'lixeira lixo apagar'],
-        ['emoji' => '🛁', 'tags' => 'banho banheira agua'],
-        ['emoji' => '💊', 'tags' => 'remedio capsula saude'],
-        ['emoji' => '🧤', 'tags' => 'luva protecao limpeza'],
-        ['emoji' => '🛏️', 'tags' => 'cama dormir quarto'],
-        ['emoji' => '🧹', 'tags' => 'vassoura limpar varrer'],
-        ['emoji' => '🧼', 'tags' => 'sabao lavar higiene'],
-        ['emoji' => '🩺', 'tags' => 'estetoscopio medico saude'],
-        ['emoji' => '⏰', 'tags' => 'relogio despertador horario'],
-        ['emoji' => '✅', 'tags' => 'concluido ok check'],
-        ['emoji' => '⚠️', 'tags' => 'alerta atencao aviso'],
-    ];
+    $listaPadrao = $emojis ?: config('icones_tarefa.emojis', []);
 @endphp
 
 <div id="{{ $uid }}" class="w-full select-none">

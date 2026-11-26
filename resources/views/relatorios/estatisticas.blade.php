@@ -406,7 +406,7 @@
                             @foreach ($lista as $execucao)
                                 <article class="cartao-rotina" aria-labelledby="tarefa-{{ $execucao->id_execucao }}">
                                     <div class="topo-rotina">
-                                        <span class="icone-tarefa" aria-hidden="true">📋</span>
+                                        <span class="icone-tarefa" aria-hidden="true"><x-icone-tarefa :icone="$execucao->icone" :cor="$execucao->cor_icone" /></span>
                                         <div class="nome-tarefa">
                                             <h3 id="tarefa-{{ $execucao->id_execucao }}">{{ $execucao->tarefa }}</h3>
                                             @if ($execucao->tipo_rotina === \App\Services\ExecucoesDiarias::TIPO_EMERGENCIAL)

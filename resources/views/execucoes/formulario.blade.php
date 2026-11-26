@@ -46,7 +46,9 @@
     @if ($finalizar)
         @php
             $categoria = \Illuminate\Support\Str::ascii(mb_strtolower($tarefa.' '.$execucao->local));
+            $iconeSalvo = trim((string) $execucao->icone);
             $icone = match (true) {
+                ! in_array($iconeSalvo, ['', '0', '1'], true) => $iconeSalvo,
                 str_contains($categoria, 'banho') || str_contains($categoria, 'higiene') => '🛁',
                 str_contains($categoria, 'aliment') || str_contains($categoria, 'refeitorio') => '🍽️',
                 str_contains($categoria, 'medic') => '💊',
@@ -54,7 +56,7 @@
             };
         @endphp
         <input type="hidden" name="fluxo_diario" value="1">
-        <p class="mb-4 self-start rounded-full bg-[#e6eff2] px-4 py-1 text-xs font-bold"><span aria-hidden="true">{{ $icone }}</span> {{ $tarefa }}</p>
+        <p class="mb-4 self-start rounded-full bg-[#e6eff2] px-4 py-1 text-xs font-bold"><x-icone-tarefa :icone="$icone" :cor="$execucao->cor_icone" class="align-middle" /> {{ $tarefa }}</p>
         <div data-anexo-execucao class="mb-4 grid justify-items-center gap-3 rounded-3xl border-2 border-[#d3ae74]/35 bg-white p-6 text-center shadow-sm">
             <span id="iconeFoto" class="grid h-12 w-12 place-items-center rounded-xl border border-dashed border-[#d3ae74]/60 text-[#64748b]" aria-hidden="true"><i class="fa-regular fa-image"></i></span>
             <img id="previewFoto" alt="Prévia da foto selecionada" hidden class="max-h-48 max-w-full rounded-xl object-contain">
