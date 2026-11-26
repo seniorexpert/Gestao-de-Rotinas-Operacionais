@@ -224,6 +224,13 @@ class ConsultaRotinas
                 ->where('e.previsto_em', '<=', $agora))));
     }
 
+    public function execucoesAbertasDoProcesso(User $usuario, CarbonImmutable $agora, string $processo): Builder
+    {
+        return $this->execucoesDaAgenda($usuario, $agora, incluirAbertasAnteriores: true)
+            ->where('r.tipo_rotina', $processo)->where('r.status', true)
+            ->whereIn('e.status', ['pendente', 'em_andamento'])->whereNull('e.concluido_em');
+    }
+
     public function execucoesPessoais(User $usuario, ?CarbonImmutable $agora = null): Builder
     {
         $consulta = $agora === null

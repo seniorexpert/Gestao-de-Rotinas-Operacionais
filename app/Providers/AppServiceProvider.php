@@ -35,6 +35,7 @@ class AppServiceProvider extends ServiceProvider
     {
         Gate::before(fn (User $usuario): ?bool => ! $usuario->status ? false : ($usuario->isAdmin() ? true : null));
         Gate::define('administrar-permissoes', fn (User $usuario): bool => $usuario->isAdmin());
+        Gate::define('concluir-execucoes-em-lote', fn (User $usuario): bool => $usuario->isAdmin());
         Gate::define('auditoria-geral', fn (User $usuario): bool => app(PermissoesAcesso::class)->gerenciaGeral($usuario));
         Gate::define('visualizar-modulo', fn (User $usuario, string $modulo): bool => app(PermissoesAcesso::class)->nivel($usuario, $modulo) >= PermissoesAcesso::VISUALIZAR);
         Gate::define('editar-modulo', fn (User $usuario, string $modulo): bool => app(PermissoesAcesso::class)->nivel($usuario, $modulo) >= PermissoesAcesso::EDITAR);

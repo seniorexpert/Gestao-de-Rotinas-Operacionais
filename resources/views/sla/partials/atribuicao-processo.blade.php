@@ -2,7 +2,9 @@
     $campo = 'mt-1 w-full min-w-0 rounded-xl border border-[#e8d6bf] bg-white px-3 py-2.5 text-sm font-normal focus:border-[#17384b] focus:outline-none focus:ring-1 focus:ring-[#17384b]';
     $statusDaTarefa = ['pendente' => 'Pendente', 'em_andamento' => 'Em andamento'];
     $coresSla = ['noPrazo' => 'bg-emerald-50 text-emerald-900', 'expirando' => 'bg-amber-50 text-amber-900', 'atrasado' => 'bg-rose-100 text-rose-900', 'semDados' => 'bg-slate-100 text-slate-700'];
-    $permiteSelecionar = $colaboradores->isNotEmpty();
+    $permiteAtribuir = $colaboradores->isNotEmpty();
+    $permiteConcluir = $atribuiResponsavel && $tarefas->isNotEmpty() && auth()->user()->can('concluir-execucoes-em-lote');
+    $permiteSelecionar = $permiteAtribuir || $permiteConcluir;
 @endphp
 
 <div data-painel-atribuicao data-titulo="{{ $atribuiResponsavel ? 'Atribuir tarefa · '.$nomeDoProcesso : $nomeDoProcesso }}">
@@ -101,9 +103,12 @@
 
         @if ($atribuiResponsavel)
             <section class="rounded-xl border border-[#e8d6bf] bg-[#f9f7f2] p-4">
-                <h3 class="text-sm font-bold">Atribuir para</h3>
                 @if ($permiteSelecionar)
-                    <label class="mt-3 block text-xs font-semibold">Novo responsável
+                    <p data-total-atribuicao aria-live="polite" class="mb-3 text-xs text-[#536b7b]"></p>
+                @endif
+                @if ($permiteAtribuir)
+                    <h3 class="text-sm font-bold">Atribuir para</h3>
+                    <label class="mt-2 block text-xs font-semibold">Novo responsável
                         <select name="novo_colaborador_id" required class="{{ $campo }}">
                             <option value="">Selecione um colaborador</option>
                             @foreach ($colaboradores as $colaborador)
@@ -112,14 +117,28 @@
                         </select>
                     </label>
                     <p data-grupo-atribuicao class="mt-1 text-xs text-[#536b7b]"></p>
-                    <p data-total-atribuicao aria-live="polite" class="mt-3 text-xs text-[#536b7b]"></p>
-                    <p data-erro-atribuicao role="alert" hidden class="mt-3 rounded-lg bg-rose-50 p-2 text-sm text-rose-900"></p>
                     <button type="submit" data-enviar-atribuicao disabled
                             class="mt-3 min-h-10 w-full rounded-xl bg-[#17384b] px-3 py-2 text-sm font-semibold text-white enabled:hover:bg-[#244d64] disabled:cursor-not-allowed disabled:opacity-50">
                         Atribuir tarefa
                     </button>
-                @else
+                @elseif (! $permiteConcluir)
                     <p class="mt-2 text-sm text-[#536b7b]">Nenhuma tarefa disponível para atribuição.</p>
+                @endif
+                @if ($permiteConcluir)
+                    <div @class(['mt-4 border-t border-[#e8d6bf] pt-4' => $permiteAtribuir])>
+                        <label class="block text-xs font-semibold">Comentário da conclusão (obrigatório)
+                            <textarea name="comentario" rows="3" maxlength="2000" aria-required="true" aria-describedby="notaConclusaoEmLote"
+                                      class="{{ $campo }}"></textarea>
+                        </label>
+                        <p id="notaConclusaoEmLote" class="mt-1 text-xs text-[#536b7b]">O comentário será registrado em cada tarefa selecionada.</p>
+                        <button type="submit" formaction="{{ route('monitoramento.concluir-selecionadas') }}" formnovalidate data-concluir-selecionadas disabled
+                                class="mt-3 min-h-10 w-full rounded-xl bg-emerald-800 px-3 py-2 text-sm font-semibold text-white enabled:hover:bg-emerald-900 disabled:cursor-not-allowed disabled:opacity-50">
+                            Concluir selecionadas
+                        </button>
+                    </div>
+                @endif
+                @if ($permiteSelecionar)
+                    <p data-erro-atribuicao role="alert" hidden class="mt-3 rounded-lg bg-rose-50 p-2 text-sm text-rose-900"></p>
                 @endif
                 <button type="button" data-fechar-atribuicao class="mt-2 min-h-10 w-full rounded-xl border border-[#e8d6bf] bg-white px-3 py-2 text-sm font-semibold hover:border-[#b39359]">Fechar</button>
             </section>

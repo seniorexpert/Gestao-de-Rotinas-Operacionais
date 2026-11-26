@@ -50,19 +50,26 @@
             });
             conteudo.querySelector('[data-vazio-atribuicao]').hidden = visiveis > 0;
 
-            const destino = conteudo.querySelector('[name="novo_colaborador_id"]');
-            if (!destino) return;
+            const selecionarTodas = conteudo.querySelector('[data-selecionar-todas]');
+            if (!selecionarTodas) return;
 
             const campos = camposVisiveis();
             const selecionadas = campos.filter(campo => campo.checked).length;
-            const selecionarTodas = conteudo.querySelector('[data-selecionar-todas]');
             selecionarTodas.disabled = campos.length === 0;
             selecionarTodas.checked = selecionadas > 0 && selecionadas === campos.length;
             selecionarTodas.indeterminate = selecionadas > 0 && selecionadas < campos.length;
-            const grupo = destino.selectedOptions[0]?.dataset.grupo;
-            conteudo.querySelector('[data-grupo-atribuicao]').textContent = grupo ? 'Grupo de acesso · ' + grupo : '';
             conteudo.querySelector('[data-total-atribuicao]').textContent = selecionadas + (selecionadas === 1 ? ' tarefa selecionada' : ' tarefas selecionadas');
-            conteudo.querySelector('[data-enviar-atribuicao]').disabled = salvando || !selecionadas || !destino.value;
+
+            const destino = conteudo.querySelector('[name="novo_colaborador_id"]');
+            if (destino) {
+                const grupo = destino.selectedOptions[0]?.dataset.grupo;
+                conteudo.querySelector('[data-grupo-atribuicao]').textContent = grupo ? 'Grupo de acesso · ' + grupo : '';
+                conteudo.querySelector('[data-enviar-atribuicao]').disabled = salvando || !selecionadas || !destino.value;
+            }
+            const concluir = conteudo.querySelector('[data-concluir-selecionadas]');
+            if (concluir) {
+                concluir.disabled = salvando || !selecionadas || !conteudo.querySelector('[name="comentario"]').value.trim();
+            }
         }
 
         window.abrirModalAtribuir = async (processo, colaborador = '', execucao = '') => {
@@ -104,7 +111,7 @@
         });
         modal.addEventListener('close', () => consulta?.abort());
         conteudo.addEventListener('input', evento => {
-            if (evento.target.matches('[data-busca-atribuicao]')) atualizar();
+            if (evento.target.matches('[data-busca-atribuicao], [name="comentario"]')) atualizar();
         });
         conteudo.addEventListener('change', evento => {
             if (evento.target.matches('[data-selecionar-todas]')) {
@@ -115,22 +122,24 @@
         conteudo.addEventListener('submit', async evento => {
             evento.preventDefault();
             const formulario = evento.target;
-            const botao = formulario.querySelector('[data-enviar-atribuicao]');
+            const botao = evento.submitter;
             if (!botao || botao.disabled || salvando) return;
 
+            const concluir = botao.matches('[data-concluir-selecionadas]');
+            const mensagemDeErro = concluir ? 'Não foi possível concluir as tarefas selecionadas.' : 'Não foi possível atribuir as tarefas selecionadas.';
+            const dadosFormulario = new FormData(formulario);
             salvando = true;
-            botao.disabled = true;
+            atualizar();
             const erro = formulario.querySelector('[data-erro-atribuicao]');
             erro.hidden = true;
-            const dadosFormulario = new FormData(formulario);
             try {
-                const resposta = await fetch(formulario.action, {
+                const resposta = await fetch(concluir ? botao.formAction : formulario.action, {
                     method: 'POST',
                     headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': dadosFormulario.get('_token') },
                     body: JSON.stringify({
                         processo: dadosFormulario.get('processo'),
-                        novo_colaborador_id: dadosFormulario.get('novo_colaborador_id'),
                         execucoes_ids: dadosFormulario.getAll('execucoes_ids[]'),
+                        ...(concluir ? { comentario: dadosFormulario.get('comentario') } : { novo_colaborador_id: dadosFormulario.get('novo_colaborador_id') }),
                     }),
                 });
                 if (resposta.redirected) throw new Error();
@@ -140,10 +149,9 @@
                 }
 
                 const dados = resposta.status === 422 ? await resposta.json() : null;
-                erro.textContent = Object.values(dados?.errors ?? {}).flat().join(' ')
-                    || 'A atribuição não pôde ser salva. Atualize a página e tente novamente.';
+                erro.textContent = Object.values(dados?.errors ?? {}).flat().join(' ') || mensagemDeErro;
             } catch {
-                erro.textContent = 'A atribuição não pôde ser salva. Atualize a página e tente novamente.';
+                erro.textContent = mensagemDeErro;
             }
             erro.hidden = false;
             salvando = false;

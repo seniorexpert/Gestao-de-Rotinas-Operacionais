@@ -71,6 +71,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/centro-monitoramento/processos/{processo}', [MonitoramentoController::class, 'processo'])
         ->can('editar-modulo', "'monitoramento'")->name('monitoramento.processo');
     Route::post('/rotinas/atribuir', [MonitoramentoController::class, 'atribuir'])->can('editar-modulo', "'monitoramento'")->name('rotinas.atribuir');
+    Route::post('/centro-monitoramento/execucoes/concluir', [ExecucoesController::class, 'concluirSelecionadas'])
+        ->can('concluir-execucoes-em-lote')->name('monitoramento.concluir-selecionadas');
     Route::post('/rotinas/salvar', [RotinasController::class, 'store'])->can('editar-modulo', "'rotinas'")->name('rotinas.store');
     Route::put('/rotinas/{grupo}', [RotinasController::class, 'update'])->can('editar-modulo', "'rotinas'")->name('rotinas.update');
     Route::post('/rotinas/{grupo}/tarefas', [RotinasController::class, 'adicionarTarefa'])

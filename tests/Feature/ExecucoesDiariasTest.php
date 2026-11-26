@@ -567,6 +567,66 @@ class ExecucoesDiariasTest extends TestCase
             ->assertRedirect()->assertSessionHasNoErrors();
     }
 
+    public function test_apenas_admin_conclui_as_execucoes_selecionadas_do_processo_com_comentario_e_auditoria(): void
+    {
+        $agora = CarbonImmutable::parse('2026-11-19 12:00:00', 'UTC');
+        $this->travelTo($agora);
+        $unidade = Empresa::create(['empresa' => 'Unidade Santana']);
+        $colaborador = $this->usuario('ana', $unidade);
+        $admin = $this->usuario('admin', Empresa::create(['empresa' => 'Outra Unidade']));
+        $rotinaPendente = $this->rotina($colaborador, $unidade, $this->tarefa('Ronda Pendente'), '08:50:00');
+        $rotinaIniciada = $this->rotina($colaborador, $unidade, $this->tarefa('Ronda Iniciada'), '09:00:00');
+        $rotinaNaoSelecionada = $this->rotina($colaborador, $unidade, $this->tarefa('Outra Ronda'), '09:10:00');
+        $rotinaEmergencial = $this->rotina($colaborador, $unidade, $this->tarefa('Atendimento Urgente'), '09:00:00');
+        DB::table('rotinas')->where('id_rotina', $rotinaEmergencial)->update([
+            'tipo_rotina' => ExecucoesDiarias::TIPO_EMERGENCIAL, 'agendada_em' => $agora,
+        ]);
+        $this->artisan('rotinas:gerar-execucoes')->assertSuccessful();
+        $execucoes = DB::table('rotinas_execucoes')->pluck('id_execucao', 'id_rotina');
+        $pendente = $execucoes[$rotinaPendente];
+        $iniciada = $execucoes[$rotinaIniciada];
+        $emergencial = $execucoes[$rotinaEmergencial];
+        $this->actingAs($colaborador)->post(route('execucoes.iniciar', $iniciada))->assertSessionHasNoErrors();
+        $fim = $agora->addMinutes(5);
+        $this->travelTo($fim);
+        $popup = route('monitoramento.processo', 'diaria');
+        $rota = route('monitoramento.concluir-selecionadas');
+        $dados = ['processo' => 'diaria', 'execucoes_ids' => [$pendente, $iniciada], 'comentario' => 'encerramento pela administração'];
+
+        $this->get($popup)->assertOk()->assertSeeText('Selecionar todas')->assertDontSeeText('Concluir selecionadas');
+        $this->postJson($rota, $dados)->assertForbidden();
+        $this->actingAs($admin)->get($popup)->assertOk()->assertSeeText('Concluir selecionadas');
+        $this->postJson($rota, [...$dados, 'comentario' => ' '])->assertUnprocessable()->assertJsonValidationErrors('comentario');
+        $this->postJson($rota, [...$dados, 'execucoes_ids' => [$pendente, $emergencial]])
+            ->assertUnprocessable()->assertJsonValidationErrors('execucoes_ids');
+        $this->assertDatabaseHas('rotinas_execucoes', ['id_execucao' => $pendente, 'status' => 'pendente', 'concluido_em' => null]);
+
+        $this->postJson($rota, $dados)->assertOk()->assertJsonPath('message', '2 tarefas concluídas com sucesso.');
+        foreach ([$pendente => null, $iniciada => $agora->toDateTimeString()] as $id => $inicio) {
+            $this->assertDatabaseHas('rotinas_execucoes', [
+                'id_execucao' => $id, 'status' => 'concluida', 'id_usuario_responsavel' => $colaborador->getKey(),
+                'id_usuario_conclusao' => $admin->getKey(), 'iniciado_em' => $inicio, 'concluido_em' => $fim->toDateTimeString(),
+                'comentario_conclusao' => 'Encerramento pela Administração',
+            ]);
+            $this->assertDatabaseHas('logs_auditoria', [
+                'tabela' => 'rotinas_execucoes', 'registro_id' => (string) $id, 'acao' => 'CONCLUIR', 'id_usuario' => $admin->getKey(),
+            ]);
+        }
+        $this->assertDatabaseHas('rotinas_execucoes', ['id_execucao' => $execucoes[$rotinaNaoSelecionada], 'status' => 'pendente']);
+        $this->postJson($rota, [...$dados, 'execucoes_ids' => [$pendente, $execucoes[$rotinaNaoSelecionada]]])
+            ->assertUnprocessable()->assertJsonValidationErrors('execucoes_ids');
+        $this->assertDatabaseHas('rotinas_execucoes', ['id_execucao' => $execucoes[$rotinaNaoSelecionada], 'status' => 'pendente']);
+        $this->get($popup)->assertOk()->assertDontSeeText(['Ronda Pendente', 'Ronda Iniciada'])->assertSeeText('Outra Ronda');
+        $this->get(route('relatorios.rotinas-finalizadas'))->assertOk()->assertSeeText(['Ronda Pendente', 'Ronda Iniciada', 'Encerramento pela Administração']);
+        $this->get(route('monitoramento.index', ['processo' => 'diaria', 'status' => 'concluida']))
+            ->assertOk()->assertViewHas('situacoes', fn ($situacoes) => $situacoes->sortKeys()->all() === ['atrasado' => 1, 'noPrazo' => 1]);
+
+        $this->postJson($rota, [...$dados, 'processo' => 'emergencial', 'execucoes_ids' => [$emergencial]])->assertOk();
+        $this->assertDatabaseHas('rotinas_execucoes', ['id_execucao' => $emergencial, 'status' => 'concluida', 'iniciado_em' => null]);
+        $this->get(route('monitoramento.index', ['processo' => 'emergencial', 'status' => 'concluida']))
+            ->assertOk()->assertViewHas('situacoes', fn ($situacoes) => $situacoes->all() === ['noPrazo' => 1]);
+    }
+
     public function test_tarefa_emergencial_entra_no_horario_uma_vez_e_escalona_pelo_sla_da_caixa(): void
     {
         $inicio = CarbonImmutable::parse('2026-11-24 09:00:00', ExecucoesDiarias::FUSO);

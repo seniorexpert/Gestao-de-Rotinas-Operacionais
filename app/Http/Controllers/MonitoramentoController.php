@@ -325,10 +325,8 @@ class MonitoramentoController extends Controller
     /** @param list<int|string> $idsExecucoes */
     private function transferirExecucoes(User $usuario, array $idsExecucoes, string $processo, int $novoResponsavel, CarbonImmutable $agora): void
     {
-        $execucoes = $this->consultaRotinas->execucoesDaAgenda($usuario, $agora, incluirAbertasAnteriores: true)
+        $execucoes = $this->consultaRotinas->execucoesAbertasDoProcesso($usuario, $agora, $processo)
             ->whereIntegerInRaw('e.id_execucao', $idsExecucoes)
-            ->where('r.tipo_rotina', $processo)->where('r.status', true)
-            ->whereIn('e.status', self::STATUS_EM_ABERTO)->whereNull('e.concluido_em')
             ->orderBy('e.id_execucao')->lockForUpdate()
             ->select('e.id_execucao', 'e.id_usuario_responsavel', 'e.id_empresa', 'e.id_rotina')->get();
 
