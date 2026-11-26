@@ -171,6 +171,9 @@
                         <option value="{{ $local->id_local }}" data-unidades="{{ implode(',', $local->ids_empresas) }}" @selected($salvarNaRotina && $localSelecionado == $local->id_local)>{{ $local->local }}</option>
                     @endforeach
                 </select>
+                @if ($salvarNaRotina)
+                    <input type="hidden" name="local_morador" id="inputLocalMorador" disabled>
+                @endif
             </div>
 
             <div>
@@ -327,8 +330,9 @@
         const tarefaNome = selectTarefa && selectTarefa.selectedIndex >= 0 ? selectTarefa.options[selectTarefa.selectedIndex].text : '';
 
         const selectLocal = document.getElementById('selectLocal');
-        const localId = selectLocal ? selectLocal.value : null;
-        const localNome = selectLocal && selectLocal.selectedIndex >= 0 ? selectLocal.options[selectLocal.selectedIndex].text : '';
+        const localMorador = selectLocal?.selectedOptions[0]?.dataset.localMorador || null;
+        const localId = selectLocal && !localMorador ? selectLocal.value : null;
+        const localNome = localMorador || (selectLocal && selectLocal.selectedIndex >= 0 ? selectLocal.options[selectLocal.selectedIndex].text : '');
 
         const morador = document.getElementById('selectMorador').value;
         const auxilioRadio = document.querySelector('input[name="necessita_auxilio"]:checked');
@@ -337,7 +341,7 @@
         const cuidadorAux = necessitaAuxilio === 'Sim' ? selectCuidador.value || null : null;
         const observacao = document.getElementById('inputObservacao').value;
 
-        if (!tarefaId || !morador || !localId || !horario || (!data && diasSelecionados.length === 0)) {
+        if (!tarefaId || !morador || (!localId && !localMorador) || !horario || (!data && diasSelecionados.length === 0)) {
             alert('Preencha os campos obrigatórios da tarefa.');
             return;
         }
@@ -350,6 +354,7 @@
             tarefa: tarefaNome,
             morador: morador,
             id_local: localId,
+            ...(localMorador ? { local_morador: localMorador } : {}),
             local: localNome,
             auxilio: necessitaAuxilio,
             cuidador: cuidadorAux,
@@ -450,7 +455,11 @@
         document.getElementById('selectTarefa').value = t.id_tarefa;
         document.getElementById('selectMorador').value = t.morador;
         aoMudarMorador(t.morador);
-        document.getElementById('selectLocal').value = t.id_local;
+        if (t.local_morador) {
+            definirOpcaoLocalMorador(t.local_morador, true);
+        } else {
+            document.getElementById('selectLocal').value = t.id_local;
+        }
         document.getElementById('inputObservacao').value = t.observacao || '';
 
         const radios = document.querySelectorAll('input[name="necessita_auxilio"]');
@@ -508,6 +517,7 @@
         }
 
         esconderCardMorador();
+        removerOpcaoLocalMorador();
     }
     @endunless
 
@@ -519,6 +529,7 @@
         const tarefaGeral = 'Nenhum (Tarefa Geral)';
         selectMorador.replaceChildren(new Option(tarefaGeral, tarefaGeral, true, true));
         esconderCardMorador();
+        removerOpcaoLocalMorador();
         @endunless
 
         fetch(`https://adm.gestaoseniorexpert.com.br/consulta_moradores.php/${encodeURIComponent(unidadeNome)}`)
@@ -546,8 +557,11 @@
     function aoMudarMorador(nomeMorador) {
         if (!nomeMorador || nomeMorador === "" || nomeMorador === "Nenhum (Tarefa Geral)") {
             esconderCardMorador();
+            removerOpcaoLocalMorador();
             return;
         }
+
+        carregarLocalDoMorador(nomeMorador);
 
         document.getElementById('nomeMoradorCard').textContent = nomeMorador;
         document.getElementById('cardMoradorSelecionado').classList.remove('hidden');
@@ -580,6 +594,67 @@
             });
     }
 
+    const VALOR_LOCAL_MORADOR = 'local-morador';
+    let consultaLocalMorador = 0;
+
+    function sincronizarLocalMorador() {
+        const campo = document.getElementById('inputLocalMorador');
+        if (!campo) return;
+        const local = document.getElementById('selectLocal')?.selectedOptions[0]?.dataset.localMorador || '';
+        campo.value = local;
+        campo.disabled = !local;
+    }
+
+    function removerOpcaoLocalMorador() {
+        consultaLocalMorador++;
+        const select = document.getElementById('selectLocal');
+        const opcao = select?.querySelector('option[data-local-morador]');
+        if (opcao) {
+            const estavaSelecionada = opcao.selected;
+            opcao.remove();
+            if (estavaSelecionada) select.value = '';
+        }
+        sincronizarLocalMorador();
+    }
+
+    function definirOpcaoLocalMorador(local, selecionar = false) {
+        const select = document.getElementById('selectLocal');
+        if (!select || !local) return;
+
+        let opcao = select.querySelector('option[data-local-morador]');
+        if (!opcao) {
+            opcao = new Option('', VALOR_LOCAL_MORADOR);
+            const primeira = select.querySelector('option[value=""]');
+            select.insertBefore(opcao, primeira ? primeira.nextSibling : select.firstChild);
+        }
+        opcao.dataset.localMorador = local;
+        opcao.textContent = `🏠 ${local} (apartamento do morador)`;
+        if (selecionar) opcao.selected = true;
+        sincronizarLocalMorador();
+    }
+
+    function carregarLocalDoMorador(nomeMorador) {
+        const select = document.getElementById('selectLocal');
+        const opcaoAtual = select?.querySelector('option[data-local-morador]');
+        if (opcaoAtual && !opcaoAtual.selected) opcaoAtual.remove();
+        const consulta = ++consultaLocalMorador;
+
+        fetch(`https://adm.gestaoseniorexpert.com.br/consulta_local_morador.php/${encodeURIComponent(nomeMorador)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (consulta !== consultaLocalMorador) return;
+                const local = Array.isArray(data) && typeof data[0] === 'string' ? data[0].trim() : '';
+                if (local) {
+                    definirOpcaoLocalMorador(local);
+                }
+            })
+            .catch(() => {
+                // Sem a consulta externa, os locais cadastrados continuam disponíveis.
+            });
+    }
+
+    document.getElementById('selectLocal')?.addEventListener('change', sincronizarLocalMorador);
+
     function esconderCardMorador() {
         const card = document.getElementById('cardMoradorSelecionado');
         if (card) card.classList.add('hidden');
@@ -588,6 +663,7 @@
     @if ($salvarNaRotina)
     atualizarContagemDias();
     aoMudarMorador(document.getElementById('selectMorador').value);
+    definirOpcaoLocalMorador(@js(old('local_morador')), true);
     carregarMoradoresPorUnidade(@js($rotinaDaTarefa->empresa));
     @else
     function enviarRotinasParaBanco() {

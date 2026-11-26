@@ -278,6 +278,44 @@ class EsquemaRotinasTest extends TestCase
         $this->assertDatabaseHas('rotinas', ['id_rotina' => $tarefa, 'id_tarefa' => $catalogo['tarefa'], 'horario' => '08:00:00']);
     }
 
+    public function test_apartamento_do_morador_pode_ser_o_local_da_tarefa(): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-24 07:15:00', ExecucoesDiarias::FUSO));
+        $empresa = $this->empresa('Unidade Centro');
+        $usuario = $this->usuario('Joana Exemplo', $empresa);
+        $catalogo = $this->catalogo($empresa);
+        $tarefa = [
+            'dias' => 'Todos os dias', 'horario' => '08:00', 'id_tarefa' => $catalogo['tarefa'],
+            'id_local' => null, 'local_morador' => 'Bloco A - 102', 'auxilio' => 'Não',
+        ];
+        $rotina = fn (array $tarefa): array => [
+            'id_empresa' => $empresa, 'colaborador_id' => $usuario->getKey(),
+            'tarefas_json' => json_encode([$tarefa], JSON_THROW_ON_ERROR),
+        ];
+
+        $this->actingAs($usuario)->post(route('rotinas.store'), $rotina([...$tarefa, 'morador' => 'Nenhum (Tarefa Geral)']))
+            ->assertSessionHasErrors('tarefas.0.id_local');
+        $this->assertDatabaseEmpty('rotinas');
+
+        $this->post(route('rotinas.store'), $rotina([...$tarefa, 'morador' => 'Maria Exemplo']))->assertSessionHas('success');
+        $this->assertDatabaseHas('rotinas', ['morador' => 'Maria Exemplo', 'id_local' => null, 'local' => 'Bloco A - 102']);
+
+        $grupo = $this->cadastrarRotinaComDuasTarefas($empresa, $usuario, $catalogo);
+        $primeira = DB::table('rotinas')->where('grupo_rotina', $grupo)->orderBy('horario')->value('id_rotina');
+        $edicao = route('relatorios.rotinas', ['editar' => $grupo, 'tarefa' => $primeira]);
+        $dados = ['dias' => ['1'], 'horario' => '08:00', 'id_tarefa' => $catalogo['tarefa'], 'auxilio' => '0'];
+
+        $this->from($edicao)->put(route('rotinas.tarefas.update', [$grupo, $primeira]), [
+            ...$dados, 'id_local' => 'local-morador', 'local_morador' => 'Bloco B - 201', 'morador' => 'Maria Exemplo',
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('rotinas', ['id_rotina' => $primeira, 'id_local' => null, 'local' => 'Bloco B - 201']);
+
+        $this->from($edicao)->put(route('rotinas.tarefas.update', [$grupo, $primeira]), [
+            ...$dados, 'id_local' => $catalogo['local'], 'morador' => 'Maria Exemplo',
+        ])->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('rotinas', ['id_rotina' => $primeira, 'id_local' => $catalogo['local'], 'local' => 'Sala de estar']);
+    }
+
     public function test_cartoes_de_edicao_exibem_icone_do_cadastro_e_dados_da_tarefa(): void
     {
         $empresa = $this->empresa('Unidade Centro');

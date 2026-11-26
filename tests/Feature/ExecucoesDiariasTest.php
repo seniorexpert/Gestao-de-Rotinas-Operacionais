@@ -266,7 +266,7 @@ class ExecucoesDiariasTest extends TestCase
         ]);
         $this->get(route('execucoes.realizando', $id))->assertOk()
             ->assertSee('background-color: #f26716;', false)
-            ->assertSee(rawurlencode('🧭'), false)
+            ->assertSee(['🧭', 'mix-blend-mode: color;'], false)
             ->assertSeeTextInOrder(['Realizando', 'Quando', '09:00'])
             ->assertDontSee('09:00 –')
             ->assertSeeTextInOrder(['Finalizar Tarefa', 'Não Pode Ser Realizada', 'Solicitar Auxílio']);
@@ -339,7 +339,7 @@ class ExecucoesDiariasTest extends TestCase
             ->assertRedirectToRoute('execucoes.realizando', $id);
         $this->get(route('execucoes.formulario', [$id, 'auxilio']))->assertOk()
             ->assertSee('background-color: #8b5cf6;', false)
-            ->assertSee(rawurlencode('🧭'), false)
+            ->assertSee(['🧭', 'mix-blend-mode: color;'], false)
             ->assertSeeTextInOrder([...$dadosDaTarefa, 'Enviar Solicitação']);
         $this->post(route('execucoes.auxilio', $id))->assertSessionHasErrors(['justificativa' => 'Informe a justificativa.']);
         $this->post(route('execucoes.auxilio', $id), ['justificativa' => 'Preciso de outro colaborador.'])
@@ -350,7 +350,7 @@ class ExecucoesDiariasTest extends TestCase
         $formulario = route('execucoes.formulario', [$id, 'nao-realizada']);
         $this->get($formulario)->assertOk()
             ->assertSee('background-color: #8b5cf6;', false)
-            ->assertSee(rawurlencode('🧭'), false)
+            ->assertSee(['🧭', 'mix-blend-mode: color;'], false)
             ->assertSeeTextInOrder([...$dadosDaTarefa, 'Confirmar Motivo']);
         $this->from($formulario)->post(route('execucoes.nao-realizada', $id))->assertSessionHasErrors('justificativa');
         $this->post(route('execucoes.nao-realizada', $id), ['justificativa' => 'Morador ausente.'])

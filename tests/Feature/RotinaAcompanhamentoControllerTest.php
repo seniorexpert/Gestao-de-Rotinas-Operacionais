@@ -288,12 +288,12 @@ class RotinaAcompanhamentoControllerTest extends TestCase
             ->assertOk()
             ->assertSeeText($visivel)
             ->assertSee('background-color: #126abc;', false)
-            ->assertSee(rawurlencode('🧭'), false)
+            ->assertSee(['🧭', 'mix-blend-mode: color;'], false)
             ->assertDontSeeText($oculto);
         $this->get(route('acompanhamento.index', ['aba' => $aba, 'item' => $aba === 'verificadas' ? $id : $pendente]))
             ->assertOk()
             ->assertSee('background-color: #126abc;', false)
-            ->assertSee(rawurlencode('🧭'), false);
+            ->assertSee(['🧭', 'mix-blend-mode: color;'], false);
     }
 
     public function test_verificadas_listam_e_contam_apenas_as_verificacoes_do_dia_em_brasilia(): void
@@ -643,13 +643,13 @@ class RotinaAcompanhamentoControllerTest extends TestCase
         $this->actingAs($superior)->get(route('acompanhamento.index'))->assertOk()
             ->assertViewHas('aba', 'auxilio')
             ->assertSee('background-color: #8b5cf6;', false)
-            ->assertSee(rawurlencode('💧'), false)
+            ->assertSee(['💧', 'mix-blend-mode: color;'], false)
             ->assertSeeTextInOrder(['Solicitação de Auxílio', 'Tarefas Não Realizadas', 'Tarefas em Atraso', 'Verificadas'])
             ->assertSeeText(['Hidratação', 'Acompanhamento · No prazo']);
         $this->get(route('acompanhamento.index', ['aba' => 'auxilio', 'item' => $solicitacao->id_solicitacao]))
             ->assertOk()
             ->assertSee('background-color: #8b5cf6;', false)
-            ->assertSee(rawurlencode('💧'), false)
+            ->assertSee(['💧', 'mix-blend-mode: color;'], false)
             ->assertSeeTextInOrder(['O Colaborador João Silva Solicita Auxílio para realizar a tarefa Hidratação! Justificativa:', $justificativa, 'Sala de Estar'])
             ->assertDontSee($justificativa, false);
     }

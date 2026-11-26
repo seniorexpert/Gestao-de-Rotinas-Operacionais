@@ -46,7 +46,8 @@ class RotinasController extends Controller
                 : ['tarefas.*.dias' => ['required', 'string', 'max:255']]),
             'tarefas.*.horario' => ['required', 'date_format:H:i,H:i:s'],
             'tarefas.*.id_tarefa' => ['required', 'integer', 'min:1'],
-            'tarefas.*.id_local' => ['required', 'integer', 'min:1'],
+            'tarefas.*.id_local' => ['exclude_with:tarefas.*.local_morador', 'required', 'integer', 'min:1'],
+            'tarefas.*.local_morador' => ['nullable', 'string', 'max:255'],
             'tarefas.*.morador' => ['nullable', 'string', 'max:255'],
             'tarefas.*.auxilio' => ['required', 'in:Sim,Não'],
             'tarefas.*.cuidador' => ['nullable', 'integer', Rule::notIn([$dados['colaborador_id']]),
@@ -64,7 +65,7 @@ class RotinasController extends Controller
                 ->whereIntegerInRaw('c.id_tarefa', array_column($tarefas, 'id_tarefa'))
                 ->orderBy('c.id_tarefa')->lockForUpdate()->pluck('c.id_tarefa')->flip();
             $locais = $catalogo->catalogoNaUnidade('locais', $unidade)
-                ->whereIntegerInRaw('c.id_local', array_column($tarefas, 'id_local'))
+                ->whereIntegerInRaw('c.id_local', array_filter(array_column($tarefas, 'id_local')))
                 ->orderBy('c.id_local')->lockForUpdate()->pluck('c.local', 'c.id_local');
 
             $idsRotinas = [];
@@ -74,7 +75,8 @@ class RotinasController extends Controller
                 if (! $tarefasDisponiveis->has($tarefa['id_tarefa'])) {
                     throw ValidationException::withMessages(["tarefas.$indice.id_tarefa" => 'Selecione uma tarefa ativa da unidade escolhida.']);
                 }
-                if (! $locais->has($tarefa['id_local'])) {
+                $localMorador = $this->localDoMorador($tarefa, "tarefas.$indice");
+                if ($localMorador === null && ! $locais->has($tarefa['id_local'])) {
                     throw ValidationException::withMessages(["tarefas.$indice.id_local" => 'Selecione um local ativo da unidade escolhida.']);
                 }
                 $auxilio = $tarefa['auxilio'] === 'Sim';
@@ -94,8 +96,8 @@ class RotinasController extends Controller
                     'horario' => $horario,
                     'id_tarefa' => $tarefa['id_tarefa'],
                     'morador' => $tarefa['morador'] ?? null,
-                    'id_local' => $tarefa['id_local'],
-                    'local' => $locais->get($tarefa['id_local']),
+                    'id_local' => $localMorador === null ? $tarefa['id_local'] : null,
+                    'local' => $localMorador ?? $locais->get($tarefa['id_local']),
                     'auxilio' => $auxilio,
                     'obs' => $tarefa['observacao'] ?? null,
                     'created_at' => $agora->utc(),
@@ -304,7 +306,8 @@ class RotinasController extends Controller
             'dias.*' => ['required', 'integer', 'distinct', 'between:0,6'],
             'horario' => ['required', 'date_format:H:i,H:i:s'],
             'id_tarefa' => ['required', 'integer', 'min:1'],
-            'id_local' => [Rule::requiredIf($registro === null || $registro->id_local !== null), 'nullable', 'integer', 'min:1'],
+            'id_local' => ['exclude_with:local_morador', Rule::requiredIf($registro === null || $registro->id_local !== null), 'nullable', 'integer', 'min:1'],
+            'local_morador' => ['nullable', 'string', 'max:255'],
             'morador' => ['nullable', 'string', 'max:255'],
             'auxilio' => ['required', 'in:0,1'],
             'auxiliares' => ['exclude_unless:auxilio,1', 'nullable', 'array', 'list'],
@@ -330,7 +333,10 @@ class RotinasController extends Controller
         $idLocal = isset($dados['id_local']) ? (int) $dados['id_local'] : null;
         $localAtual = isset($registro->id_local) ? (int) $registro->id_local : null;
         $local = $registro?->local;
-        if ($idLocal !== $localAtual) {
+        $localMorador = $this->localDoMorador($dados);
+        if ($localMorador !== null) {
+            $local = $localMorador;
+        } elseif ($idLocal !== $localAtual) {
             $local = $catalogo->catalogoNaUnidade('locais', $unidade)->where('c.id_local', $idLocal)->lockForUpdate()->value('c.local');
             if ($local === null) {
                 throw ValidationException::withMessages(['id_local' => 'Selecione um local ativo da unidade da rotina.']);
@@ -351,5 +357,26 @@ class RotinasController extends Controller
             'auxilio' => $request->boolean('auxilio'),
             'obs' => $dados['observacao'] ?? null,
         ], $auxiliares];
+    }
+
+    /**
+     * Apartamento do morador escolhido como local, que não possui cadastro em locais.
+     *
+     * @param  array{local_morador?: ?string, morador?: ?string}  $dados
+     */
+    private function localDoMorador(array $dados, string $prefixo = ''): ?string
+    {
+        $local = trim((string) ($dados['local_morador'] ?? ''));
+        if ($local === '') {
+            return null;
+        }
+
+        $morador = trim((string) ($dados['morador'] ?? ''));
+        if ($morador === '' || $morador === 'Nenhum (Tarefa Geral)') {
+            $campo = $prefixo === '' ? 'id_local' : "$prefixo.id_local";
+            throw ValidationException::withMessages([$campo => 'Selecione o(a) morador(a) para usar o apartamento como local.']);
+        }
+
+        return $local;
     }
 }
