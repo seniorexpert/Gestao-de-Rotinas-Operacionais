@@ -48,6 +48,14 @@
                     </div>
                 @endif
             </dl>
+            @if ($execucao->auxilio)
+                <div class="mt-4 border-t border-slate-100 pt-3 text-sm">
+                    <h3 class="font-semibold text-amber-800">{{ $auxiliares->isNotEmpty() ? 'Auxílio previsto para esta tarefa de:' : 'Auxílio previsto para esta tarefa.' }}</h3>
+                    @if ($auxiliares->isNotEmpty())
+                        <p class="mt-1 break-words font-semibold">{{ $auxiliares->implode(', ') }}</p>
+                    @endif
+                </div>
+            @endif
         </section>
 
         @if ($temOrientacoes)

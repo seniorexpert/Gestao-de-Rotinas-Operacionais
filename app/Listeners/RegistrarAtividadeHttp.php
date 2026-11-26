@@ -3,6 +3,7 @@
 namespace App\Listeners;
 
 use App\Services\AuditoriaService;
+use App\Services\VisibilidadeGrupos;
 use Illuminate\Foundation\Http\Events\RequestHandled;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -22,6 +23,8 @@ class RegistrarAtividadeHttp
         'usuarios.index' => ['CONSULTAR', 'usuarios', 'Consulta da gestão de acessos'],
         'users.store' => ['CREATE', 'usuarios', 'Cadastro de usuário'],
         'users.update' => ['UPDATE', 'usuarios', 'Edição de usuário'],
+        'visibilidade-grupos.index' => ['CONSULTAR', VisibilidadeGrupos::TABELA, 'Consulta da visibilidade entre grupos'],
+        'visibilidade-grupos.update' => ['UPDATE', VisibilidadeGrupos::TABELA, 'Gravação da visibilidade entre grupos'],
         'processos.index' => ['ACESSAR', 'requisicoes', 'Acesso a Iniciar Processos'],
         'processos.gestao-rotinas' => ['CONSULTAR', 'rotinas', 'Consulta dos cadastros de gestão de rotinas'],
         'processos.usuarios-por-unidade' => ['CONSULTAR', 'usuarios', 'Consulta de colaboradores da unidade'],
@@ -51,6 +54,9 @@ class RegistrarAtividadeHttp
         'relatorios.locais' => ['CONSULTAR', 'locais', 'Consulta do relatório de locais'],
         'relatorios.estatisticas' => ['CONSULTAR', 'rotinas_execucoes', 'Consulta de estatísticas'],
         'relatorios.rotinas-finalizadas' => ['CONSULTAR', 'rotinas_execucoes', 'Consulta de rotinas finalizadas'],
+        'relatorios.rotinas-finalizadas.detalhes' => ['CONSULTAR', 'rotinas_execucoes', 'Consulta de detalhes da rotina finalizada'],
+        'relatorios.rotinas-finalizadas.foto' => ['CONSULTAR', 'rotinas_execucoes', 'Consulta de foto da rotina finalizada'],
+        'relatorios.rotinas-finalizadas.exportar' => ['EXPORTAR', 'rotinas_execucoes', 'Exportação de rotinas finalizadas'],
         'relatorios.logs-rotinas' => ['CONSULTAR', 'logs_auditoria', 'Consulta dos logs e auditoria'],
         'relatorios.logs.detalhes' => ['CONSULTAR', 'logs_auditoria', 'Consulta de detalhes de um log'],
         'relatorios.logs.detalhes.legado' => ['CONSULTAR', 'logs_auditoria', 'Consulta de detalhes de um log'],
@@ -93,7 +99,7 @@ class RegistrarAtividadeHttp
 
         if ($resultado === 'sucesso' && in_array($rota, [
             'execucoes.iniciar', 'execucoes.concluir', 'execucoes.nao-realizada', 'execucoes.auxilio',
-            'acompanhamento.store', 'users.update', 'rotinas.atribuir', 'rotinas.update', 'rotinas.tarefas.update',
+            'acompanhamento.store', 'users.update', 'rotinas.atribuir', 'rotinas.update', 'rotinas.tarefas.update', 'visibilidade-grupos.update',
         ], true)) {
             $resultado = 'sem_alteracao';
         }
@@ -120,7 +126,7 @@ class RegistrarAtividadeHttp
         $registro = is_scalar($id) && ctype_digit((string) $id) && strlen((string) $id) <= 19 ? (string) $id : $rota;
 
         AuditoriaService::registrar(
-            $acao, $tabela, $registro,
+            $acao, $request->attributes->get(AuditoriaService::TABELA_HTTP, $tabela), $registro,
             descricao: $descricao,
             idEmpresa: $request->attributes->get(AuditoriaService::UNIDADE_HTTP),
             idRotina: $request->attributes->get(AuditoriaService::ROTINA_HTTP),

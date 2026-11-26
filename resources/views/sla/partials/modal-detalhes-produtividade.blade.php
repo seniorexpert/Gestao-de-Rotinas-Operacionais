@@ -1,29 +1,34 @@
-<div id="modalDetalhesProdutividade" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl max-w-2xl w-full p-8 relative shadow-2xl max-h-[90vh] flex flex-col">
+<div id="modalDetalhesProdutividade" role="dialog" aria-modal="true" aria-labelledby="modalProdNomeColaborador" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white text-[#17384b] rounded-3xl max-w-2xl w-full p-5 sm:p-8 relative shadow-2xl max-h-[90vh] flex flex-col">
         
-        <button type="button" onclick="fecharModalDetalhesProd()" class="absolute top-6 right-6 text-gray-400 hover:text-gray-700 focus:outline-none">
+        <button type="button" onclick="fecharModalDetalhesProd()" aria-label="Fechar detalhes" class="absolute top-6 right-6 text-gray-400 hover:text-gray-700">
             ✕
         </button>
 
         <div class="flex-shrink-0 mb-6">
-            <h2 id="modalProdNomeColaborador" class="text-3xl font-bold text-[#1e2d3d] font-serif"></h2>
+            <h2 id="modalProdNomeColaborador" class="pr-7 font-['Fraunces',Georgia,serif] text-2xl font-semibold break-words sm:text-3xl"></h2>
             <p id="modalProdSubtitulo" class="text-sm text-gray-500 mt-1"></p>
         </div>
 
         <div class="space-y-4 mb-4">
             <div class="relative">
-                <input type="text" id="inputBuscaProd" onkeyup="filtrarTarefasModalProd()" placeholder="Buscar por tarefa, local, morador ou horário..." class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3 pl-4 pr-10 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
-                <span class="absolute right-4 top-3.5 text-gray-400">🔍</span>
+                <input type="search" id="inputBuscaProd" oninput="filtrarTarefasModalProd()" aria-label="Buscar tarefas do colaborador" placeholder="Buscar por tarefa, local, morador ou horário..." class="w-full rounded-xl border border-[#e8d6bf] bg-white px-4 py-3 pr-10 text-sm focus:border-[#8b6b43] focus:outline-none focus:ring-1 focus:ring-[#8b6b43]">
+                <i class="fa-solid fa-magnifying-glass pointer-events-none absolute right-4 top-3.5 text-[#8b6b43]" aria-hidden="true"></i>
             </div>
         </div>
 
         <div class="space-y-4 sans-text overflow-y-auto flex-1 pr-1" id="modalProdListaTarefas">
             @foreach ($execucoes as $execucao)
-                <div class="item-tarefa-prod flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-gray-200 bg-white p-4" data-usuario="{{ $execucao->id_usuario_responsavel }}">
-                    <div>
-                        <h3 class="font-semibold text-slate-800">{{ $execucao->tarefa ?? 'Rotina' }}</h3>
-                        @if ($execucao->tipo_rotina === \App\Services\ExecucoesDiarias::TIPO_EMERGENCIAL)
-                            <p class="mt-0.5 text-xs font-semibold text-amber-900">Tarefa emergencial</p>
+                <div class="item-tarefa-prod flex flex-wrap items-start justify-between gap-3 rounded-2xl border border-[#e8d6bf] bg-white p-3.5"
+                     data-usuario="{{ $execucao->id_usuario_responsavel }}"
+                     @if ($execucao->pode_atribuir) data-processo-atribuivel="{{ $execucao->processo }}" @endif>
+                    <div class="min-w-0">
+                        <h3 class="flex items-center gap-2 text-sm font-semibold">
+                            <x-icone-tarefa :icone="$execucao->icone" :cor="$execucao->cor_icone" class="h-5 w-5 text-lg" />
+                            <span class="min-w-0 break-words">{{ $execucao->tarefa ?? 'Rotina' }}</span>
+                        </h3>
+                        @if ($execucao->processo !== \App\Services\ExecucoesDiarias::TIPO_DIARIA)
+                            <p class="mt-1 text-xs font-semibold text-[#8b6b43]">{{ $nomesProcessos[$execucao->processo] }}</p>
                         @endif
                         <p class="mt-0.5 text-xs text-slate-600">
                             {{ $execucao->horario }} · {{ $execucao->local_rotina ?: ($execucao->local_cadastrado ?? 'Local não informado') }} · {{ $execucao->morador ?? 'Tarefa geral' }}
@@ -45,8 +50,8 @@
                             'bg-slate-100 text-slate-700' => $execucao->situacao_sla === 'semDados',
                             ])>{{ \App\Services\CalculadoraSla::ROTULOS[$execucao->situacao_sla] ?? 'Sem dados de SLA' }}</span>
                         @endif
-                        @if ($execucao->status === 'pendente' && $execucao->rotina_ativa && auth()->user()->can('editar-modulo', 'monitoramento'))
-                            <button type="button" onclick="atribuirTarefaIndividual(@js((string) $execucao->id_rotina), @js((string) $execucao->rotina_responsavel))" class="text-xs font-semibold text-slate-700 hover:underline">
+                        @if ($execucao->pode_atribuir && auth()->user()->can('editar-modulo', 'monitoramento'))
+                            <button type="button" onclick="atribuirTarefaIndividual(@js($execucao->processo), @js((string) $execucao->id_execucao), @js((string) $execucao->id_usuario_responsavel))" class="text-xs font-semibold text-slate-700 hover:underline">
                                 Atribuir
                             </button>
                         @endif
@@ -60,7 +65,7 @@
                 Fechar
             </button>
             @can('editar-modulo', 'monitoramento')
-            <button type="button" onclick="abrirAtribuirComColaborador()" class="w-1/2 py-3.5 rounded-2xl bg-[#1e293b] text-white hover:bg-slate-700 text-sm font-bold transition text-center">
+            <button type="button" id="atribuirComColaborador" onclick="abrirAtribuirComColaborador()" hidden class="w-1/2 py-3.5 rounded-2xl bg-[#1e293b] text-white hover:bg-slate-700 text-sm font-bold transition text-center">
                 ⇄ Atribuir tarefa
             </button>
             @endcan
@@ -75,17 +80,25 @@
         colaboradorAtualId = idColaborador;
 
         document.getElementById('modalProdNomeColaborador').textContent = nomeColaborador;
-        document.getElementById('modalProdSubtitulo').textContent = [unidades, totalTarefas + ' tarefas no dia'].filter(Boolean).join(' · ');
+        const total = totalTarefas + (totalTarefas === 1 ? ' tarefa' : ' tarefas');
+        document.getElementById('modalProdSubtitulo').textContent = [unidades, total].filter(Boolean).join(' · ');
         document.getElementById('inputBuscaProd').value = '';
 
         const itens = document.querySelectorAll('.item-tarefa-prod');
+        const processos = new Set();
         itens.forEach(item => {
             if (item.getAttribute('data-usuario') === String(idColaborador)) {
                 item.style.display = "flex";
+                if (item.dataset.processoAtribuivel) processos.add(item.dataset.processoAtribuivel);
             } else {
                 item.style.display = "none";
             }
         });
+        const atribuir = document.getElementById('atribuirComColaborador');
+        if (atribuir) {
+            atribuir.hidden = processos.size !== 1;
+            atribuir.dataset.processo = processos.size === 1 ? [...processos][0] : '';
+        }
 
         const modal = document.getElementById('modalDetalhesProdutividade');
         if (modal) modal.classList.remove('hidden');
@@ -97,14 +110,10 @@
     }
 
     function abrirAtribuirComColaborador() {
+        const processo = document.getElementById('atribuirComColaborador').dataset.processo;
+        if (!processo) return;
         fecharModalDetalhesProd();
-        abrirModalAtribuir();
-
-        const selectColab = document.getElementById('filtroColaboradorAtual');
-        if (selectColab) {
-            selectColab.value = colaboradorAtualId;
-            filtrarTarefasPorColaborador();
-        }
+        abrirModalAtribuir(processo, colaboradorAtualId);
     }
 
     function filtrarTarefasModalProd() {
@@ -122,26 +131,8 @@
         });
     }
 
-    function atribuirTarefaIndividual(idRotina, idUsuario) {
+    function atribuirTarefaIndividual(processo, idExecucao, idUsuario) {
         fecharModalDetalhesProd();
-        
-        abrirModalAtribuir();
-
-        const selectColab = document.getElementById('filtroColaboradorAtual');
-        if (selectColab) {
-            selectColab.value = idUsuario;
-            filtrarTarefasPorColaborador();
-        }
-
-        setTimeout(() => {
-            const checkboxes = document.querySelectorAll('#listaTarefasModal input[type="checkbox"]');
-            checkboxes.forEach(cb => {
-                if (cb.value === String(idRotina)) {
-                    cb.checked = true;
-                } else {
-                    cb.checked = false; 
-                }
-            });
-        }, 100); 
+        abrirModalAtribuir(processo, idUsuario, idExecucao);
     }
 </script>

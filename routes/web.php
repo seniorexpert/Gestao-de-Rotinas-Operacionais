@@ -15,8 +15,10 @@ use App\Http\Controllers\RelatorioController;
 use App\Http\Controllers\RotinaAcompanhamentoController;
 use App\Http\Controllers\RotinasController;
 use App\Http\Controllers\RotinasEmergenciaisController;
+use App\Http\Controllers\RotinasFinalizadasController;
 use App\Http\Controllers\TarefasController;
 use App\Http\Controllers\UsuarioController;
+use App\Http\Controllers\VisibilidadeGruposController;
 use App\Services\AuditoriaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -36,7 +38,12 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/tarefas', [RelatorioController::class, 'tarefas'])->can('visualizar-modulo', "'tarefas'")->name('tarefas');
         Route::get('/ferramentas', [RelatorioController::class, 'ferramentas'])->can('visualizar-modulo', "'ferramentas'")->name('ferramentas');
         Route::get('/locais', [RelatorioController::class, 'locais'])->can('visualizar-modulo', "'locais'")->name('locais');
-        Route::get('/rotinas-finalizadas', [RelatorioController::class, 'rotinasFinalizadas'])->can('visualizar-modulo', "'rotinas_finalizadas'")->name('rotinas-finalizadas');
+        Route::middleware("can:visualizar-modulo,'rotinas_finalizadas'")->prefix('rotinas-finalizadas')->group(function () {
+            Route::get('/', [RotinasFinalizadasController::class, 'index'])->name('rotinas-finalizadas');
+            Route::get('/exportar', [RotinasFinalizadasController::class, 'exportar'])->name('rotinas-finalizadas.exportar');
+            Route::get('/{id}', [RotinasFinalizadasController::class, 'detalhes'])->whereNumber('id')->name('rotinas-finalizadas.detalhes');
+            Route::get('/{id}/foto', [RotinasFinalizadasController::class, 'foto'])->whereNumber('id')->name('rotinas-finalizadas.foto');
+        });
         Route::get('/estatisticas', [EstatisticasController::class, 'index'])->can('visualizar-modulo', "'estatisticas'")->name('estatisticas');
         Route::middleware("can:visualizar-modulo,'auditoria'")->group(function () {
             Route::get('/logs-rotinas', [AuditoriaController::class, 'index'])->name('logs-rotinas');
@@ -61,7 +68,11 @@ Route::middleware('auth')->group(function () {
         ->can('visualizar-modulo', "'processos'")->name('processos.gestao-rotinas');
     Route::get('/api/usuarios-por-unidade', [ProcessoController::class, 'usuariosPorUnidade'])->can('consultar-colaboradores')->name('processos.usuarios-por-unidade');
     Route::get('/centro-monitoramento', [MonitoramentoController::class, 'index'])->can('visualizar-modulo', "'monitoramento'")->name('monitoramento.index');
+    Route::get('/centro-monitoramento/processos/{processo}', [MonitoramentoController::class, 'processo'])
+        ->can('editar-modulo', "'monitoramento'")->name('monitoramento.processo');
     Route::post('/rotinas/atribuir', [MonitoramentoController::class, 'atribuir'])->can('editar-modulo', "'monitoramento'")->name('rotinas.atribuir');
+    Route::post('/centro-monitoramento/execucoes/concluir', [ExecucoesController::class, 'concluirSelecionadas'])
+        ->can('concluir-execucoes-em-lote')->name('monitoramento.concluir-selecionadas');
     Route::post('/rotinas/salvar', [RotinasController::class, 'store'])->can('editar-modulo', "'rotinas'")->name('rotinas.store');
     Route::put('/rotinas/{grupo}', [RotinasController::class, 'update'])->can('editar-modulo', "'rotinas'")->name('rotinas.update');
     Route::post('/rotinas/{grupo}/tarefas', [RotinasController::class, 'adicionarTarefa'])
@@ -87,6 +98,11 @@ Route::middleware('auth')->group(function () {
 Route::middleware(['auth', 'can:administrar-permissoes'])->prefix('permissoes-acesso')->name('permissoes.')->group(function () {
     Route::get('/', [PermissaoAcessoController::class, 'index'])->name('index');
     Route::put('/{tipo}/{id}', [PermissaoAcessoController::class, 'update'])->whereIn('tipo', ['grupo', 'usuario'])->whereNumber('id')->name('update');
+});
+
+Route::middleware(['auth', 'can:administrar-permissoes'])->prefix('visibilidade-grupos')->name('visibilidade-grupos.')->group(function () {
+    Route::get('/', [VisibilidadeGruposController::class, 'index'])->name('index');
+    Route::put('/{grupo}', [VisibilidadeGruposController::class, 'update'])->whereNumber('grupo')->name('update');
 });
 
 Route::post('/logout', function (Request $request) {

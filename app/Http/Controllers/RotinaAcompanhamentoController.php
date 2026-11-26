@@ -7,11 +7,11 @@ use App\Services\AuditoriaService;
 use App\Services\ConsultaRotinas;
 use App\Services\EscalonamentoAcompanhamento;
 use App\Services\ExecucoesDiarias;
+use App\Services\TextoEmTitulo;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use Illuminate\Contracts\View\View;
 use Illuminate\Database\Query\Builder;
-use Illuminate\Database\Query\JoinClause;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
@@ -27,12 +27,6 @@ class RotinaAcompanhamentoController extends Controller
         'nao_realizadas' => 'Tarefas Não Realizadas',
         'pendentes' => 'Tarefas em Atraso',
         'verificadas' => 'Verificadas',
-    ];
-
-    private const TABELAS = [
-        'atraso' => 'rotinas_verificacoes',
-        'nao_realizada' => 'rotinas_acomp_nao_realizadas',
-        'auxilio' => 'rotinas_acomp_auxilios',
     ];
 
     private const ABAS_POR_TIPO = [
@@ -65,7 +59,7 @@ class RotinaAcompanhamentoController extends Controller
 
         if (isset($filtros['item'])) {
             $tipo = $this->tipoDoItem($filtros);
-            $item = $this->itens($usuario, $tipo)
+            $item = $this->rotinas->itensDeAcompanhamento($usuario, $tipo)
                 ->leftJoin('usuarios as gerente', 'v.id_usuario_verificacao', '=', 'gerente.id_usuario')
                 ->addSelect('v.acao', 'gerente.usuario as verificado_por')
                 ->where($tipo === 'auxilio' ? 'v.id_solicitacao' : 'e.id_execucao', (int) $filtros['item'])
@@ -76,11 +70,8 @@ class RotinaAcompanhamentoController extends Controller
             $request->attributes->set(AuditoriaService::UNIDADE_HTTP, (int) $item->id_empresa);
             $request->attributes->set(AuditoriaService::ROTINA_HTTP, (int) $item->id_rotina);
 
-            $auxiliares = DB::table('rotina_auxiliares as a')
-                ->join('usuarios as u', 'u.id_usuario', '=', 'a.id_usuario')
-                ->where('a.id_rotina', $item->id_rotina)
+            $auxiliares = $this->rotinas->auxiliaresDeRotinas([$item->id_rotina])
                 ->where('a.id_usuario', '<>', $item->id_usuario_responsavel)
-                ->orderBy('u.usuario')
                 ->pluck('u.usuario');
 
             $filtros['aba'] ??= $this->abaDoItem($item);
@@ -97,18 +88,7 @@ class RotinaAcompanhamentoController extends Controller
         $aba = $filtros['aba'] ?? 'auxilio';
         $parametros = ['aba' => $aba, 'busca' => $filtros['busca'] ?? null, 'origem' => $filtros['origem'] ?? null];
         [$inicioDoDia, $fimDoDia] = ExecucoesDiarias::janela($agora);
-        $atrasos = $this->itens($usuario, 'atraso')
-            ->where(function (Builder $query) use ($agora) {
-                $query->whereNotNull('v.id_execucao')
-                    ->orWhere(fn (Builder $pendentes) => $pendentes
-                        ->whereIn('e.status', ['pendente', 'em_andamento', 'concluida'])
-                        ->where(fn (Builder $horarios) => $horarios
-                            ->where('e.previsto_em', '<=', $agora)
-                            ->orWhere('e.iniciado_em', '<=', $agora)));
-            });
-        $naoRealizadas = $this->itens($usuario, 'nao_realizada')->where('v.recebido_em', '<=', $agora);
-        $auxilios = $this->itens($usuario, 'auxilio')->where('v.recebido_em', '<=', $agora);
-        $execucoes = DB::query()->fromSub($atrasos->unionAll($naoRealizadas)->unionAll($auxilios), 'fila')
+        $execucoes = $this->rotinas->filaDeAcompanhamento($usuario, $agora)
             ->where(fn (Builder $fila) => $fila->whereNull('fila.verificado_em')
                 ->orWhere(fn (Builder $verificadas) => $verificadas
                     ->where('fila.verificado_em', '>=', $inicioDoDia)
@@ -172,6 +152,7 @@ class RotinaAcompanhamentoController extends Controller
 
     public function store(Request $request, int $id): RedirectResponse
     {
+        TextoEmTitulo::naRequisicao($request, 'acao');
         $dados = $request->validate([
             ...$this->regrasDosFiltros(),
             'acao' => ['required', 'string', 'max:2000'],
@@ -185,13 +166,13 @@ class RotinaAcompanhamentoController extends Controller
 
         $tipo = $this->tipoDoItem($dados);
         DB::transaction(function () use ($usuario, $caixa, $id, $dados, $tipo) {
-            $tabela = self::TABELAS[$tipo];
+            $tabela = ConsultaRotinas::TABELAS_ACOMPANHAMENTO[$tipo];
             $solicitacao = $tipo === 'auxilio';
             $registroDoItem = DB::table($tabela)->where($solicitacao ? 'id_solicitacao' : 'id_execucao', $id);
             $idExecucao = $solicitacao ? (clone $registroDoItem)->value('id_execucao') : $id;
             abort_unless($idExecucao, 404);
 
-            $execucao = $this->execucoesDaUnidade($usuario)
+            $execucao = $this->rotinas->execucoesParaAcompanhamento($usuario)
                 ->where('e.id_execucao', $idExecucao)
                 ->lockForUpdate()
                 ->first();
@@ -203,7 +184,7 @@ class RotinaAcompanhamentoController extends Controller
             abort_if($tipo === 'nao_realizada' && $execucao->status !== 'nao_realizada', 404);
 
             if ($registro?->verificado_em !== null) {
-                abort_unless($this->podeConsultarVerificacao($registro, $caixa, $usuario), 404);
+                abort_unless($this->escalonamento->podeConsultarVerificacao($registro, $caixa, $usuario), 404);
 
                 return;
             }
@@ -215,7 +196,7 @@ class RotinaAcompanhamentoController extends Controller
             }
 
             $agora = now()->toImmutable();
-            $envio = $this->encaminharItem($execucao, $agora);
+            $envio = $this->escalonamento->encaminharItem($execucao, $agora);
             $destino = $caixa ?? array_key_first($envio['recebimentos'] ?? []);
             abort_unless(isset($envio['recebimentos'][$destino]), 404);
 
@@ -256,7 +237,7 @@ class RotinaAcompanhamentoController extends Controller
             'aba' => ['nullable', Rule::in(array_keys(self::ABAS))],
             'busca' => ['nullable', 'string', 'max:150'],
             'page' => ['nullable', 'integer', 'min:1'],
-            'tipo' => ['nullable', Rule::in(array_keys(self::TABELAS))],
+            'tipo' => ['nullable', Rule::in(array_keys(ConsultaRotinas::TABELAS_ACOMPANHAMENTO))],
             'origem' => ['nullable', Rule::in(['diarias'])],
             'aba_diaria' => ['nullable', 'string', 'max:30'],
         ];
@@ -291,78 +272,15 @@ class RotinaAcompanhamentoController extends Controller
         };
     }
 
-    private function execucoesDaUnidade(User $usuario): Builder
-    {
-        $consulta = DB::table('rotinas_execucoes as e')
-            ->join('rotinas as r', fn (JoinClause $join) => $join
-                ->on('e.id_rotina', '=', 'r.id_rotina')
-                ->on('e.id_empresa', '=', 'r.id_empresa'))
-            ->leftJoin('usuarios as u', 'e.id_usuario_responsavel', '=', 'u.id_usuario')
-            ->leftJoin('grupos_acesso as g', 'u.id_grupo_acesso', '=', 'g.id_grupo_acesso')
-            ->whereIn('e.id_empresa', $this->rotinas->empresas($usuario))
-            ->select([
-                'e.id_execucao',
-                'e.id_rotina',
-                'e.id_empresa',
-                'e.id_usuario_responsavel',
-                'e.previsto_em',
-                'e.created_at',
-                'r.tipo_rotina',
-                'e.prazo_em',
-                'e.iniciado_em',
-                'e.concluido_em',
-                'e.duracao_prevista_segundos',
-                'e.tempo_limite_minutos',
-                'e.status',
-                'u.usuario as colaborador',
-                'g.grupo_acesso as grupo_origem',
-            ]);
-
-        return $this->rotinas->filtrarExecucoesVisiveis($consulta)
-            ->where(fn (Builder $visiveis) => $visiveis->where('r.status', true)
-                ->orWhereIn('e.status', ['concluida', 'nao_realizada']));
-    }
-
-    private function itens(User $usuario, string $tipo): Builder
-    {
-        $consulta = $this->execucoesDaUnidade($usuario)
-            ->leftJoin('tarefas as t', 'r.id_tarefa', '=', 't.id_tarefa')
-            ->leftJoin('locais as l', 'r.id_local', '=', 'l.id_local')
-            ->addSelect([
-                't.tarefa',
-                't.icone',
-                't.cor_icone',
-                'r.morador',
-                'r.local as local_rotina',
-                'l.local as local_cadastrado',
-                'r.auxilio',
-                'v.verificado_em',
-                'v.id_usuario_verificacao',
-                'v.encaminhamentos',
-            ]);
-
-        if ($tipo === 'atraso') {
-            return $consulta->leftJoin(self::TABELAS[$tipo].' as v', 'e.id_execucao', '=', 'v.id_execucao')
-                ->selectRaw("'atraso' as tipo, e.id_execucao as id_item, CAST(NULL AS VARCHAR(40)) as caixa_inicial, e.previsto_em as entrada, CAST(NULL AS VARCHAR(2000)) as justificativa");
-        }
-
-        $consulta->join(self::TABELAS[$tipo].' as v', 'e.id_execucao', '=', 'v.id_execucao');
-
-        return $tipo === 'auxilio'
-            ? $consulta->selectRaw("'auxilio' as tipo, v.id_solicitacao as id_item, v.caixa as caixa_inicial, v.recebido_em as entrada, v.justificativa")
-            : $consulta->where('e.status', 'nao_realizada')
-                ->selectRaw("'nao_realizada' as tipo, e.id_execucao as id_item, v.caixa as caixa_inicial, v.recebido_em as entrada, e.justificativa_nao_realizada as justificativa");
-    }
-
     private function prepararItem(stdClass $item, CarbonImmutable $agora, ?string $caixa, User $usuario): bool
     {
         $item->atraso_segundos = null;
 
         if ($item->verificado_em !== null) {
-            return $this->podeConsultarVerificacao($item, $caixa, $usuario);
+            return $this->escalonamento->podeConsultarVerificacao($item, $caixa, $usuario);
         }
 
-        $envio = $this->encaminharItem($item, $agora);
+        $envio = $this->escalonamento->encaminharItem($item, $agora);
         $recebimentos = $envio['recebimentos'] ?? [];
         $destino = $caixa ?? array_key_first($recebimentos);
         $recebidoEm = $recebimentos[$destino] ?? null;
@@ -379,39 +297,6 @@ class RotinaAcompanhamentoController extends Controller
         $item->sla_acompanhamento = $this->escalonamento->situacao($recebidoEm, $agora, $auxilio);
 
         return true;
-    }
-
-    /** @return array{atraso_segundos: ?int, recebimentos: array<string, CarbonImmutable>}|null */
-    private function encaminharItem(stdClass $item, CarbonImmutable $agora): ?array
-    {
-        if ($item->tipo === 'atraso') {
-            return $this->escalonamento->encaminhar($item, $agora);
-        }
-
-        return [
-            'atraso_segundos' => null,
-            'recebimentos' => $this->escalonamento->recebimentos(
-                [$item->caixa_inicial], CarbonImmutable::parse($item->entrada, 'UTC'), $agora, $item->tipo === 'auxilio',
-            ),
-        ];
-    }
-
-    private function podeConsultarVerificacao(stdClass $verificacao, ?string $caixa, User $usuario): bool
-    {
-        if ($caixa === null || (string) $verificacao->id_usuario_verificacao === (string) $usuario->getKey()) {
-            return true;
-        }
-
-        if ($verificacao->encaminhamentos === null) {
-            return in_array($caixa, [
-                EscalonamentoAcompanhamento::GERENTE_DA_UNIDADE,
-                EscalonamentoAcompanhamento::GERENTE_GERAL,
-            ], true);
-        }
-
-        $recebimentos = json_decode($verificacao->encaminhamentos, true);
-
-        return isset($recebimentos[$caixa]);
     }
 
     private function abaDoItem(stdClass $item): string

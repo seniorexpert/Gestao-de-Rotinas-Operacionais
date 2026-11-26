@@ -32,13 +32,17 @@
         ? \Carbon\Carbon::parse($data, 'UTC')->setTimezone('America/Sao_Paulo')
         : null;
 
-    $formatarData = fn ($data) => $dataLocal($data)?->format('d/m/Y H:i:s') ?? '—';
-
     $statusExecucao = [
-        'pendente' => 'Pendente',
-        'em_andamento' => 'Em andamento',
-        'concluida' => 'Concluída',
+        'pendente' => ['nome' => 'Pendente', 'classe' => 'bg-[#f4efe7] text-[#665233]'],
+        'em_andamento' => ['nome' => 'Iniciada', 'classe' => 'bg-[#e4eef1] text-[#153e56]'],
+        'concluida' => ['nome' => 'Concluída', 'classe' => 'bg-[#e7f2e9] text-[#2e6438]'],
     ];
+
+    $porProcesso = $aba === 'processos';
+    $tipoItem = $porProcesso ? 'tarefa' : 'rotina';
+    $secoesDaLista = $porProcesso
+        ? $grupos->groupBy(fn (array $item): string => mb_substr($item['nome'], 0, 1))
+        : $grupos;
 
 @endphp
 
@@ -296,23 +300,6 @@
     .estatisticas .dados-rotina dt { color: #6b7783; font-weight: 600; }
     .estatisticas .dados-rotina dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
     .estatisticas .icone-dado { display: inline-block; width: 14px; color: #b58a4b; text-align: center; }
-    .estatisticas .acoes-rotina {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 10px;
-        margin-top: 0;
-        padding-top: 10px;
-    }
-    .estatisticas .acoes-rotina form { flex-shrink: 0; }
-    .estatisticas .acoes-rotina .botao { padding: 5px 10px; font-size: 12px; border-radius: 7px; cursor: pointer; }
-    .estatisticas .botao-concluir { background: #36783d; border-color: #36783d; color: white; }
-    .estatisticas .dados-sla { flex: 1; min-width: 0; font-size: 11px; color: #687984; }
-    .estatisticas .dados-sla summary { padding: 5px 0; }
-    .estatisticas .dados-sla dl { display: grid; gap: 4px; margin: 6px 0 0; }
-    .estatisticas .dados-sla dt { margin: 0; }
-    .estatisticas .dados-sla dd { margin: 0 0 3px; color: #243e53; overflow-wrap: anywhere; }
     .estatisticas .faixa-vazia { margin: 0; padding: 20px 16px; color: #7c8790; font-size: 13px; }
     @media (max-width: 1199px) {
         .estatisticas .grade-rotinas { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -349,8 +336,12 @@
         @if ($detalhe)
             <h1 class="titulo-colaborador">{{ $detalhe['nome'] }}</h1>
             <p class="subtitulo-colaborador">
-                {{ $aba === 'usuarios' ? 'Usuário' : 'Grupo' }} ·
-                {{ $detalhe['total'] }} {{ $detalhe['total'] === 1 ? 'rotina' : 'rotinas' }}
+                @if ($porProcesso)
+                    {{ $detalhe['total'] }} {{ $detalhe['total'] === 1 ? 'tarefa' : 'tarefas' }}
+                @else
+                    {{ $aba === 'usuarios' ? 'Usuário' : 'Grupo' }} ·
+                    {{ $detalhe['total'] }} {{ $detalhe['total'] === 1 ? 'rotina' : 'rotinas' }}
+                @endif
             </p>
 
             <form class="busca-rotinas" method="GET" action="{{ route('relatorios.estatisticas') }}" role="search">
@@ -371,7 +362,7 @@
 
             @if ($buscaRotinas !== '')
                 <p class="resultado-busca" role="status">
-                    {{ $rotinasDetalhe->count() }} de {{ $detalhe['total'] }} rotinas encontradas.
+                    {{ $rotinasDetalhe->count() }} de {{ $detalhe['total'] }} {{ $tipoItem }}s encontradas.
                     <a href="{{ route('relatorios.estatisticas', array_merge($parametros, ['detalhe' => $chaveDetalhe])) }}">Limpar busca</a>
                 </p>
             @endif
@@ -392,7 +383,7 @@
                             <h2 id="sla-{{ $chave }}">
                                 <span class="ponto-sla" aria-hidden="true"></span>
                                 {{ $config['nome'] }}
-                                <span class="contagem-sla">· {{ $lista->count() }} {{ $lista->count() === 1 ? 'rotina' : 'rotinas' }}</span>
+                                <span class="contagem-sla">· {{ $lista->count() }} {{ $tipoItem }}{{ $lista->count() === 1 ? '' : 's' }}</span>
                             </h2>
                             <p>{{ $config['descricao'] }}</p>
                         </div>
@@ -400,102 +391,13 @@
                     </header>
 
                     @if ($lista->isEmpty())
-                        <p class="faixa-vazia">Nenhuma rotina nesta situação.</p>
+                        <p class="faixa-vazia">Nenhuma {{ $tipoItem }} nesta situação.</p>
                     @else
                         <div class="grade-rotinas">
                             @foreach ($lista as $execucao)
-                                <article class="cartao-rotina" aria-labelledby="tarefa-{{ $execucao->id_execucao }}">
-                                    <div class="topo-rotina">
-                                        <span class="icone-tarefa" aria-hidden="true"><x-icone-tarefa :icone="$execucao->icone" :cor="$execucao->cor_icone" /></span>
-                                        <div class="nome-tarefa">
-                                            <h3 id="tarefa-{{ $execucao->id_execucao }}">{{ $execucao->tarefa }}</h3>
-                                            @if ($execucao->tipo_rotina === \App\Services\ExecucoesDiarias::TIPO_EMERGENCIAL)
-                                                <p>Tarefa emergencial</p>
-                                            @endif
-                                            <p>
-                                                @if ($execucao->status === 'concluida' && $execucao->concluido_em)
-                                                    Finalizada em {{ $dataLocal($execucao->concluido_em)->format('d/m/Y') }}
-                                                @else
-                                                    {{ $statusExecucao[$execucao->status] ?? $execucao->status }}
-                                                @endif
-                                            </p>
-                                        </div>
-                                        <time class="horario-rotina" datetime="{{ $dataLocal($execucao->previsto_em)?->toIso8601String() }}"
-                                              title="Horário previsto em São Paulo">
-                                            <span aria-hidden="true">◷</span>
-                                            {{ $dataLocal($execucao->previsto_em)?->format('H:i') }}
-                                        </time>
-                                    </div>
-
-                                    <dl class="dados-rotina">
-                                        <div>
-                                            <dt><svg class="icone-dado" aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="6" width="16" height="15" rx="2"/><path d="M8 3v6m8-6v6M4 11h16"/></svg> Início:</dt>
-                                            <dd>{{ $dataLocal($execucao->iniciado_em)?->format('d/m/Y') ?? 'Não iniciada' }}</dd>
-                                        </div>
-                                        <div>
-                                            <dt><svg class="icone-dado" aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="7" r="4"/><path d="M4 22v-2a8 8 0 0 1 16 0v2"/></svg> Morador(a):</dt>
-                                            <dd>{{ $execucao->morador }}</dd>
-                                        </div>
-                                        <div>
-                                            <dt><svg class="icone-dado" aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg> Local:</dt>
-                                            <dd>{{ $execucao->local }}</dd>
-                                        </div>
-                                    </dl>
-
-                                    <div class="acoes-rotina">
-                                        <details class="dados-sla">
-                                            <summary>Ver SLA</summary>
-                                            <dl>
-                                                <dt>Execução / rotina</dt>
-                                                <dd>#{{ $execucao->id_execucao }} / #{{ $execucao->id_rotina }}</dd>
-                                                @if ($aba === 'grupos')
-                                                    <dt>Responsável</dt>
-                                                    <dd>{{ $execucao->responsavel ?? 'Não localizado' }}</dd>
-                                                @endif
-                                                <dt>Previsto</dt>
-                                                <dd>{{ $formatarData($execucao->previsto_em) }}</dd>
-                                                <dt>Início</dt>
-                                                <dd>{{ $formatarData($execucao->iniciado_em) }}</dd>
-                                                <dt>Limite da etapa</dt>
-                                                <dd>{{ $formatarData($execucao->prazo_em) }}</dd>
-                                                <dt>Conclusão</dt>
-                                                <dd>{{ $formatarData($execucao->concluido_em) }}</dd>
-                                                <dt>SLA atual</dt>
-                                                <dd>{{ $situacoes[$execucao->situacao]['nome'] ?? '—' }}</dd>
-                                                <dt>SLA do início</dt>
-                                                <dd>{{ $situacoes[$execucao->sla_inicio]['nome'] ?? '—' }}</dd>
-                                                <dt>SLA da conclusão</dt>
-                                                <dd>{{ $situacoes[$execucao->sla_conclusao]['nome'] ?? '—' }}</dd>
-                                            </dl>
-                                        </details>
-
-                                        @if (auth()->user()->can('editar-modulo', 'rotinas_diarias')
-                                            && (auth()->user()->isAdmin() || (string) $execucao->id_usuario_responsavel === (string) auth()->id()))
-                                            @if ($execucao->status === 'pendente')
-                                                <form method="POST" action="{{ route('execucoes.iniciar', $execucao->id_execucao) }}">
-                                                    @csrf
-                                                    <button type="submit" class="botao primario">Iniciar</button>
-                                                </form>
-                                            @elseif ($execucao->status === 'em_andamento')
-                                                @php
-                                                    $erroComentario = old('id_execucao') === (string) $execucao->id_execucao && $errors->has('comentario');
-                                                @endphp
-                                                <details class="shrink-0 open:w-full" @if ($erroComentario) open @endif>
-                                                    <summary class="botao botao-concluir w-fit list-none">Concluir</summary>
-                                                    <form method="POST" action="{{ route('execucoes.concluir', $execucao->id_execucao) }}" class="mt-2 grid gap-1.5">
-                                                        @csrf
-                                                        <input type="hidden" name="id_execucao" value="{{ $execucao->id_execucao }}">
-                                                        <label for="comentario-{{ $execucao->id_execucao }}" class="text-xs font-semibold">Comentário (obrigatório)</label>
-                                                        <textarea id="comentario-{{ $execucao->id_execucao }}" name="comentario" rows="3" maxlength="2000" required
-                                                                  @if ($erroComentario) aria-invalid="true" aria-describedby="erros-estatisticas" @endif
-                                                                  class="w-full resize-y rounded-lg border border-[#e8d7c1] bg-white p-2 text-sm">{{ $erroComentario && is_string(old('comentario')) ? old('comentario') : '' }}</textarea>
-                                                        <button type="submit" class="botao botao-concluir justify-self-start">Confirmar conclusão</button>
-                                                    </form>
-                                                </details>
-                                            @endif
-                                        @endif
-                                    </div>
-                                </article>
+                                @include('relatorios.partials.cartao-estatistica-rotina', [
+                                    'execucao' => $execucao, 'statusExecucao' => $statusExecucao, 'dataLocal' => $dataLocal, 'aba' => $aba,
+                                ])
                             @endforeach
                         </div>
                     @endif
@@ -516,7 +418,7 @@
     </h1>
 
     <p class="mt-2 text-sm text-gray-500">
-        Percentual de rotinas atrasadas, expirando e no prazo.
+        {{ $porProcesso ? 'Percentual de tarefas atrasadas, expirando e no prazo por tipo de processo.' : 'Percentual de rotinas atrasadas, expirando e no prazo.' }}
     </p>
 
     <form method="GET" action="{{ route('relatorios.estatisticas') }}">
@@ -525,7 +427,7 @@
         <div class="mt-6 flex flex-wrap items-center justify-between gap-4
                     border-b border-gray-200">
             <div class="flex gap-6">
-                @foreach (['usuarios' => 'Usuários', 'grupos' => 'Grupos'] as $chave => $titulo)
+                @foreach (['usuarios' => 'Usuários', 'grupos' => 'Grupos', 'processos' => 'Processos'] as $chave => $titulo)
                     <button
                         type="submit"
                         onclick="this.form.elements['aba'].value = '{{ $chave }}'"
@@ -539,11 +441,6 @@
                     </button>
                 @endforeach
 
-                <button type="button" disabled
-                        title="O cadastro de processos ainda precisa ser identificado."
-                        class="pb-3 text-sm text-gray-400">
-                    Processos
-                </button>
             </div>
 
             <a href="{{ route('relatorios.estatisticas') }}"
@@ -642,7 +539,7 @@
     @endif
 
     <div class="mt-6 space-y-5">
-        @forelse ($grupos as $letra => $itens)
+        @forelse ($secoesDaLista as $letra => $itens)
             <details open>
                 <summary class="letra-resumo">
                     <span>{{ $letra }}</span><span aria-hidden="true">›</span>
@@ -652,10 +549,10 @@
                     @foreach ($itens as $item)
                         <a class="colaborador"
                            href="{{ route('relatorios.estatisticas', array_merge($parametros, ['detalhe' => $item['chave']])) }}"
-                           aria-label="Ver rotinas de {{ $item['nome'] }}">
+                           aria-label="Ver {{ $tipoItem }}s de {{ $item['nome'] }}">
                             <div class="cabecalho-colaborador">
                                 <strong>{{ $item['nome'] }}</strong>
-                                <span class="total-colaborador">{{ $item['total'] }} {{ $item['total'] === 1 ? 'rotina' : 'rotinas' }}</span>
+                                <span class="total-colaborador">{{ $item['total'] }} {{ $tipoItem }}{{ $item['total'] === 1 ? '' : 's' }}</span>
                                 <span aria-hidden="true" style="color:#ab874e">›</span>
                             </div>
                             <div class="barra-unica" aria-hidden="true">
@@ -677,7 +574,7 @@
             </details>
         @empty
             <div class="rounded-xl border border-dashed border-gray-300 px-6 py-12 text-center">
-                <p class="font-semibold text-[#153e56]">Nenhuma execução encontrada</p>
+                <p class="font-semibold text-[#153e56]">{{ $porProcesso ? 'Nenhum processo encontrado' : 'Nenhuma execução encontrada' }}</p>
                 <p class="mt-2 text-sm text-gray-500">
                     @if (!$pendentes && !$andamento && !$finalizados)
                         Selecione uma situação da execução e clique em Buscar.

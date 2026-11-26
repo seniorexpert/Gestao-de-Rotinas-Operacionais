@@ -50,7 +50,10 @@
             <i class="fa-regular fa-file-lines" aria-hidden="true"></i>
             Ver documentação
         </a>
-        <p id="modalAuxilio" class="text-sm font-semibold text-amber-800">Auxílio previsto para esta tarefa.</p>
+        <div id="modalAuxilio" class="hidden text-sm">
+            <h3 id="modalAuxilioTitulo" class="font-semibold text-amber-800">Auxílio previsto para esta tarefa de:</h3>
+            <p id="modalAuxiliares" class="mt-1 break-words font-semibold"></p>
+        </div>
     </div>
 
     <div id="modalSlaExecucao" class="flex flex-wrap items-baseline justify-between gap-1 px-1 py-2 text-xs text-[#64748b]">
@@ -97,6 +100,10 @@
         campo('modalOrientacoes').classList.toggle('hidden', !(data.instrucao || data.obs || data.documentacao || data.auxilio));
         campo('modalInstrucaoBloco').classList.toggle('hidden', !data.instrucao);
         campo('modalObsBloco').classList.toggle('hidden', !data.obs);
+        const nomesAuxiliares = data.auxiliares?.join(', ') ?? '';
+        preencher('modalAuxilioTitulo', nomesAuxiliares ? 'Auxílio previsto para esta tarefa de:' : 'Auxílio previsto para esta tarefa.');
+        preencher('modalAuxiliares', nomesAuxiliares);
+        campo('modalAuxiliares').classList.toggle('hidden', !nomesAuxiliares);
         campo('modalAuxilio').classList.toggle('hidden', !data.auxilio);
         const documento = campo('modalDocumentacao');
         documento.classList.toggle('hidden', !data.documentacao);

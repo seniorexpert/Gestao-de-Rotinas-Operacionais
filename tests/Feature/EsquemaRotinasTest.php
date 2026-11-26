@@ -17,7 +17,7 @@ class EsquemaRotinasTest extends TestCase
 
     #[TestWith(['processos.index', 'Organizar sala'])]
     #[TestWith(['processos.gestao-rotinas', 'Organizar sala'])]
-    #[TestWith(['monitoramento.index', 'Organizar sala'])]
+    #[TestWith(['monitoramento.index', 'Rotinas Diárias'])]
     #[TestWith(['relatorios.tarefas', 'Organizar sala'])]
     #[TestWith(['relatorios.locais', 'Sala de estar'])]
     #[TestWith(['relatorios.ferramentas', 'Kit de limpeza'])]
@@ -81,7 +81,7 @@ class EsquemaRotinasTest extends TestCase
         $this->post(route($tabela.'.store'), ['id' => $id, $campo => 'Registro revisado', ...$unidades])->assertRedirect()->assertSessionHasNoErrors();
 
         $this->assertDatabaseCount($tabela, 1);
-        $this->assertDatabaseHas($tabela, [$chave => $id, $coluna => 'Registro revisado', 'status' => true]);
+        $this->assertDatabaseHas($tabela, [$chave => $id, $coluna => 'Registro Revisado', 'status' => true]);
     }
 
     public function test_tarefa_grava_duracao_como_time_e_vincula_a_ferramenta_por_id(): void
@@ -92,19 +92,19 @@ class EsquemaRotinasTest extends TestCase
         DB::table('ferramentas_empresas')->insert(['id_ferramenta' => $ferramenta, 'id_empresa' => $empresa]);
 
         $this->actingAs($usuario)->post(route('tarefas.store'), [
-            'nome_tarefa' => 'Organizar sala',
+            'nome_tarefa' => 'a ORGANIZAÇÃO DOS quartos e AS áreas comuns',
             'tempo_tarefa' => '1.5',
             'status_tarefa' => 'Ativa',
             'id_empresas' => [$empresa],
             'id_ferramenta' => $ferramenta,
-            'descricao_tarefa' => 'Recolher os materiais.',
+            'descricao_tarefa' => "recolher OS materiais DE limpeza.\nos responsáveis devem consultar https://exemplo.test/Guia/AbC E avisar ÀS equipes por plantao@example.test",
         ])->assertSessionHas('success', 'Tarefa salva com sucesso.');
 
         $this->assertDatabaseHas('tarefas', [
-            'tarefa' => 'Organizar sala',
+            'tarefa' => 'A Organização dos Quartos e as Áreas Comuns',
             'tempo_realizar_tarefa' => '00:01:30',
             'id_ferramenta' => $ferramenta,
-            'descricao' => 'Recolher os materiais.',
+            'descricao' => "Recolher os Materiais de Limpeza.\nOs Responsáveis Devem Consultar https://exemplo.test/Guia/AbC e Avisar às Equipes por plantao@example.test",
             'status' => true,
             'icone' => '📋',
             'cor_icone' => 'original',
@@ -133,6 +133,7 @@ class EsquemaRotinasTest extends TestCase
                 'id_local' => $catalogo['local'],
                 'auxilio' => 'Sim',
                 'cuidador' => $auxiliar->getKey(),
+                'observacao' => 'checar A iluminação',
             ]], JSON_THROW_ON_ERROR),
         ])->assertSessionHas('success', $emergencial ? 'Tarefas emergenciais salvas com sucesso!' : 'Todas as rotinas foram salvas com sucesso!');
 
@@ -141,10 +142,60 @@ class EsquemaRotinasTest extends TestCase
             'id_rotina' => $idRotina, 'id_empresa' => $empresa, 'id_usuario' => $responsavel->getKey(),
             'id_tarefa' => $catalogo['tarefa'], 'id_local' => $catalogo['local'],
             'local' => 'Sala de estar', 'horario' => '08:30:00', 'status' => $emergencial, 'auxilio' => true,
+            'obs' => 'Checar a Iluminação',
             'tipo_rotina' => $emergencial ? ExecucoesDiarias::TIPO_EMERGENCIAL : ExecucoesDiarias::TIPO_DIARIA,
         ]);
         $this->assertDatabaseHas('rotina_auxiliares', ['id_rotina' => $idRotina, 'id_usuario' => $auxiliar->getKey()]);
         $this->assertDatabaseHas('logs_auditoria', ['tabela' => 'rotinas', 'registro_id' => (string) $idRotina]);
+    }
+
+    #[TestWith(['rotinas.store'])]
+    #[TestWith(['rotinas.emergenciais.store'])]
+    public function test_cadastro_grava_todos_os_colaboradores_auxiliares_de_cada_tarefa(string $rota): void
+    {
+        $this->travelTo(CarbonImmutable::parse('2026-11-26 07:00:00', ExecucoesDiarias::FUSO));
+        $empresa = $this->empresa('Unidade Centro');
+        $responsavel = $this->usuario('Ana Exemplo', $empresa);
+        $primeiroAuxiliar = $this->usuario('Joana Exemplo', $empresa);
+        $segundoAuxiliar = $this->usuario('Rita Exemplo', $empresa);
+        $catalogo = $this->catalogo($empresa);
+        $auxiliares = [$primeiroAuxiliar->getKey(), $segundoAuxiliar->getKey()];
+        $dadosDaTarefa = [
+            'dias' => 'Quinta-feira', 'id_tarefa' => $catalogo['tarefa'], 'id_local' => $catalogo['local'],
+            'auxilio' => 'Sim', 'auxiliares' => $auxiliares,
+        ];
+
+        $this->actingAs($responsavel)->post(route($rota), [
+            'id_empresa' => $empresa, 'colaborador_id' => $responsavel->getKey(),
+            'tarefas_json' => json_encode([
+                $dadosDaTarefa + ['horario' => '08:00'],
+                $dadosDaTarefa + ['horario' => '09:00'],
+            ], JSON_THROW_ON_ERROR),
+        ])->assertSessionHasNoErrors()->assertSessionHas('success');
+
+        $this->assertDatabaseCount('rotina_auxiliares', 4);
+        foreach (DB::table('rotinas')->pluck('id_rotina') as $id) {
+            $this->assertSame($auxiliares, DB::table('rotina_auxiliares')->where('id_rotina', $id)->orderBy('id_usuario')->pluck('id_usuario')->all());
+        }
+    }
+
+    public function test_cadastro_rejeita_auxiliares_de_outra_unidade_e_o_proprio_responsavel(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $responsavel = $this->usuario('Ana Exemplo', $empresa);
+        $externo = $this->usuario('Rita Exemplo', $this->empresa('Unidade Sul'));
+        $catalogo = $this->catalogo($empresa);
+
+        $this->actingAs($responsavel)->post(route('rotinas.store'), [
+            'id_empresa' => $empresa, 'colaborador_id' => $responsavel->getKey(),
+            'tarefas_json' => json_encode([[
+                'dias' => 'Quinta-feira', 'horario' => '08:00',
+                'id_tarefa' => $catalogo['tarefa'], 'id_local' => $catalogo['local'],
+                'auxilio' => 'Sim', 'auxiliares' => [$externo->getKey(), $responsavel->getKey()],
+            ]], JSON_THROW_ON_ERROR),
+        ])->assertSessionHasErrors(['tarefas.0.auxiliares.0', 'tarefas.0.auxiliares.1']);
+
+        $this->assertDatabaseEmpty('rotinas');
     }
 
     public function test_atribuicao_altera_o_responsavel_na_tabela_rotinas(): void
@@ -195,6 +246,65 @@ class EsquemaRotinasTest extends TestCase
             && $rotinas->pluck('grupo_rotina')->sort()->values()->all() === collect([$grupo, $outroGrupo])->sort()->values()->all());
     }
 
+    public function test_filtro_de_morador_combina_com_colaborador_e_mostra_a_rotina_inteira(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $usuario = $this->usuario('Joana Exemplo', $empresa);
+        $outroColaborador = $this->usuario('Rita Exemplo', $empresa);
+        $catalogo = $this->catalogo($empresa);
+        $grupo = $this->actingAs($usuario)->cadastrarRotinaComDuasTarefas($empresa, $usuario, $catalogo);
+        $outraRotina = $this->rotina($empresa, $outroColaborador, $catalogo);
+        $this->rotina($empresa, $usuario, $catalogo);
+        DB::table('rotinas')->where('grupo_rotina', $grupo)->where('horario', '09:00:00')
+            ->update(['morador' => 'Maria Exemplo, Helena Souza', 'status' => false]);
+        DB::table('rotinas')->where('id_rotina', $outraRotina)->update(['morador' => 'Helena Souza']);
+        $filtros = ['colaborador' => 'Joana Exemplo', 'morador' => 'hELENA'];
+        $relatorio = route('relatorios.rotinas', $filtros);
+        $edicao = route('relatorios.rotinas', [...$filtros, 'editar' => $grupo]);
+
+        $this->get($relatorio)->assertOk()->assertSee($edicao)->assertSee('value="hELENA"', false)
+            ->assertSeeTextInOrder(['08:00 – 09:00', '2 tarefas', 'Parcialmente ativa', '1 rotina encontrada'])
+            ->assertViewHas('rotinas', fn ($rotinas) => $rotinas->count() === 1 && $rotinas->first()->grupo_rotina === $grupo);
+        $this->get($edicao)->assertOk()->assertSee($relatorio)
+            ->assertSee(route('rotinas.update', ['grupo' => $grupo, ...$filtros]))
+            ->assertViewHas('tarefasEdicao', fn ($tarefas) => $tarefas->count() === 2);
+        $this->put(route('rotinas.update', ['grupo' => $grupo, ...$filtros]), [
+            'colaborador_id' => $usuario->getKey(), 'status' => '1',
+        ])->assertRedirect($relatorio);
+    }
+
+    public function test_filtro_de_morador_respeita_a_unidade_e_ignora_tarefas_removidas(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $outraEmpresa = $this->empresa('Unidade Sul');
+        $usuario = $this->usuario('Joana Exemplo', $empresa);
+        $foraDaUnidade = $this->usuario('Rita Exemplo', $outraEmpresa);
+        $catalogo = $this->catalogo($empresa);
+        $rotinaEncontrada = $this->rotina($empresa, $usuario, $catalogo);
+        $rotinaComTarefaRemovida = $this->actingAs($usuario)->cadastrarRotinaComDuasTarefas($empresa, $usuario, $catalogo);
+        $rotinaDeOutraUnidade = $this->rotina($outraEmpresa, $foraDaUnidade, $this->catalogo($outraEmpresa));
+        DB::table('rotinas')->whereIn('id_rotina', [$rotinaEncontrada, $rotinaDeOutraUnidade])->update(['morador' => 'Sofia Exemplo']);
+        DB::table('rotinas')->where('grupo_rotina', $rotinaComTarefaRemovida)->where('horario', '09:00:00')
+            ->update(['morador' => 'Sofia Exemplo', 'excluida_em' => now()]);
+
+        $this->get(route('relatorios.rotinas', ['morador' => 'Sofia']))->assertOk()
+            ->assertViewHas('rotinas', fn ($rotinas) => $rotinas->pluck('id_rotina_principal')->all() === [$rotinaEncontrada]);
+    }
+
+    public function test_filtro_de_morador_trata_caracteres_de_busca_como_parte_do_nome(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $usuario = $this->usuario('Joana Exemplo', $empresa);
+        $catalogo = $this->catalogo($empresa);
+        $rotina = $this->rotina($empresa, $usuario, $catalogo);
+        $outraRotina = $this->rotina($empresa, $usuario, $catalogo);
+        DB::table('rotinas')->where('id_rotina', $rotina)->update(['morador' => 'Ana_Exemplo']);
+        DB::table('rotinas')->where('id_rotina', $outraRotina)->update(['morador' => 'Ana Exemplo']);
+
+        $this->actingAs($usuario)->get(route('relatorios.rotinas', ['morador' => 'Ana_']))->assertOk()
+            ->assertViewHas('rotinas', fn ($rotinas) => $rotinas->pluck('id_rotina_principal')->all() === [$rotina]);
+    }
+
     public function test_rotina_inativa_permanece_na_agenda_mas_bloqueia_execucao_e_geracao(): void
     {
         $agora = CarbonImmutable::parse('2026-11-24 07:15:00', ExecucoesDiarias::FUSO);
@@ -241,8 +351,8 @@ class EsquemaRotinasTest extends TestCase
         $edicao = route('relatorios.rotinas', ['editar' => $grupo, 'tarefa' => $primeira]);
         $url = route('rotinas.tarefas.update', [$grupo, $primeira]);
         $this->get(route('relatorios.rotinas', ['editar' => $grupo]))->assertSee($edicao);
-        $this->get($edicao)->assertOk()->assertSee('id="tarefaRotinaModal"', false)
-            ->assertSeeTextInOrder(['Dados da tarefa', 'Dia(s) da semana', 'Observação', 'Salvar tarefa'])->assertSee('08:00:00');
+        $this->get($edicao)->assertOk()->assertSee('id="tarefaRotinaModal"', false)->assertSee('step="60" value="08:00"', false)
+            ->assertSeeTextInOrder(['Dados da tarefa', 'Dia(s) da semana', 'Observação', 'Salvar tarefa']);
 
         $this->from($edicao)->put($url, [
             'dias' => ['2', '3'], 'horario' => '10:30', 'id_tarefa' => $catalogo['tarefa'], 'id_local' => $catalogo['local'],
@@ -250,14 +360,35 @@ class EsquemaRotinasTest extends TestCase
         ])->assertRedirect(route('relatorios.rotinas', ['editar' => $grupo]))->assertSessionHasNoErrors();
 
         $this->assertDatabaseHas('rotinas', ['id_rotina' => $primeira, 'horario' => '10:30:00', 'dias_semanas' => 'Terça-feira, Quarta-feira',
-            'morador' => 'Moradora Exemplo', 'auxilio' => true, 'obs' => 'Verificar material']);
+            'morador' => 'Moradora Exemplo', 'auxilio' => true, 'obs' => 'Verificar Material']);
         $this->assertDatabaseHas('rotinas', ['id_rotina' => $segunda, 'horario' => '09:00:00', 'dias_semanas' => 'Todos os dias']);
         $this->assertDatabaseHas('rotina_auxiliares', ['id_rotina' => $primeira, 'id_usuario' => $auxiliar->getKey()]);
         $this->assertDatabaseHas('logs_auditoria', ['id_rotina' => $primeira, 'acao' => 'UPDATE', 'descricao' => 'Tarefa da rotina editada']);
         $this->get(route('home'))->assertViewHas('rotinas', fn ($rotinas) => $rotinas->firstWhere('id_rotina', $primeira)->horario === '08:00 · 24/11/2026');
 
         $this->travelTo($agora->addDay()->setTime(8, 0));
-        $this->get(route('home'))->assertViewHas('rotinas', fn ($rotinas) => $rotinas->firstWhere('id_rotina', $primeira)->horario === '10:30 · 25/11/2026');
+        $this->get(route('home'))->assertViewHas('rotinas', fn ($rotinas) => $rotinas->where('id_rotina', $primeira)->pluck('horario')->all() === [
+            '08:00 · 24/11/2026',
+            '10:30 · 25/11/2026',
+        ]);
+    }
+
+    public function test_edicao_exibe_horas_e_minutos_e_preserva_o_horario_quando_o_minuto_nao_muda(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $usuario = $this->usuario('Joana Exemplo', $empresa);
+        $catalogo = $this->catalogo($empresa);
+        $tarefa = $this->rotina($empresa, $usuario, $catalogo);
+        DB::table('rotinas')->where('id_rotina', $tarefa)->update(['horario' => '08:15:30']);
+        $edicao = route('relatorios.rotinas', ['editar' => $tarefa, 'tarefa' => $tarefa]);
+
+        $this->actingAs($usuario)->get($edicao)->assertOk()->assertSee('step="60" value="08:15"', false);
+        $this->from($edicao)->put(route('rotinas.tarefas.update', [$tarefa, $tarefa]), [
+            'dias' => ['1'], 'horario' => '08:15', 'id_tarefa' => $catalogo['tarefa'], 'id_local' => $catalogo['local'],
+            'auxilio' => '0', 'observacao' => 'Conferir material',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('rotinas', ['id_rotina' => $tarefa, 'horario' => '08:15:30', 'obs' => 'Conferir Material']);
     }
 
     public function test_edicao_de_tarefa_da_rotina_valida_o_grupo_e_o_catalogo_da_unidade(): void
@@ -320,16 +451,23 @@ class EsquemaRotinasTest extends TestCase
     {
         $empresa = $this->empresa('Unidade Centro');
         $usuario = $this->usuario('Joana Exemplo', $empresa);
+        $ana = $this->usuario('Ana Exemplo', $empresa);
+        $paula = $this->usuario('Paula Exemplo', $empresa);
         $catalogo = $this->catalogo($empresa);
         DB::table('tarefas')->where('id_tarefa', $catalogo['tarefa'])->update(['icone' => '🩺', 'cor_icone' => 'original']);
         $rotina = $this->rotina($empresa, $usuario, $catalogo);
         DB::table('rotinas')->where('id_rotina', $rotina)->update([
             'morador' => 'Maria Exemplo, Helena Exemplo', 'auxilio' => true, 'dias_semanas' => implode(', ', ExecucoesDiarias::DIAS_DA_SEMANA),
         ]);
+        DB::table('rotina_auxiliares')->insert([
+            ['id_rotina' => $rotina, 'id_usuario' => $paula->getKey()],
+            ['id_rotina' => $rotina, 'id_usuario' => $ana->getKey()],
+        ]);
 
         $this->actingAs($usuario)->get(route('relatorios.rotinas', ['editar' => $rotina]))->assertOk()
             ->assertSeeTextInOrder(['🩺', 'Organizar sala', 'Horário:', '08:00', 'Dias:', 'Todos os dias',
-                'Moradores:', 'Maria Exemplo, Helena Exemplo', 'Local:', 'Sala de estar', 'Auxílio:', 'Sim', 'Editar', 'Remover', 'Adicionar nova tarefa']);
+                'Moradores:', 'Maria Exemplo, Helena Exemplo', 'Local:', 'Sala de estar', 'Auxílio:', 'Sim - Ana Exemplo; Paula Exemplo',
+                'Editar', 'Remover', 'Adicionar nova tarefa']);
     }
 
     #[TestWith([true])]
@@ -350,7 +488,7 @@ class EsquemaRotinasTest extends TestCase
         $adicionar = route('relatorios.rotinas', ['editar' => $grupo, 'adicionar_tarefa' => '1']);
         $salvar = route('rotinas.tarefas.store', $grupo);
         $this->get($edicao)->assertSee($adicionar);
-        $this->get($adicionar)->assertOk()->assertSee('id="tarefaRotinaModal"', false)->assertSee($salvar)
+        $this->get($adicionar)->assertOk()->assertSee('id="tarefaRotinaModal"', false)->assertSee('step="60" value=""', false)->assertSee($salvar)
             ->assertSeeTextInOrder(['Dados da tarefa', 'Dia(s) da semana', 'Observação', 'Adicionar à rotina']);
 
         $this->from($adicionar)->post($salvar, [
@@ -363,7 +501,7 @@ class EsquemaRotinasTest extends TestCase
         $this->assertDatabaseHas('rotinas', [
             'id_rotina' => $id, 'grupo_rotina' => $grupo, 'id_empresa' => $empresa, 'id_usuario' => $responsavel->getKey(),
             'status' => $ativa, 'horario' => '08:30:00', 'dias_semanas' => 'Terça-feira', 'id_tarefa' => $catalogo['tarefa'],
-            'id_local' => $catalogo['local'], 'morador' => 'Moradora Exemplo', 'obs' => 'Verificar material', 'auxilio' => true,
+            'id_local' => $catalogo['local'], 'morador' => 'Moradora Exemplo', 'obs' => 'Verificar Material', 'auxilio' => true,
         ]);
         $this->assertDatabaseHas('rotina_auxiliares', ['id_rotina' => $id, 'id_usuario' => $editor->getKey()]);
         $this->assertDatabaseHas('logs_auditoria', ['id_rotina' => $id, 'acao' => 'CREATE', 'descricao' => 'Tarefa adicionada à rotina']);
@@ -479,6 +617,88 @@ class EsquemaRotinasTest extends TestCase
         ])->assertSessionHasErrors('novo_colaborador_id');
 
         $this->assertDatabaseHas('rotinas', ['id_rotina' => $rotina, 'id_usuario' => $usuario->getKey()]);
+    }
+
+    public function test_grade_excel_exporta_os_mesmos_horarios_e_detalhes_filtrados_por_morador_e_grupo(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $outraEmpresa = $this->empresa('Unidade Sul');
+        $usuario = $this->usuario('Joana Exemplo', $empresa);
+        $outroGrupo = $this->usuario('Rita Exemplo', $empresa);
+        $foraDaUnidade = $this->usuario('Pessoa de outra unidade', $outraEmpresa);
+        $cuidador = DB::table('grupos_acesso')->where('grupo_acesso', 'Cuidador')->value('id_grupo_acesso');
+        $enfermagem = DB::table('grupos_acesso')->where('grupo_acesso', 'Enfermagem')->value('id_grupo_acesso');
+        DB::table('usuarios')->whereIn('id_usuario', [$usuario->getKey(), $foraDaUnidade->getKey()])->update(['id_grupo_acesso' => $cuidador]);
+        DB::table('usuarios')->where('id_usuario', $outroGrupo->getKey())->update(['id_grupo_acesso' => $enfermagem]);
+
+        $catalogo = $this->catalogo($empresa);
+        DB::table('tarefas')->where('id_tarefa', $catalogo['tarefa'])->update(['icone' => '💊', 'cor_icone' => 'original']);
+        $recepcao = $this->rotina($empresa, $usuario, $catalogo);
+        $madrugada = $this->rotina($empresa, $usuario, $catalogo);
+        $outroMorador = $this->rotina($empresa, $usuario, $catalogo);
+        $rotinaEnfermagem = $this->rotina($empresa, $outroGrupo, $catalogo);
+        $rotinaExterna = $this->rotina($outraEmpresa, $foraDaUnidade, $this->catalogo($outraEmpresa));
+        DB::table('rotinas')->whereIn('id_rotina', [$recepcao, $madrugada, $rotinaEnfermagem, $rotinaExterna])->update(['morador' => 'Maria Exemplo, Helena Souza']);
+        DB::table('rotinas')->where('id_rotina', $recepcao)->update(['horario' => '22:00:00', 'local' => 'Quarto 02', 'dias_semanas' => 'Terça-feira, Quinta-feira']);
+        DB::table('rotinas')->where('id_rotina', $madrugada)->update(['horario' => '02:00:00', 'dias_semanas' => 'Todos']);
+        DB::table('rotinas')->where('id_rotina', $outroMorador)->update(['morador' => 'Pedro Exemplo']);
+        $filtros = ['morador' => 'hELENA', 'grupo' => $cuidador];
+        $exportacao = route('relatorios.excel.exportar', $filtros);
+
+        $this->actingAs($usuario)->get(route('relatorios.excel', $filtros))->assertOk()->assertSee($exportacao)
+            ->assertSeeText('Joana Exemplo')->assertSeeText('💊')->assertSeeText('2 tarefas encontradas')
+            ->assertSeeText('Maria Exemplo, Helena Souza · Quarto 02')->assertSeeText('Terça-feira, Quinta-feira')
+            ->assertViewHas('horarios', fn ($horarios) => $horarios->all() === ['22:00', '02:00'])
+            ->assertViewHas('colaboradores', fn ($colaboradores) => $colaboradores->pluck('id_usuario')->all() === [$usuario->getKey()]);
+        $planilha = $this->get($exportacao)->assertDownload()->streamedContent();
+
+        foreach (['Joana Exemplo', 'Cuidador', '2 tarefas encontradas', '💊', 'Maria Exemplo, Helena Souza · Quarto 02', 'Terça-feira, Quinta-feira', 'Todos os dias'] as $texto) {
+            $this->assertStringContainsString($texto, $planilha);
+        }
+        $this->assertLessThan(strpos($planilha, '02:00'), strpos($planilha, '22:00'));
+        foreach (['Pedro Exemplo', 'Rita Exemplo', 'Pessoa de outra unidade'] as $texto) {
+            $this->assertStringNotContainsString($texto, $planilha);
+        }
+    }
+
+    public function test_filtro_de_colaborador_se_combina_com_morador_e_grupo_na_grade_excel(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $usuario = $this->usuario('Joana Exemplo', $empresa);
+        $outroColaborador = $this->usuario('Rita Exemplo', $empresa);
+        $grupo = DB::table('grupos_acesso')->where('grupo_acesso', 'Cuidador')->value('id_grupo_acesso');
+        DB::table('usuarios')->whereIn('id_usuario', [$usuario->getKey(), $outroColaborador->getKey()])->update(['id_grupo_acesso' => $grupo]);
+        $catalogo = $this->catalogo($empresa);
+        $rotinas = [$this->rotina($empresa, $usuario, $catalogo), $this->rotina($empresa, $outroColaborador, $catalogo)];
+        DB::table('rotinas')->whereIn('id_rotina', $rotinas)->update(['morador' => 'Helena Souza']);
+        $filtros = ['colaborador' => 'Rita Exemplo', 'morador' => 'Helena', 'grupo' => $grupo];
+
+        $this->actingAs($usuario)->get(route('relatorios.excel', $filtros))->assertOk()
+            ->assertViewHas('colaboradores', fn ($colaboradores) => $colaboradores->pluck('id_usuario')->all() === [$outroColaborador->getKey()]);
+        $planilha = $this->get(route('relatorios.excel.exportar', $filtros))->assertDownload()->streamedContent();
+
+        $this->assertStringContainsString('Rita Exemplo', $planilha);
+        $this->assertStringNotContainsString('Joana Exemplo', $planilha);
+    }
+
+    public function test_grade_e_planilha_ordenam_horarios_a_partir_das_seis_da_manha(): void
+    {
+        $empresa = $this->empresa('Unidade Centro');
+        $usuario = $this->usuario('Joana Exemplo', $empresa);
+        $catalogo = $this->catalogo($empresa);
+
+        foreach (['23:00', '05:59', '06:00', '00:00', '03:00', '09:30'] as $horario) {
+            $id = $this->rotina($empresa, $usuario, $catalogo);
+            DB::table('rotinas')->where('id_rotina', $id)->update(['horario' => $horario.':00']);
+        }
+
+        $horariosEsperados = ['06:00', '09:30', '23:00', '00:00', '03:00', '05:59'];
+        $pagina = $this->actingAs($usuario)->get(route('relatorios.excel'))->assertOk();
+        $this->assertSame($horariosEsperados, $pagina->viewData('horarios')->all());
+
+        $planilha = $this->get(route('relatorios.excel.exportar'))->assertDownload()->streamedContent();
+        preg_match_all('/<tr\b[^>]*>\s*<td\b[^>]*>(\d{2}:\d{2})<\/td>/', $planilha, $horariosNaPlanilha);
+        $this->assertSame($horariosEsperados, $horariosNaPlanilha[1]);
     }
 
     #[TestWith(['relatorios.excel.exportar', 'Organizar sala'])]

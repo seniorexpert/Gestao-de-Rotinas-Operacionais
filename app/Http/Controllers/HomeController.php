@@ -65,7 +65,15 @@ class HomeController extends Controller
                 : 0)
             ->values();
 
+        $idsComAuxilio = $rotinas->where('auxilio', true)->pluck('id_rotina')->unique()->values()->all();
+        $auxiliaresPorRotina = $idsComAuxilio === [] ? collect() : $this->consultaRotinas->auxiliaresDeRotinas($idsComAuxilio)
+            ->get(['a.id_rotina', 'a.id_usuario', 'u.usuario'])
+            ->groupBy('id_rotina');
+
         foreach ($rotinas as $rotina) {
+            $rotina->auxiliares = $auxiliaresPorRotina->get($rotina->id_rotina)
+                ?->where('id_usuario', '!=', $rotina->id_usuario_responsavel)
+                ->pluck('usuario')->all() ?? [];
             $rotina->local = trim($rotina->local_rotina ?? '') ?: (trim($rotina->local_cadastrado ?? '') ?: 'Não informado');
             $previsto = CarbonImmutable::parse($rotina->previsto_em, 'UTC')->setTimezone(ExecucoesDiarias::FUSO);
             $rotina->horario = $previsto->format('H:i · d/m/Y');

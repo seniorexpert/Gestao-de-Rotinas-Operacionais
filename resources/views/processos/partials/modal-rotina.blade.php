@@ -120,8 +120,8 @@
         preencherAgendamentoEmergencial();
         @endif
         
-        if (typeof carregarCuidadoresAuxiliares === 'function') {
-            carregarCuidadoresAuxiliares(unidadeSelect.value);
+        if (typeof carregarColaboradoresAuxiliares === 'function') {
+            carregarColaboradoresAuxiliares();
         }
         
         if (typeof carregarMoradoresPorUnidade === 'function') {

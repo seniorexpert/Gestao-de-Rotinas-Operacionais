@@ -123,23 +123,23 @@ class CalculadoraSla
             return $this->calcularEmergencial($execucao, $momento);
         }
 
-        if ($execucao->status === 'pendente') {
+        $conclusaoSemInicio = $execucao->status === 'concluida' && empty($execucao->iniciado_em) && ! empty($execucao->concluido_em);
+        if ($execucao->status === 'pendente' || $conclusaoSemInicio) {
             if (
-                ! empty($execucao->iniciado_em)
-                || ! empty($execucao->concluido_em)
+                ! $conclusaoSemInicio
+                && (! empty($execucao->iniciado_em) || ! empty($execucao->concluido_em))
             ) {
                 throw new InvalidArgumentException(
                     'Execução pendente possui início ou conclusão preenchidos.'
                 );
             }
 
+            $situacao = $this->pendente($execucao->previsto_em, $conclusaoSemInicio ? $execucao->concluido_em : $momento);
+
             return [
-                'sla_atual' => $this->pendente(
-                    $execucao->previsto_em,
-                    $momento
-                ),
+                'sla_atual' => $situacao,
                 'sla_inicio' => null,
-                'sla_conclusao' => null,
+                'sla_conclusao' => $conclusaoSemInicio ? $situacao : null,
                 'prazo_em' => $this->prazoInicio($execucao->previsto_em),
             ];
         }
@@ -220,9 +220,11 @@ class CalculadoraSla
 
         $prazoInicio = $this->prazoInicio($execucao->previsto_em);
 
-        if ($execucao->status === 'pendente') {
+        if (empty($execucao->iniciado_em)) {
+            $referencia = $this->data($execucao->concluido_em ?? $agora);
+
             return $sla['sla_atual'] === 'atrasado'
-                ? ['vencido_em' => $prazoInicio, 'segundos' => (int) $prazoInicio->diffInSeconds($agora)]
+                ? ['vencido_em' => $prazoInicio, 'segundos' => (int) $prazoInicio->diffInSeconds($referencia)]
                 : null;
         }
 
@@ -266,9 +268,8 @@ class CalculadoraSla
 
         if (
             ($execucao->status === 'pendente' && ($inicio || $conclusao))
-            || ($execucao->status !== 'pendente' && ! $inicio)
             || ($execucao->status === 'concluida' && ! $conclusao)
-            || ($execucao->status === 'em_andamento' && $conclusao)
+            || ($execucao->status === 'em_andamento' && (! $inicio || $conclusao))
         ) {
             throw new InvalidArgumentException('A execução emergencial possui datas inconsistentes.');
         }
@@ -287,14 +288,14 @@ class CalculadoraSla
         ];
     }
 
-    private function duracaoPrevista(object $execucao): int
+    public function duracaoPrevista(object $execucao): int
     {
         $duracao = (int) ($execucao->duracao_prevista_segundos ?? 0);
         if ($duracao > 0) {
             return $duracao;
         }
 
-        if (! empty($execucao->prazo_em)) {
+        if (! empty($execucao->iniciado_em) && ! empty($execucao->prazo_em)) {
             $inicio = $this->data($execucao->iniciado_em);
             $duracao = (int) $inicio->diffInSeconds($this->data($execucao->prazo_em));
         }

@@ -77,8 +77,8 @@
                         <dd class="break-words text-sm font-bold text-[#1e2d3d] sm:text-base">{{ $item->morador }}</dd>
                     </div>
                     <div class="col-span-2 min-w-0 border-t border-slate-100 pt-3 lg:col-span-1 lg:border-t-0 lg:pt-0">
-                        <dt class="mb-1 text-xs text-slate-600 sm:text-sm">Tarefa em dupla com</dt>
-                        <dd class="break-words text-sm font-bold text-[#1e2d3d] sm:text-base">{{ $auxiliares->implode(', ') ?: 'Não é em dupla' }}</dd>
+                        <dt class="mb-1 text-xs text-slate-600 sm:text-sm">Auxílio:</dt>
+                        <dd class="break-words text-sm font-bold text-[#1e2d3d] sm:text-base"><x-auxilio-rotina :previsto="$item->auxilio" :auxiliares="$auxiliares" /></dd>
                     </div>
                 </dl>
                 @if (!$item->verificado_em)

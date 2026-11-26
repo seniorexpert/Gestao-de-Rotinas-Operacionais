@@ -8,19 +8,30 @@ use App\Services\CalculadoraSla;
 use App\Services\ConsultaRotinas;
 use App\Services\EscalonamentoAcompanhamento;
 use App\Services\ExecucoesDiarias;
+use App\Services\TextoEmTitulo;
 use Carbon\Carbon;
 use Illuminate\Contracts\View\View;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 class ExecucoesController extends Controller
 {
+    private const REGRAS_COMENTARIO = ['required', 'string', 'max:2000'];
+
+    private const MENSAGENS_COMENTARIO = [
+        'comentario.required' => 'Informe um comentário sobre a execução.',
+        'comentario.string' => 'O comentário deve ser informado em texto.',
+        'comentario.max' => 'Escreva um comentário de até 2.000 caracteres.',
+    ];
+
     public function __construct(
         private CalculadoraSla $sla,
         private ConsultaRotinas $rotinas,
@@ -38,8 +49,11 @@ class ExecucoesController extends Controller
             ? Carbon::parse($limite, 'UTC')->setTimezone(ExecucoesDiarias::FUSO)->format('d/m H:i:s')
             : null;
         $documentacao = $execucao->documentacao ? Storage::disk('public')->url($execucao->documentacao) : null;
+        $auxiliares = $execucao->auxilio ? $this->rotinas->auxiliaresDeRotinas([$execucao->id_rotina])
+            ->where('a.id_usuario', '<>', $execucao->id_usuario_responsavel)
+            ->pluck('u.usuario') : collect();
 
-        return view('execucoes.realizando', compact('execucao', 'prazo', 'documentacao'));
+        return view('execucoes.realizando', compact('execucao', 'prazo', 'documentacao', 'auxiliares'));
     }
 
     public function formulario(Request $request, int $id, string $acao): View
@@ -130,13 +144,12 @@ class ExecucoesController extends Controller
                 }
 
                 $encerramento = $this->encerramento($request, $execucao);
+                TextoEmTitulo::naRequisicao($request, 'comentario');
                 $dados = $request->validate([
-                    'comentario' => ['required', 'string', 'max:2000'],
+                    'comentario' => self::REGRAS_COMENTARIO,
                     'foto' => ['nullable', 'image', 'max:2048'],
                 ], [
-                    'comentario.required' => 'Informe um comentário sobre a execução.',
-                    'comentario.string' => 'O comentário deve ser informado em texto.',
-                    'comentario.max' => 'Escreva um comentário de até 2.000 caracteres.',
+                    ...self::MENSAGENS_COMENTARIO,
                     'foto.image' => 'Selecione um arquivo de imagem.',
                     'foto.max' => 'A foto deve ter até 2 MB.',
                     'foto.uploaded' => 'Não foi possível receber a foto. Envie uma imagem de até 2 MB.',
@@ -165,6 +178,49 @@ class ExecucoesController extends Controller
         $destino = $request->boolean('fluxo_diario') ? to_route('home', ['aba' => 'concluida']) : back();
 
         return $destino->with('success', 'Execução concluída com sucesso.');
+    }
+
+    public function concluirSelecionadas(Request $request): JsonResponse
+    {
+        TextoEmTitulo::naRequisicao($request, 'comentario');
+        $dados = $request->validate([
+            'processo' => ['required', Rule::in([ExecucoesDiarias::TIPO_DIARIA, ExecucoesDiarias::TIPO_EMERGENCIAL])],
+            'execucoes_ids' => ['required', 'array', 'list', 'min:1'],
+            'execucoes_ids.*' => ['required', 'integer', 'min:1', 'distinct'],
+            'comentario' => self::REGRAS_COMENTARIO,
+        ], self::MENSAGENS_COMENTARIO);
+
+        DB::transaction(function () use ($request, $dados): void {
+            $agora = now('UTC');
+            $execucoes = $this->rotinas->execucoesAbertasDoProcesso($request->user(), $agora->toImmutable(), $dados['processo'])
+                ->whereIntegerInRaw('e.id_execucao', $dados['execucoes_ids'])
+                ->orderBy('e.id_execucao')->lockForUpdate()
+                ->select('e.*', 'r.tipo_rotina')->get();
+
+            if ($execucoes->count() !== count($dados['execucoes_ids'])) {
+                throw ValidationException::withMessages([
+                    'execucoes_ids' => 'Uma das tarefas selecionadas foi encerrada ou está indisponível. Confira a seleção atualizada.',
+                ]);
+            }
+
+            foreach ($execucoes as $execucao) {
+                $encerramento = $execucao->status === 'pendente' && $execucao->iniciado_em === null
+                    ? ['concluido_em' => $agora, 'id_usuario_conclusao' => (int) $request->user()->getAuthIdentifier()]
+                    : $this->encerramento($request, $execucao, $agora);
+
+                $this->registrarMudanca($execucao, 'CONCLUIR', 'Execução concluída em lote', [
+                    ...$encerramento,
+                    'status' => 'concluida',
+                    'comentario_conclusao' => $dados['comentario'],
+                ]);
+            }
+        }, 3);
+
+        $total = count($dados['execucoes_ids']);
+        $mensagem = $total === 1 ? 'Tarefa concluída com sucesso.' : "{$total} tarefas concluídas com sucesso.";
+        $request->session()->flash('success', $mensagem);
+
+        return response()->json(['message' => $mensagem]);
     }
 
     public function naoRealizada(Request $request, int $id): RedirectResponse
@@ -242,6 +298,8 @@ class ExecucoesController extends Controller
 
     private function justificativa(Request $request): string
     {
+        TextoEmTitulo::naRequisicao($request, 'justificativa');
+
         return $request->validate(['justificativa' => ['required', 'string', 'max:2000']], [
             'justificativa.required' => 'Informe a justificativa.',
             'justificativa.max' => 'Escreva uma justificativa de até 2.000 caracteres.',
@@ -267,10 +325,10 @@ class ExecucoesController extends Controller
     }
 
     /** @return array{concluido_em: Carbon, id_usuario_conclusao: int} */
-    private function encerramento(Request $request, object $execucao): array
+    private function encerramento(Request $request, object $execucao, ?Carbon $agora = null): array
     {
         $this->validarEmAndamento($execucao);
-        $agora = now('UTC');
+        $agora ??= now('UTC');
         if (
             ($execucao->tipo_rotina !== ExecucoesDiarias::TIPO_EMERGENCIAL && (int) $execucao->duracao_prevista_segundos <= 0)
             || $agora->lessThan(Carbon::parse($execucao->iniciado_em, 'UTC'))

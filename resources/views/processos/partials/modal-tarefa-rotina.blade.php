@@ -12,17 +12,17 @@
     $idFormulario = 'formSalvarRotina';
     if ($salvarNaRotina) {
         $acaoFormulario = $editandoTarefa
-            ? route('rotinas.tarefas.update', [$grupoEdicao, $tarefaEmEdicao->id_rotina])
-            : route('rotinas.tarefas.store', $grupoEdicao);
+            ? route('rotinas.tarefas.update', ['grupo' => $grupoEdicao, 'tarefa' => $tarefaEmEdicao->id_rotina, ...$filtrosRelatorio])
+            : route('rotinas.tarefas.store', ['grupo' => $grupoEdicao, ...$filtrosRelatorio]);
         $idFormulario = $editandoTarefa ? 'formEditarTarefaRotina' : 'formAdicionarTarefaRotina';
-        $voltarParaRotina = route('relatorios.rotinas', array_filter(['colaborador' => $colaboradorFiltro, 'editar' => $grupoEdicao]));
+        $voltarParaRotina = route('relatorios.rotinas', [...$filtrosRelatorio, 'editar' => $grupoEdicao]);
         $unidadeDaTarefa = (int) $rotinaDaTarefa->id_empresa;
         $tarefas = $tarefas->filter(fn ($tarefa) => in_array($unidadeDaTarefa, $tarefa->ids_empresas, true));
         $locais = $locais->filter(fn ($local) => in_array($unidadeDaTarefa, $local->ids_empresas, true));
         $diasSelecionados = array_map('intval', array_filter((array) old('dias', $errors->any() ? [] : ($edicaoTarefa['dias'] ?? [])), 'is_scalar'));
         $auxiliaresSelecionados = array_map('intval', array_filter((array) old('auxiliares', $errors->any() ? [] : ($edicaoTarefa['auxiliares'] ?? [])), 'is_scalar'));
         $auxilioSelecionado = in_array(old('auxilio', (int) ($tarefaEmEdicao->auxilio ?? 0)), [1, '1'], true);
-        $horarioSelecionado = old('horario', substr($tarefaEmEdicao->horario ?? '', 0, 8));
+        $horarioSelecionado = old('horario', $tarefaEmEdicao->horario ?? '');
         $tarefaSelecionada = old('id_tarefa', $tarefaEmEdicao->id_tarefa ?? null);
         $localSelecionado = old('id_local', $tarefaEmEdicao->id_local ?? null);
         $moradorSelecionado = old('morador', $tarefaEmEdicao->morador ?? null);
@@ -80,12 +80,14 @@
                     <p id="diaEmergencial" class="mt-1 text-xs capitalize text-gray-500">{{ $agoraEmergencial->locale('pt_BR')->dayName }}</p>
                 </div>
             @else
-            <div class="relative">
-                <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Dia(s) da semana</label>
+            <div id="seletorDiasSemana" class="relative">
+                <span id="rotuloDiasSemana" class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Dia(s) da semana</span>
                 
-                <button type="button" onclick="toggleDiasDropdown()" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 flex items-center justify-between focus:outline-none focus:border-[#1e2d3d]">
+                <button type="button" id="diasDropdownBotao" aria-controls="diasDropdownList" aria-expanded="false"
+                        aria-labelledby="rotuloDiasSemana diasTextoBtn"
+                        class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 flex items-center justify-between focus:outline-none focus:border-[#1e2d3d]">
                     <span id="diasTextoBtn" class="text-gray-400">Selecionar dias</span>
-                    <i id="diasIconeSetra" class="fa-solid fa-chevron-up transition-transform duration-200 text-gray-400 text-xs"></i>
+                    <i id="diasIconeSeta" data-seta-dropdown class="fa-solid fa-chevron-up transition-transform duration-200 text-gray-400 text-xs" aria-hidden="true"></i>
                 </button>
 
                 <div id="diasDropdownList" class="absolute left-0 right-0 mt-2 bg-white border border-gray-300 rounded-2xl p-4 max-h-56 overflow-y-auto space-y-3 shadow-xl z-50 hidden">
@@ -109,7 +111,7 @@
             <div>
                 <label for="inputHorario" class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Horário</label>
                 <input type="time" name="horario" id="inputHorario" required
-                       @if ($salvarNaRotina) step="1" value="{{ is_string($horarioSelecionado) ? $horarioSelecionado : '' }}"
+                       @if ($salvarNaRotina) step="60" value="{{ is_string($horarioSelecionado) ? substr($horarioSelecionado, 0, 5) : '' }}"
                        @elseif ($emergencial) value="{{ $agoraEmergencial->format('H:i') }}" @endif
                        class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
                 @if ($editandoTarefa)
@@ -180,19 +182,20 @@
                 <label class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Necessita auxílio?</label>
                 <div class="flex items-center gap-6 pt-2">
                     <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="{{ $salvarNaRotina ? 'auxilio' : 'necessita_auxilio' }}" value="{{ $salvarNaRotina ? '0' : 'Não' }}" @checked(!$salvarNaRotina || !$auxilioSelecionado) onchange="toggleCuidadorAuxiliar(false)" class="w-4 h-4 text-[#1e2d3d] focus:ring-[#1e2d3d]">
+                        <input type="radio" name="{{ $salvarNaRotina ? 'auxilio' : 'necessita_auxilio' }}" value="{{ $salvarNaRotina ? '0' : 'Não' }}" @checked(!$salvarNaRotina || !$auxilioSelecionado) onchange="toggleColaboradoresAuxiliares(false)" class="w-4 h-4 text-[#1e2d3d] focus:ring-[#1e2d3d]">
                         <span class="text-sm text-gray-800">Não</span>
                     </label>
                     <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="radio" name="{{ $salvarNaRotina ? 'auxilio' : 'necessita_auxilio' }}" value="{{ $salvarNaRotina ? '1' : 'Sim' }}" @checked($salvarNaRotina && $auxilioSelecionado) onchange="toggleCuidadorAuxiliar(true)" class="w-4 h-4 text-[#1e2d3d] focus:ring-[#1e2d3d]">
+                        <input type="radio" name="{{ $salvarNaRotina ? 'auxilio' : 'necessita_auxilio' }}" value="{{ $salvarNaRotina ? '1' : 'Sim' }}" @checked($salvarNaRotina && $auxilioSelecionado) onchange="toggleColaboradoresAuxiliares(true)" class="w-4 h-4 text-[#1e2d3d] focus:ring-[#1e2d3d]">
                         <span class="text-sm text-gray-800">Sim</span>
                     </label>
                 </div>
             </div>
 
-            <div id="campoCuidadorAuxiliar" @class(['hidden' => !$salvarNaRotina || !$auxilioSelecionado])>
-                <label for="selectCuidadorAux" class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">{{ $salvarNaRotina ? 'Colaboradores auxiliares' : 'Cuidador(a) auxiliar' }}</label>
-                <select name="{{ $salvarNaRotina ? 'auxiliares[]' : 'cuidador_auxiliar' }}" id="selectCuidadorAux" @if ($salvarNaRotina) multiple size="3" @endif class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
+            <div id="campoColaboradoresAuxiliares" @class(['hidden' => !$salvarNaRotina || !$auxilioSelecionado])>
+                <label id="rotuloColaboradoresAuxiliares" for="selectColaboradoresAuxiliares" class="mb-2 block text-xs font-bold text-[#1e2d3d]">Colaborador(a) Auxiliar</label>
+                <select name="auxiliares[]" id="selectColaboradoresAuxiliares" multiple size="3" @disabled(!$salvarNaRotina || !$auxilioSelecionado)
+                        class="w-full rounded-xl border border-[#e8d6bf] bg-white px-3 py-2 text-sm text-[#17384b]">
                     @if ($salvarNaRotina)
                         @forelse ($colaboradoresEdicao->where('id_usuario', '!=', $rotinaDaTarefa->id_usuario) as $auxiliar)
                             <option value="{{ $auxiliar->id_usuario }}" @selected(in_array((int) $auxiliar->id_usuario, $auxiliaresSelecionados, true))>{{ $auxiliar->usuario }}</option>
@@ -200,9 +203,32 @@
                             <option disabled>Nenhum outro colaborador vinculado à unidade.</option>
                         @endforelse
                     @else
-                        <option value="" disabled selected>Selecione se necessário</option>
+                        <option value="" disabled>Selecione se necessário</option>
                     @endif
                 </select>
+                <div id="seletorColaboradoresAuxiliares" class="hidden">
+                    <button type="button" id="botaoColaboradoresAuxiliares" aria-expanded="false" aria-controls="listaColaboradoresAuxiliares"
+                            aria-labelledby="rotuloColaboradoresAuxiliares resumoColaboradoresAuxiliares"
+                            class="flex min-h-11 w-full min-w-0 items-center justify-between gap-3 rounded-xl border border-[#e8d6bf] bg-white px-4 py-2.5 text-left text-sm text-[#17384b] outline-none focus-visible:ring-2 focus-visible:ring-[#17384b]/30 aria-expanded:border-[#17384b]">
+                        <span id="resumoColaboradoresAuxiliares" class="min-w-0 truncate">Selecionar colaboradores</span>
+                        <i data-seta-dropdown class="fa-solid fa-chevron-down shrink-0 text-xs transition-transform" aria-hidden="true"></i>
+                    </button>
+                    <div id="marcadoresColaboradoresAuxiliares" class="mt-2 flex flex-wrap gap-1.5 empty:hidden"></div>
+                    <div id="listaColaboradoresAuxiliares" role="group" aria-labelledby="rotuloColaboradoresAuxiliares"
+                         class="mt-2 hidden max-h-56 overflow-y-auto rounded-xl border border-[#e8d6bf] bg-white shadow-sm"></div>
+                </div>
+                <template id="modeloOpcaoAuxiliar">
+                    <label class="flex min-w-0 cursor-pointer items-center justify-between gap-3 px-4 py-2.5 text-sm text-[#17384b] hover:bg-[#f9f7f2] has-[:checked]:bg-[#edf1f2] has-[:checked]:font-semibold">
+                        <span data-nome-auxiliar class="min-w-0 break-words"></span>
+                        <input type="checkbox" class="h-5 w-5 shrink-0 cursor-pointer accent-[#17384b]">
+                    </label>
+                </template>
+                <template id="modeloMarcadorAuxiliar">
+                    <button type="button" class="inline-flex min-h-7 max-w-full items-center gap-2 rounded-full border border-[#e8d6bf] bg-[#f9f7f2] px-3 py-1 text-xs font-semibold text-[#17384b] hover:bg-[#f0ebe2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#17384b]">
+                        <span data-nome-auxiliar class="min-w-0 break-words"></span>
+                        <i class="fa-solid fa-xmark shrink-0" aria-hidden="true"></i>
+                    </button>
+                </template>
             </div>
 
             <div>
@@ -254,18 +280,114 @@
         if (modal) modal.classList.add('hidden');
     }
 
-    function carregarCuidadoresAuxiliares(unidadeId, valorSelecionado = '') {
-        const selectCuidador = document.getElementById('selectCuidadorAux');
-        carregarUsuariosPorUnidade(selectCuidador, unidadeId, 'Selecione se necessário', valorSelecionado);
+    function carregarColaboradoresAuxiliares(idsSelecionados = []) {
+        const responsavel = document.getElementById('selectColaboradorModalRotina');
+        const selecionados = new Set(idsSelecionados.map(String));
+        const opcoes = [...responsavel.options]
+            .filter(opcao => opcao.value && opcao.value !== responsavel.value)
+            .map(opcao => new Option(opcao.text, opcao.value, false, selecionados.has(opcao.value)));
+
+        selectAuxiliares.replaceChildren(...opcoes);
+        montarOpcoesAuxiliares();
     }
     @endunless
 
-    function toggleDiasDropdown() {
-        const lista = document.getElementById('diasDropdownList');
-        const icone = document.getElementById('diasIconeSetra');
-        if (lista) lista.classList.toggle('hidden');
-        if (icone) icone.classList.toggle('rotate-180');
+    function configurarDropdownDaTarefa(seletor) {
+        const botao = seletor.querySelector('button[aria-controls]');
+        const lista = document.getElementById(botao.getAttribute('aria-controls'));
+        const seta = botao.querySelector('[data-seta-dropdown]');
+
+        function definirAberto(aberto) {
+            lista.classList.toggle('hidden', !aberto);
+            seta.classList.toggle('rotate-180', aberto);
+            botao.setAttribute('aria-expanded', String(aberto));
+        }
+
+        function fecharAoSair(event) {
+            if (!lista.classList.contains('hidden') && !seletor.contains(event.target)) {
+                definirAberto(false);
+            }
+        }
+
+        botao.addEventListener('click', () => definirAberto(lista.classList.contains('hidden')));
+        document.addEventListener('pointerdown', fecharAoSair, true);
+        document.addEventListener('focusin', fecharAoSair);
+        seletor.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && !lista.classList.contains('hidden')) {
+                event.preventDefault();
+                definirAberto(false);
+                botao.focus();
+            }
+        });
+
+        return definirAberto;
     }
+
+    @unless ($emergencial)
+    const definirDropdownDiasAberto = configurarDropdownDaTarefa(document.getElementById('seletorDiasSemana'));
+    @endunless
+
+    const campoAuxiliares = document.getElementById('campoColaboradoresAuxiliares');
+    const selectAuxiliares = document.getElementById('selectColaboradoresAuxiliares');
+    const seletorAuxiliares = document.getElementById('seletorColaboradoresAuxiliares');
+    const botaoAuxiliares = document.getElementById('botaoColaboradoresAuxiliares');
+    const listaAuxiliares = document.getElementById('listaColaboradoresAuxiliares');
+    const resumoAuxiliares = document.getElementById('resumoColaboradoresAuxiliares');
+    const marcadoresAuxiliares = document.getElementById('marcadoresColaboradoresAuxiliares');
+    const modeloOpcaoAuxiliar = document.getElementById('modeloOpcaoAuxiliar').content.firstElementChild;
+    const modeloMarcadorAuxiliar = document.getElementById('modeloMarcadorAuxiliar').content.firstElementChild;
+    const definirDropdownAuxiliaresAberto = configurarDropdownDaTarefa(seletorAuxiliares);
+
+    function opcoesAuxiliaresSelecionadas() {
+        return [...selectAuxiliares.selectedOptions].filter(opcao => opcao.value && !opcao.disabled);
+    }
+
+    function atualizarMarcadoresAuxiliares() {
+        const selecionadas = opcoesAuxiliaresSelecionadas();
+        const nomes = selecionadas.map(opcao => opcao.text).join(', ');
+        resumoAuxiliares.textContent = nomes || 'Selecionar colaboradores';
+        botaoAuxiliares.title = nomes;
+        marcadoresAuxiliares.replaceChildren(...selecionadas.map(opcao => {
+            const marcador = modeloMarcadorAuxiliar.cloneNode(true);
+            marcador.querySelector('[data-nome-auxiliar]').textContent = opcao.text;
+            marcador.setAttribute('aria-label', 'Remover ' + opcao.text);
+            marcador.addEventListener('click', () => {
+                opcao.selected = false;
+                montarOpcoesAuxiliares();
+                botaoAuxiliares.focus();
+            });
+            return marcador;
+        }));
+    }
+
+    function montarOpcoesAuxiliares() {
+        const opcoes = [...selectAuxiliares.options].filter(opcao => opcao.value && !opcao.disabled);
+        listaAuxiliares.replaceChildren(...opcoes.map(opcao => {
+            const item = modeloOpcaoAuxiliar.cloneNode(true);
+            const checkbox = item.querySelector('input');
+            item.querySelector('[data-nome-auxiliar]').textContent = opcao.text;
+            checkbox.value = opcao.value;
+            checkbox.checked = opcao.selected;
+            checkbox.addEventListener('change', () => {
+                opcao.selected = checkbox.checked;
+                atualizarMarcadoresAuxiliares();
+            });
+            return item;
+        }));
+
+        if (opcoes.length === 0) {
+            const mensagem = document.createElement('p');
+            mensagem.className = 'px-4 py-3 text-sm text-[#536b7b]';
+            mensagem.textContent = 'Nenhum outro colaborador vinculado à unidade.';
+            listaAuxiliares.append(mensagem);
+        }
+
+        atualizarMarcadoresAuxiliares();
+    }
+
+    selectAuxiliares.classList.add('hidden');
+    seletorAuxiliares.classList.remove('hidden');
+    montarOpcoesAuxiliares();
 
     function toggleTodosDias(masterCheckbox) {
         const checkboxes = document.querySelectorAll('.dia-checkbox');
@@ -299,14 +421,11 @@
         }
     }
 
-    function toggleCuidadorAuxiliar(mostrar) {
-        const campo = document.getElementById('campoCuidadorAuxiliar');
-        if (campo) {
-            if (mostrar) {
-                campo.classList.remove('hidden');
-            } else {
-                campo.classList.add('hidden');
-            }
+    function toggleColaboradoresAuxiliares(mostrar) {
+        campoAuxiliares.classList.toggle('hidden', !mostrar);
+        selectAuxiliares.disabled = !mostrar;
+        if (!mostrar) {
+            definirDropdownAuxiliaresAberto(false);
         }
     }
 
@@ -337,8 +456,7 @@
         const morador = document.getElementById('selectMorador').value;
         const auxilioRadio = document.querySelector('input[name="necessita_auxilio"]:checked');
         const necessitaAuxilio = auxilioRadio ? auxilioRadio.value : 'Não';
-        const selectCuidador = document.getElementById('selectCuidadorAux');
-        const cuidadorAux = necessitaAuxilio === 'Sim' ? selectCuidador.value || null : null;
+        const auxiliares = necessitaAuxilio === 'Sim' ? opcoesAuxiliaresSelecionadas() : [];
         const observacao = document.getElementById('inputObservacao').value;
 
         if (!tarefaId || !morador || (!localId && !localMorador) || !horario || (!data && diasSelecionados.length === 0)) {
@@ -357,8 +475,8 @@
             ...(localMorador ? { local_morador: localMorador } : {}),
             local: localNome,
             auxilio: necessitaAuxilio,
-            cuidador: cuidadorAux,
-            cuidador_nome: cuidadorAux ? selectCuidador.selectedOptions[0].text : '',
+            auxiliares: auxiliares.map(opcao => opcao.value),
+            auxiliares_nomes: auxiliares.map(opcao => opcao.text).join(', '),
             observacao: observacao
         };
 
@@ -405,7 +523,7 @@
                         <div class="flex justify-between"><span class="font-bold text-gray-400">${t.data ? 'Data' : 'Dias'}</span> <span class="text-gray-800 font-medium">${escaparTexto(t.dias)}</span></div>
                         <div class="flex justify-between"><span class="font-bold text-gray-400">Morador(a)</span> <span class="text-gray-800 font-medium">${escaparTexto(t.morador)}</span></div>
                         <div class="flex justify-between"><span class="font-bold text-gray-400">Local</span> <span class="text-gray-800 font-medium">${escaparTexto(t.local)}</span></div>
-                        <div class="flex justify-between"><span class="font-bold text-gray-400">Auxílio</span> <span class="text-gray-800 font-medium">${escaparTexto(t.auxilio)} ${t.cuidador_nome ? '(' + escaparTexto(t.cuidador_nome) + ')' : ''}</span></div>
+                        <div class="flex justify-between gap-3"><span class="font-bold text-gray-400">Auxílio</span> <span class="min-w-0 break-words text-right font-medium text-gray-800">${escaparTexto(t.auxilio)} ${t.auxiliares_nomes ? '(' + escaparTexto(t.auxiliares_nomes) + ')' : ''}</span></div>
                         ${t.observacao ? '<div class="flex justify-between"><span class="font-bold text-gray-400">Observação</span> <span class="text-gray-800 font-medium">' + escaparTexto(t.observacao) + '</span></div>' : ''}
 
                         <div class="flex items-center justify-end gap-6 pt-4 mt-2 border-t border-gray-100">
@@ -442,8 +560,6 @@
 
     function editarTarefa(index) {
         filtrarCatalogoDaRotina(document.getElementById('selectUnidadeRotina').value);
-        const unidadeSelect = document.getElementById('selectUnidadeRotina');
-        const unidadeId = unidadeSelect ? unidadeSelect.value : '';
         const t = listaTarefasMemoria[index];
         
         document.getElementById('tarefaIndexEdicao').value = index;
@@ -469,8 +585,8 @@
             }
         });
 
-        toggleCuidadorAuxiliar(t.auxilio === 'Sim');
-        carregarCuidadoresAuxiliares(unidadeId, t.cuidador || '');
+        toggleColaboradoresAuxiliares(t.auxilio === 'Sim');
+        carregarColaboradoresAuxiliares(t.auxiliares);
 
         const diasArray = t.dias.split(', ');
         document.querySelectorAll('.dia-checkbox').forEach(cb => {
@@ -491,6 +607,10 @@
     function limparFormularioTarefa() {
         const form = document.getElementById('formSalvarRotina');
         if (form) form.reset();
+
+        @unless ($emergencial)
+        definirDropdownDiasAberto(false);
+        @endunless
         
         const indexEdicao = document.getElementById('tarefaIndexEdicao');
         if (indexEdicao) indexEdicao.value = '';
@@ -506,10 +626,8 @@
             diasTexto.className = 'text-gray-400';
         }
 
-        const campoCuidador = document.getElementById('campoCuidadorAuxiliar');
-        if (campoCuidador) {
-            campoCuidador.classList.add('hidden');
-        }
+        toggleColaboradoresAuxiliares(false);
+        montarOpcoesAuxiliares();
         
         const radioNao = document.querySelector('input[name="necessita_auxilio"][value="Não"]');
         if (radioNao) {

@@ -46,7 +46,7 @@ class UsuarioControllerTest extends TestCase
         $senha = 'senha-de-cadastro';
 
         $this->actingAs($gerente)->post(route('users.store'), [
-            'usuario' => 'Lucas Exemplo',
+            'usuario' => 'LUCAS exemplo',
             'username' => 'lucas-exemplo',
             'password' => $senha,
             'id_grupo_acesso' => (string) $grupo->getKey(),

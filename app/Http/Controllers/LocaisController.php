@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\CadastroCatalogo;
+use App\Services\TextoEmTitulo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -10,6 +11,7 @@ class LocaisController extends Controller
 {
     public function store(Request $request, CadastroCatalogo $catalogo): RedirectResponse
     {
+        TextoEmTitulo::naRequisicao($request, 'nome_local');
         $dados = $request->validate([
             'id' => 'nullable|integer|min:1',
             'nome_local' => 'required|string|max:100',

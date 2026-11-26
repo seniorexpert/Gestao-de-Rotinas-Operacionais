@@ -95,6 +95,7 @@
                     'sla' => $rotina->execucao_bloqueada || $rotina->status === 'nao_realizada' ? null : (\App\Services\CalculadoraSla::ROTULOS[$rotina->situacao_sla] ?? 'Sem dados de SLA'),
                     'acao' => $rotina->acao_execucao,
                     'auxilio' => (bool) $rotina->auxilio,
+                    'auxiliares' => $rotina->auxiliares,
                     'comentario' => $rotina->comentario_conclusao,
                     'justificativa' => $rotina->justificativa_nao_realizada,
                     'foto' => $rotina->foto_conclusao ? route('execucoes.foto', $rotina->id_execucao) : null,
@@ -126,6 +127,10 @@
                         <span class="flex min-w-0 items-center gap-1">
                             <i class="fa-regular fa-user shrink-0 text-[#b18b50]" aria-hidden="true"></i>
                             <span class="truncate" title="{{ $morador }}"><b>Morador(a):</b> {{ $morador }}</span>
+                        </span>
+                        <span class="flex min-w-0 items-baseline gap-1">
+                            <i class="fa-solid fa-link shrink-0 text-[#b18b50]" aria-hidden="true"></i>
+                            <span class="[overflow-wrap:anywhere]"><b>Auxílio:</b> <x-auxilio-rotina :previsto="$rotina->auxilio" :auxiliares="$rotina->auxiliares" /></span>
                         </span>
                     </span>
                     <span class="mt-1 block text-[0.82rem] font-bold tabular-nums sm:text-sm" title="Horário previsto">{{ $rotina->horario }}</span>

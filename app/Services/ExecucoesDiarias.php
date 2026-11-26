@@ -145,13 +145,19 @@ class ExecucoesDiarias
     /** @param list<int> $idsRotinas */
     public function reatribuirPendentes(array $idsRotinas, int $responsavel, CarbonImmutable $agora): void
     {
+        $this->pendentesParaReatribuicao($idsRotinas, $agora)
+            ->update(['id_usuario_responsavel' => $responsavel, 'updated_at' => $agora->utc()]);
+    }
+
+    /** @param list<int> $idsRotinas */
+    public function pendentesParaReatribuicao(array $idsRotinas, CarbonImmutable $agora): Builder
+    {
         [$inicioDoDia] = self::janela($agora);
 
-        DB::table('rotinas_execucoes')->whereIntegerInRaw('id_rotina', $idsRotinas)
+        return DB::table('rotinas_execucoes')->whereIntegerInRaw('id_rotina', $idsRotinas)
             ->where(fn (Builder $consulta) => $consulta->where('previsto_em', '>=', $inicioDoDia)
                 ->orWhere('agenda_ate', '>', $agora->utc()))
-            ->where('status', 'pendente')->whereNull('iniciado_em')->whereNull('concluido_em')
-            ->update(['id_usuario_responsavel' => $responsavel, 'updated_at' => $agora->utc()]);
+            ->where('status', 'pendente')->whereNull('iniciado_em')->whereNull('concluido_em');
     }
 
     /** @param list<int>|null $idsRotinas */

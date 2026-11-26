@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\GrupoAcesso;
 use App\Models\User;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Support\Str;
 use InvalidArgumentException;
 
@@ -31,6 +32,8 @@ class EscalonamentoAcompanhamento
         self::COORDENADOR => self::GERENTE_DA_UNIDADE,
         self::GERENTE_DA_UNIDADE => self::GERENTE_GERAL,
     ];
+
+    private const CAIXAS_VERIFICACOES_LEGADAS = [self::GERENTE_DA_UNIDADE, self::GERENTE_GERAL];
 
     public function __construct(private CalculadoraSla $calculadoraSla) {}
 
@@ -93,6 +96,69 @@ class EscalonamentoAcompanhamento
         ];
     }
 
+    /** @return array{atraso_segundos: ?int, recebimentos: array<string, CarbonImmutable>}|null */
+    public function encaminharItem(object $item, CarbonImmutable $agora): ?array
+    {
+        if ($item->tipo === 'atraso') {
+            return $this->encaminhar($item, $agora);
+        }
+
+        return [
+            'atraso_segundos' => null,
+            'recebimentos' => $this->recebimentos(
+                [$item->caixa_inicial], CarbonImmutable::parse($item->entrada, 'UTC'), $agora, $item->tipo === 'auxilio',
+            ),
+        ];
+    }
+
+    public function recebimentoDoItem(object $item, ?string $caixa, CarbonImmutable $referencia): ?CarbonImmutable
+    {
+        $recebimentos = $item->verificado_em !== null && $item->encaminhamentos !== null
+            ? json_decode($item->encaminhamentos, true)
+            : [];
+        if (! is_array($recebimentos) || $recebimentos === []) {
+            $recebimentos = $this->encaminharItem($item, $referencia)['recebimentos'] ?? [];
+        }
+
+        $recebidoEm = $caixa !== null ? ($recebimentos[$caixa] ?? null) : null;
+        if ($recebidoEm === null && ($caixa === null || $item->verificado_em !== null)) {
+            $recebidoEm = reset($recebimentos);
+        }
+        if (is_string($recebidoEm) && trim($recebidoEm) !== '') {
+            $recebidoEm = CarbonImmutable::parse($recebidoEm, 'UTC');
+        }
+
+        return $recebidoEm instanceof CarbonImmutable && $recebidoEm->lessThanOrEqualTo($referencia) ? $recebidoEm : null;
+    }
+
+    public function podeConsultarVerificacao(object $verificacao, ?string $caixa, User $usuario): bool
+    {
+        if ($caixa === null || (string) $verificacao->id_usuario_verificacao === (string) $usuario->getKey()) {
+            return true;
+        }
+
+        if ($verificacao->encaminhamentos === null) {
+            return in_array($caixa, self::CAIXAS_VERIFICACOES_LEGADAS, true);
+        }
+
+        $recebimentos = json_decode($verificacao->encaminhamentos, true);
+
+        return isset($recebimentos[$caixa]);
+    }
+
+    public function filtrarVerificacoes(Builder $consulta, User $usuario): Builder
+    {
+        $caixa = $usuario->isAdmin() ? null : $this->caixaDoUsuario($usuario);
+        if ($caixa === null) {
+            return $consulta;
+        }
+
+        return $consulta->where(fn (Builder $visiveis) => $visiveis
+            ->where('v.id_usuario_verificacao', $usuario->getKey())
+            ->orWhereNotNull('v.encaminhamentos->'.$caixa)
+            ->when(in_array($caixa, self::CAIXAS_VERIFICACOES_LEGADAS, true), fn (Builder $legadas) => $legadas->orWhereNull('v.encaminhamentos')));
+    }
+
     /**
      * @param  list<string>  $destinos
      * @return array<string, CarbonImmutable>
@@ -123,16 +189,22 @@ class EscalonamentoAcompanhamento
 
     public function situacao(CarbonImmutable $recebidoEm, CarbonImmutable $agora, bool $auxilio = false): string
     {
-        if ($agora->greaterThanOrEqualTo($this->limite($recebidoEm, $auxilio))) {
-            return 'Atrasada';
+        return CalculadoraSla::ROTULOS[$this->classificarSla($recebidoEm, $agora, $auxilio)];
+    }
+
+    /** @return 'atrasado'|'expirando'|'noPrazo' */
+    public function classificarSla(CarbonImmutable $recebidoEm, CarbonImmutable $referencia, bool $auxilio = false): string
+    {
+        if ($referencia->greaterThanOrEqualTo($this->limite($recebidoEm, $auxilio))) {
+            return 'atrasado';
         }
 
         $alerta = $auxilio ? self::ALERTA_AUXILIO_EM_MINUTOS : self::ALERTA_EM_MINUTOS;
-        if ($agora->greaterThanOrEqualTo($recebidoEm->addMinutes($alerta))) {
-            return 'Expirando';
+        if ($referencia->greaterThanOrEqualTo($recebidoEm->addMinutes($alerta))) {
+            return 'expirando';
         }
 
-        return 'No prazo';
+        return 'noPrazo';
     }
 
     private function normalizarGrupo(?string $nome): string

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\CadastroCatalogo;
+use App\Services\TextoEmTitulo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -13,6 +14,7 @@ class TarefasController extends Controller
 {
     public function store(Request $request, CadastroCatalogo $catalogo): RedirectResponse
     {
+        TextoEmTitulo::naRequisicao($request, 'nome_tarefa', 'descricao_tarefa');
         $dados = $request->validate([
             'id' => 'nullable|integer|min:1',
             'nome_tarefa' => 'required|string|max:100',
