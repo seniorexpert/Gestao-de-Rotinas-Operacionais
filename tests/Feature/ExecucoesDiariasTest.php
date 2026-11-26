@@ -143,7 +143,8 @@ class ExecucoesDiariasTest extends TestCase
         $this->post(route('execucoes.concluir', $recepcao), ['comentario' => 'Plantão recebido.'])->assertSessionHasNoErrors();
 
         $this->travelTo(CarbonImmutable::parse('2026-11-20 02:00:00', 'America/Sao_Paulo'));
-        $this->get(route('monitoramento.index'))->assertOk()->assertViewHas('execucoes', fn ($execucoes) => $execucoes->count() === 5);
+        $this->get(route('monitoramento.index'))->assertOk()->assertViewHas('execucoes', fn ($execucoes) => $execucoes->count() === 4
+            && ! $execucoes->contains('id_execucao', $recepcao));
         $concluidas = route('home', ['aba' => 'concluida']);
         $this->get($concluidas)->assertOk()
             ->assertViewHas('rotinas', fn ($rotinas) => $rotinas->count() === 5
@@ -306,7 +307,54 @@ class ExecucoesDiariasTest extends TestCase
             ->assertViewHas('situacoes', fn ($situacoes) => $situacoes->sortKeys()->all() === [
                 'atrasado' => 1, 'expirando' => 1, 'noPrazo' => 1,
             ])
-            ->assertSeeText(['Verificar o salão', 'Atrasada', '0 de 3 concluídas']);
+            ->assertSeeText('Verificar o salão')
+            ->assertSeeTextInOrder(['Produtividade', 'Ana', 'Atrasada', '1', 'Expirando', '1', 'No prazo', '1', '0 de 3 concluídas']);
+    }
+
+    public function test_monitoramento_conta_abertas_anteriores_e_filtra_pelo_status_e_pelo_sla(): void
+    {
+        $noite = CarbonImmutable::parse('2026-11-19 22:00:00', ExecucoesDiarias::FUSO);
+        $this->travelTo($noite);
+        $unidade = Empresa::create(['empresa' => 'Unidade Centro']);
+        $ana = $this->usuario('ana', $unidade);
+        $beatriz = $this->usuario('beatriz', $unidade);
+        $rita = $this->usuario('rita', $unidade);
+        $pendente = $this->rotina($ana, $unidade, $this->tarefa('Pendente de ontem'), '22:00:00');
+        $andamento = $this->rotina($beatriz, $unidade, $this->tarefa('Em execução desde ontem'), '22:00:00');
+        $encerradaOntem = $this->rotina($ana, $unidade, $this->tarefa('Concluída ontem'), '22:00:00');
+        $encerradaHoje = $this->rotina($ana, $unidade, $this->tarefa('Concluída depois da virada'), '22:00:00');
+        $naoRealizada = $this->rotina($rita, $unidade, $this->tarefa('Impedida depois da virada'), '22:00:00');
+
+        $this->actingAs($ana)->get(route('monitoramento.index'))->assertOk();
+        DB::table('rotinas_execucoes')->whereIn('id_rotina', [$andamento, $encerradaOntem, $encerradaHoje, $naoRealizada])
+            ->update(['status' => 'em_andamento', 'iniciado_em' => $noite->utc(), 'prazo_em' => $noite->addMinutes(30)->utc()]);
+        DB::table('rotinas_execucoes')->where('id_rotina', $encerradaOntem)
+            ->update(['status' => 'concluida', 'concluido_em' => $noite->addMinutes(10)->utc()]);
+        $hoje = $noite->addHours(4);
+        $this->travelTo($hoje);
+        DB::table('rotinas_execucoes')->where('id_rotina', $encerradaHoje)->update(['status' => 'concluida', 'concluido_em' => $hoje->utc()]);
+        DB::table('rotinas_execucoes')->where('id_rotina', $naoRealizada)->update(['status' => 'nao_realizada', 'concluido_em' => $hoje->utc()]);
+
+        $this->get(route('monitoramento.index'))->assertOk()
+            ->assertViewHas('processos', fn ($processos) => $processos->get('diaria')->sortKeys()->all() === [
+                'concluida' => 1, 'em_andamento' => 1, 'nao_realizada' => 1, 'pendente' => 1, 'todas' => 4,
+            ])->assertViewHas('execucoes', fn ($itens) => ! $itens->contains('id_rotina', $encerradaOntem));
+        $this->get(route('monitoramento.index', ['processo' => 'diaria', 'status' => 'pendente']))->assertOk()
+            ->assertViewHas('execucoes', fn ($itens) => $itens->sole()->id_rotina === $pendente)
+            ->assertViewHas('situacoes', fn ($situacoes) => $situacoes->all() === ['atrasado' => 1])
+            ->assertViewHas('produtividades', fn ($produtividades) => $produtividades->sole()->colaborador_id === $ana->getKey());
+        $this->get(route('monitoramento.index', ['sla' => 'atrasado']))->assertOk()
+            ->assertViewHas('processos', fn ($processos) => $processos->keys()->all() === ['diaria'] && $processos->get('diaria')->get('todas') === 3)
+            ->assertViewHas('produtividades', fn ($produtividades) => $produtividades->map(fn ($prod) => $prod->situacoes_sla->all())->all() === [
+                $ana->getKey() => ['atrasado' => 2], $beatriz->getKey() => ['atrasado' => 1],
+            ])
+            ->assertViewHas('execucoes', fn ($itens) => ! $itens->contains('id_rotina', $naoRealizada));
+        $this->get(route('monitoramento.index', ['processo' => 'diaria', 'status' => 'concluida', 'sla' => 'atrasado']))->assertOk()
+            ->assertSeeText(['Filtros ativos', '1 de 1 concluídas', 'Concluída depois da virada'])
+            ->assertSee(route('monitoramento.index', ['processo' => 'diaria', 'sla' => 'atrasado']))
+            ->assertViewHas('execucoes', fn ($itens) => $itens->sole()->id_rotina === $encerradaHoje);
+        $this->get(route('monitoramento.index', ['processo' => 'diaria', 'sla' => 'atrasado']))->assertOk()
+            ->assertViewHas('execucoes', fn ($itens) => $itens->pluck('id_rotina')->sort()->values()->all() === [$pendente, $andamento, $encerradaHoje]);
     }
 
     public function test_rotinas_diarias_usam_a_duracao_cadastrada_para_prazo_de_conclusao(): void
@@ -454,6 +502,71 @@ class ExecucoesDiariasTest extends TestCase
         ]);
     }
 
+    public function test_popup_do_monitoramento_lista_e_atribui_somente_tarefas_do_processo_selecionado(): void
+    {
+        $agora = CarbonImmutable::parse('2026-11-19 12:00:00', 'UTC');
+        $this->travelTo($agora);
+        $unidade = Empresa::create(['empresa' => 'Unidade Santana']);
+        $responsavel = $this->usuario('ana', $unidade);
+        $destino = $this->usuario('bia', $unidade);
+        $externo = $this->usuario('carlos', Empresa::create(['empresa' => 'Outra Unidade']));
+        $diaria = $this->rotina($responsavel, $unidade, $this->tarefa('Ronda da Manhã'), '09:00:00');
+        $outra = $this->rotina($responsavel, $unidade, $this->tarefa('Tarefa Encerrada'), '09:10:00');
+        $emergencial = $this->rotina($responsavel, $unidade, $this->tarefa('Atendimento Urgente'), '09:00:00');
+        DB::table('rotinas')->where('id_rotina', $emergencial)->update([
+            'tipo_rotina' => ExecucoesDiarias::TIPO_EMERGENCIAL, 'agendada_em' => $agora,
+        ]);
+        $this->artisan('rotinas:gerar-execucoes')->assertSuccessful();
+        $execucoes = DB::table('rotinas_execucoes')->get()->keyBy('id_rotina');
+        $idDiaria = $execucoes[$diaria]->id_execucao;
+        $idEncerrada = $execucoes[$outra]->id_execucao;
+        $idEmergencial = $execucoes[$emergencial]->id_execucao;
+        $ocorrenciaAnterior = (array) $execucoes[$diaria];
+        unset($ocorrenciaAnterior['id_execucao']);
+        $idAnterior = DB::table('rotinas_execucoes')->insertGetId([
+            ...$ocorrenciaAnterior,
+            'previsto_em' => $agora->subDay(), 'agenda_ate' => $agora->subHours(3), 'prazo_em' => $agora->subHours(23),
+        ], 'id_execucao');
+        DB::table('rotinas_execucoes')->where('id_execucao', $idEncerrada)->update([
+            'status' => 'concluida', 'iniciado_em' => $agora->subMinutes(5), 'concluido_em' => $agora,
+        ]);
+        $this->actingAs($responsavel)->post(route('execucoes.iniciar', $idDiaria))->assertRedirect()->assertSessionHasNoErrors();
+        $this->post(route('execucoes.iniciar', $idEmergencial))->assertRedirect()->assertSessionHasNoErrors();
+
+        $this->get(route('monitoramento.processo', 'diaria'))
+            ->assertOk()->assertSeeText(['Ronda da Manhã', 'Selecionar todas'])->assertDontSeeText(['Atendimento Urgente', 'Tarefa Encerrada'])
+            ->assertViewHas('tarefas', fn ($tarefas) => $tarefas->pluck('status')->all() === ['pendente', 'em_andamento']);
+        $this->get(route('monitoramento.processo', 'emergencial'))
+            ->assertOk()->assertSeeText(['Atendimento Urgente', 'Em andamento'])->assertDontSeeText('Ronda da Manhã');
+        $this->actingAs($externo)->get(route('monitoramento.processo', 'diaria'))
+            ->assertOk()->assertDontSeeText('Ronda da Manhã');
+
+        $dados = ['processo' => 'diaria', 'novo_colaborador_id' => $destino->getKey()];
+        $this->postJson(route('rotinas.atribuir'), [...$dados, 'execucoes_ids' => [$idAnterior]])
+            ->assertUnprocessable()->assertJsonValidationErrors('execucoes_ids');
+        $this->actingAs($responsavel)->postJson(route('rotinas.atribuir'), [...$dados, 'execucoes_ids' => [$idDiaria, $idEmergencial]])
+            ->assertUnprocessable()->assertJsonValidationErrors('execucoes_ids');
+        $this->postJson(route('rotinas.atribuir'), [...$dados, 'execucoes_ids' => [$idAnterior, $idEncerrada]])
+            ->assertUnprocessable()->assertJsonValidationErrors('execucoes_ids');
+        $this->assertDatabaseHas('rotinas_execucoes', ['id_execucao' => $idAnterior, 'id_usuario_responsavel' => $responsavel->getKey()]);
+
+        $this->postJson(route('rotinas.atribuir'), [...$dados, 'execucoes_ids' => [$idAnterior]])->assertOk();
+        $this->assertDatabaseHas('rotinas_execucoes', ['id_execucao' => $idAnterior, 'id_usuario_responsavel' => $destino->getKey(), 'status' => 'pendente']);
+        $this->assertDatabaseHas('rotinas_execucoes', ['id_execucao' => $idDiaria, 'id_usuario_responsavel' => $responsavel->getKey()]);
+        $this->assertDatabaseHas('rotinas', ['id_rotina' => $diaria, 'id_usuario' => $responsavel->getKey()]);
+
+        $this->postJson(route('rotinas.atribuir'), [...$dados, 'execucoes_ids' => [$idAnterior, $idDiaria]])->assertOk();
+        $this->assertDatabaseHas('rotinas_execucoes', [
+            'id_execucao' => $idDiaria, 'id_usuario_responsavel' => $destino->getKey(),
+            'status' => 'em_andamento', 'iniciado_em' => $agora->toDateTimeString(),
+        ]);
+        $this->assertDatabaseHas('logs_auditoria', ['tabela' => 'rotinas_execucoes', 'registro_id' => (string) $idDiaria, 'acao' => 'UPDATE']);
+        $this->postJson(route('rotinas.atribuir'), [...$dados, 'processo' => 'emergencial', 'execucoes_ids' => [$idEmergencial]])->assertOk();
+        $this->assertDatabaseHas('rotinas_execucoes', ['id_execucao' => $idEmergencial, 'id_usuario_responsavel' => $destino->getKey(), 'status' => 'em_andamento']);
+        $this->actingAs($destino)->post(route('execucoes.concluir', $idDiaria), ['comentario' => 'Ronda finalizada'])
+            ->assertRedirect()->assertSessionHasNoErrors();
+    }
+
     public function test_tarefa_emergencial_entra_no_horario_uma_vez_e_escalona_pelo_sla_da_caixa(): void
     {
         $inicio = CarbonImmutable::parse('2026-11-24 09:00:00', ExecucoesDiarias::FUSO);
@@ -536,6 +649,9 @@ class ExecucoesDiariasTest extends TestCase
             ->assertRedirectToRoute('execucoes.realizando', $id);
         $this->get(route('execucoes.realizando', $id))->assertOk()->assertSeeText('Tarefa emergencial');
         $this->assertDatabaseHas('rotinas_execucoes', ['id_execucao' => $id, 'status' => 'em_andamento', 'prazo_em' => '2026-11-24 12:30:00']);
+        $this->get(route('monitoramento.index', ['processo' => 'emergencial', 'status' => 'pendente']))->assertOk()
+            ->assertViewHas('processos', fn ($processos) => $processos->get('emergencial')->all() === ['pendente' => 1, 'todas' => 1])
+            ->assertViewHas('execucoes', fn ($itens) => $itens->sole()->id_execucao === $id && $itens->sole()->status === 'em_andamento');
 
         $acompanhamento = route('acompanhamento.index', ['aba' => 'pendentes']);
         $this->travelTo($inicio->addMinutes(30)->subSecond());
@@ -547,6 +663,9 @@ class ExecucoesDiariasTest extends TestCase
         $this->post(route('execucoes.concluir', $id), ['comentario' => 'Atendimento realizado.'])->assertSessionHasNoErrors();
         $this->get(route('home', ['aba' => 'concluida']))->assertOk()->assertSeeText('Atendimento urgente');
         $this->get(route('relatorios.rotinas-finalizadas'))->assertOk()->assertDontSeeText('Atendimento urgente');
+        $this->get(route('monitoramento.index', ['processo' => 'emergencial', 'status' => 'concluida']))->assertOk()
+            ->assertViewHas('processos', fn ($processos) => $processos->get('emergencial')->all() === ['concluida' => 1, 'todas' => 1])
+            ->assertViewHas('execucoes', fn ($itens) => $itens->sole()->id_execucao === $id);
 
         $this->travelTo($inicio->addWeek()->addHour());
         $this->artisan('rotinas:gerar-execucoes')->assertSuccessful();
@@ -582,6 +701,29 @@ class ExecucoesDiariasTest extends TestCase
                 'border-[#d3ae74]/35', 'title="Ronda da manhã"',
                 'border-[#d3ae74]/35', 'title="Verificar o salão"',
             ], false);
+    }
+
+    public function test_emergencial_encerrada_sem_realizacao_aparece_apenas_em_todas_as_tarefas_do_processo(): void
+    {
+        $inicio = CarbonImmutable::parse('2026-11-24 09:00:00', ExecucoesDiarias::FUSO);
+        $this->travelTo($inicio);
+        $unidade = Empresa::create(['empresa' => 'Unidade Santana']);
+        $usuario = $this->usuario('ana', $unidade);
+        $rotina = $this->rotina($usuario, $unidade, $this->tarefa('Atendimento emergencial'), '09:00:00', 'Terça-feira');
+        DB::table('rotinas')->where('id_rotina', $rotina)->update([
+            'tipo_rotina' => ExecucoesDiarias::TIPO_EMERGENCIAL, 'agendada_em' => $inicio->utc(),
+        ]);
+
+        $this->actingAs($usuario)->get(route('home'))->assertOk();
+        $id = DB::table('rotinas_execucoes')->where('id_rotina', $rotina)->value('id_execucao');
+        $this->post(route('execucoes.iniciar', $id))->assertSessionHasNoErrors();
+        $this->post(route('execucoes.nao-realizada', $id), ['justificativa' => 'Material indisponível.'])->assertSessionHasNoErrors();
+
+        $this->get(route('monitoramento.index', ['processo' => 'emergencial']))->assertOk()
+            ->assertViewHas('processos', fn ($processos) => $processos->get('emergencial')->all() === ['todas' => 1])
+            ->assertViewHas('execucoes', fn ($itens) => $itens->sole()->status === 'nao_realizada');
+        $this->get(route('monitoramento.index', ['processo' => 'emergencial', 'status' => 'concluida']))->assertOk()
+            ->assertViewHas('execucoes', fn ($itens) => $itens->isEmpty());
     }
 
     private function usuario(string $login, Empresa $empresa): User

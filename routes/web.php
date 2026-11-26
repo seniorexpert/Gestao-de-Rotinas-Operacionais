@@ -68,6 +68,8 @@ Route::middleware('auth')->group(function () {
         ->can('visualizar-modulo', "'processos'")->name('processos.gestao-rotinas');
     Route::get('/api/usuarios-por-unidade', [ProcessoController::class, 'usuariosPorUnidade'])->can('consultar-colaboradores')->name('processos.usuarios-por-unidade');
     Route::get('/centro-monitoramento', [MonitoramentoController::class, 'index'])->can('visualizar-modulo', "'monitoramento'")->name('monitoramento.index');
+    Route::get('/centro-monitoramento/processos/{processo}', [MonitoramentoController::class, 'processo'])
+        ->can('editar-modulo', "'monitoramento'")->name('monitoramento.processo');
     Route::post('/rotinas/atribuir', [MonitoramentoController::class, 'atribuir'])->can('editar-modulo', "'monitoramento'")->name('rotinas.atribuir');
     Route::post('/rotinas/salvar', [RotinasController::class, 'store'])->can('editar-modulo', "'rotinas'")->name('rotinas.store');
     Route::put('/rotinas/{grupo}', [RotinasController::class, 'update'])->can('editar-modulo', "'rotinas'")->name('rotinas.update');

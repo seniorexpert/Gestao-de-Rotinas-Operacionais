@@ -1,101 +1,153 @@
-<div id="modalAtribuirTarefa" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
-    <div class="bg-white rounded-3xl max-w-xl w-full p-8 relative shadow-2xl max-h-[90vh] flex flex-col">
-        
-        <button type="button" onclick="fecharModalAtribuir()" class="absolute top-6 right-6 text-gray-400 hover:text-gray-700 focus:outline-none">
-            ✕
+<dialog id="modalAtribuirTarefa" aria-labelledby="tituloAtribuicao"
+        class="m-auto max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] max-w-5xl overflow-y-auto rounded-2xl border border-[#e8d6bf] bg-white p-0 text-[#17384b] shadow-xl backdrop:bg-slate-950/45 sm:max-h-[90dvh]">
+    <header class="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-[#e8d6bf] bg-white px-4 py-3 sm:px-6">
+        <h2 id="tituloAtribuicao" class="font-['Fraunces',Georgia,serif] text-xl font-semibold sm:text-2xl">Atribuir tarefa</h2>
+        <button type="button" data-fechar-atribuicao autofocus aria-label="Fechar"
+                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[#e8d6bf] hover:bg-[#f9f7f2]">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
         </button>
-
-        <div class="flex-shrink-0 mb-6">
-            <h2 class="text-3xl font-bold text-[#1e2d3d] font-serif">Atribuir tarefa</h2>
-            <p class="text-sm text-gray-500 mt-1">Escolha a tarefa e o colaborador que vai assumi-la.</p>
-        </div>
-
-        <form action="{{ route('rotinas.atribuir') }}" method="POST" class="space-y-6 sans-text overflow-y-auto flex-1 pr-1">
-            @csrf
-            
-            <div class="border border-gray-200 rounded-3xl p-6 bg-white shadow-sm space-y-4">
-                <h3 class="text-sm font-bold text-[#1e2d3d]">1. Tarefa</h3>
-                
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Colaborador atual</label>
-                    <select id="filtroColaboradorAtual" onchange="filtrarTarefasPorColaborador()" class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
-                        <option value="">Todos os colaboradores</option>
-                        @foreach ($colaboradores as $colaborador)
-                            <option value="{{ $colaborador->id_usuario }}">{{ $colaborador->usuario }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div class="space-y-2 max-h-48 overflow-y-auto pr-1" id="listaTarefasModal">
-                    @foreach ($rotinas as $rotina)
-                        <div class="item-tarefa border border-gray-200 rounded-2xl p-4 flex items-center justify-between bg-white cursor-pointer hover:bg-gray-50 transition" data-usuario="{{ $rotina->id_usuario }}">
-                            <div class="flex items-center gap-3">
-                                <span class="text-xs font-bold text-slate-700">{{ $rotina->horario }}</span>
-                                <div>
-                                    <p class="text-sm font-bold text-slate-800">{{ $rotina->tarefa ?? 'Tarefa' }}</p>
-                                    <span class="text-[10px] text-gray-400">Local {{ $rotina->local ?: ($rotina->local_cadastrado ?? '—') }} · {{ $rotina->usuario }}</span>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-3">
-                                <span class="px-2.5 py-1 text-[10px] font-semibold rounded-full border {{ $rotina->status ? 'bg-emerald-50 text-emerald-700 border-emerald-100' : 'bg-slate-50 text-slate-600 border-slate-100' }}">
-                                    {{ $rotina->status ? 'Ativa' : 'Inativa' }}
-                                </span>
-                                <input type="checkbox" name="rotinas_ids[]" value="{{ $rotina->id_rotina }}" class="w-4 h-4 rounded border-gray-300 text-[#1e2d3d] focus:ring-[#1e2d3d]">
-                            </div>
-                        </div>
-                    @endforeach
-                </div>
-            </div>
-
-            <div class="border border-gray-200 rounded-3xl p-6 bg-white shadow-sm space-y-4">
-                <h3 class="text-sm font-bold text-[#1e2d3d]">2. Atribuir para</h3>
-                <div>
-                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Novo responsável</label>
-                    <select name="novo_colaborador_id" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
-                        <option value="" disabled selected>Selecione o novo colaborador</option>
-                        @foreach ($colaboradores as $colaborador)
-                            <option value="{{ $colaborador->id_usuario }}">{{ $colaborador->usuario }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <p class="text-xs text-gray-400">Selecione uma ou mais tarefas acima e o novo responsável para realizar a atribuição.</p>
-            </div>
-
-            <div class="pt-6 border-t border-gray-100 mt-4 flex items-center justify-end gap-4">
-                <button type="button" onclick="fecharModalAtribuir()" class="w-1/2 py-3.5 rounded-2xl border border-gray-300 text-slate-800 hover:bg-gray-50 text-sm font-bold transition text-center">
-                    Cancelar
-                </button>
-                <button type="submit" class="w-1/2 py-3.5 rounded-2xl bg-[#1e293b] text-white hover:bg-slate-700 text-sm font-bold transition text-center">
-                    Atribuir tarefa
-                </button>
-            </div>
-        </form>
-
-    </div>
-</div>
+    </header>
+    <div id="conteudoAtribuicao" class="p-4 sm:p-6"></div>
+</dialog>
 
 <script>
-    function abrirModalAtribuir() {
+    (() => {
         const modal = document.getElementById('modalAtribuirTarefa');
-        if (modal) modal.classList.remove('hidden');
-    }
+        const titulo = document.getElementById('tituloAtribuicao');
+        const conteudo = document.getElementById('conteudoAtribuicao');
+        const rota = @js(route('monitoramento.processo', ['processo' => 'PROCESSO']));
+        let consulta;
+        let salvando = false;
 
-    function fecharModalAtribuir() {
-        const modal = document.getElementById('modalAtribuirTarefa');
-        if (modal) modal.classList.add('hidden');
-    }
+        const mensagem = (texto, erro = false) => {
+            const aviso = document.createElement('p');
+            aviso.className = erro ? 'text-sm text-rose-800' : 'text-sm text-[#536b7b]';
+            aviso.setAttribute('role', erro ? 'alert' : 'status');
+            aviso.textContent = texto;
+            conteudo.replaceChildren(aviso);
+        };
 
-    function filtrarTarefasPorColaborador() {
-        const idSelecionado = document.getElementById('filtroColaboradorAtual').value;
-        const itens = document.querySelectorAll('.item-tarefa');
+        const normalizar = texto => texto.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
+        const campoDaExecucao = '[name="execucoes_ids[]"]';
+        const camposVisiveis = () => [...conteudo.querySelectorAll('[data-tarefa-atribuicao]:not([hidden]) ' + campoDaExecucao)];
 
-        itens.forEach(item => {
-            const usuarioIdItem = item.getAttribute('data-usuario');
-            if (idSelecionado === "" || usuarioIdItem === idSelecionado) {
-                item.style.display = "flex";
-            } else {
-                item.style.display = "none";
+        function atualizar() {
+            const busca = normalizar(conteudo.querySelector('[data-busca-atribuicao]').value);
+            const responsavel = conteudo.querySelector('[data-responsavel-atribuicao]').value;
+            const status = conteudo.querySelector('[data-status-atribuicao]').value;
+            let visiveis = 0;
+
+            conteudo.querySelectorAll('[data-tarefa-atribuicao]').forEach(tarefa => {
+                tarefa.hidden = (responsavel !== '' && tarefa.dataset.responsavel !== responsavel)
+                    || (status !== '' && tarefa.dataset.status !== status)
+                    || !normalizar(tarefa.textContent).includes(busca);
+                if (tarefa.hidden) {
+                    const campo = tarefa.querySelector(campoDaExecucao);
+                    if (campo) campo.checked = false;
+                } else {
+                    visiveis++;
+                }
+            });
+            conteudo.querySelector('[data-vazio-atribuicao]').hidden = visiveis > 0;
+
+            const destino = conteudo.querySelector('[name="novo_colaborador_id"]');
+            if (!destino) return;
+
+            const campos = camposVisiveis();
+            const selecionadas = campos.filter(campo => campo.checked).length;
+            const selecionarTodas = conteudo.querySelector('[data-selecionar-todas]');
+            selecionarTodas.disabled = campos.length === 0;
+            selecionarTodas.checked = selecionadas > 0 && selecionadas === campos.length;
+            selecionarTodas.indeterminate = selecionadas > 0 && selecionadas < campos.length;
+            const grupo = destino.selectedOptions[0]?.dataset.grupo;
+            conteudo.querySelector('[data-grupo-atribuicao]').textContent = grupo ? 'Grupo de acesso · ' + grupo : '';
+            conteudo.querySelector('[data-total-atribuicao]').textContent = selecionadas + (selecionadas === 1 ? ' tarefa selecionada' : ' tarefas selecionadas');
+            conteudo.querySelector('[data-enviar-atribuicao]').disabled = salvando || !selecionadas || !destino.value;
+        }
+
+        window.abrirModalAtribuir = async (processo, colaborador = '', execucao = '') => {
+            if (!processo || salvando) return;
+            consulta?.abort();
+            const requisicao = new AbortController();
+            consulta = requisicao;
+            titulo.textContent = 'Atribuir tarefa';
+            mensagem('Carregando as tarefas do processo…');
+            modal.showModal();
+
+            try {
+                const resposta = await fetch(rota.replace('/PROCESSO', '/' + encodeURIComponent(processo)), {
+                    cache: 'no-store',
+                    signal: requisicao.signal,
+                });
+                if (!resposta.ok || resposta.redirected) throw new Error();
+                const fragmento = await resposta.text();
+                if (requisicao.signal.aborted) return;
+                conteudo.innerHTML = fragmento;
+
+                const processoAberto = conteudo.querySelector('[data-painel-atribuicao]');
+                titulo.textContent = processoAberto.dataset.titulo;
+                const responsavel = conteudo.querySelector('[data-responsavel-atribuicao]');
+                if ([...responsavel.options].some(opcao => opcao.value === colaborador)) responsavel.value = colaborador;
+                const tarefa = [...conteudo.querySelectorAll(campoDaExecucao)].find(campo => campo.value === execucao);
+                if (tarefa) tarefa.checked = true;
+                atualizar();
+            } catch {
+                if (!requisicao.signal.aborted) mensagem('Não foi possível carregar as tarefas do processo. Feche o popup e tente novamente.', true);
             }
+        };
+
+        modal.addEventListener('click', evento => {
+            if (!salvando && evento.target.closest('[data-fechar-atribuicao]')) modal.close();
         });
-    }
+        modal.addEventListener('cancel', evento => {
+            if (salvando) evento.preventDefault();
+        });
+        modal.addEventListener('close', () => consulta?.abort());
+        conteudo.addEventListener('input', evento => {
+            if (evento.target.matches('[data-busca-atribuicao]')) atualizar();
+        });
+        conteudo.addEventListener('change', evento => {
+            if (evento.target.matches('[data-selecionar-todas]')) {
+                camposVisiveis().forEach(campo => campo.checked = evento.target.checked);
+            }
+            atualizar();
+        });
+        conteudo.addEventListener('submit', async evento => {
+            evento.preventDefault();
+            const formulario = evento.target;
+            const botao = formulario.querySelector('[data-enviar-atribuicao]');
+            if (!botao || botao.disabled || salvando) return;
+
+            salvando = true;
+            botao.disabled = true;
+            const erro = formulario.querySelector('[data-erro-atribuicao]');
+            erro.hidden = true;
+            const dadosFormulario = new FormData(formulario);
+            try {
+                const resposta = await fetch(formulario.action, {
+                    method: 'POST',
+                    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'X-CSRF-TOKEN': dadosFormulario.get('_token') },
+                    body: JSON.stringify({
+                        processo: dadosFormulario.get('processo'),
+                        novo_colaborador_id: dadosFormulario.get('novo_colaborador_id'),
+                        execucoes_ids: dadosFormulario.getAll('execucoes_ids[]'),
+                    }),
+                });
+                if (resposta.redirected) throw new Error();
+                if (resposta.ok) {
+                    location.reload();
+                    return;
+                }
+
+                const dados = resposta.status === 422 ? await resposta.json() : null;
+                erro.textContent = Object.values(dados?.errors ?? {}).flat().join(' ')
+                    || 'A atribuição não pôde ser salva. Atualize a página e tente novamente.';
+            } catch {
+                erro.textContent = 'A atribuição não pôde ser salva. Atualize a página e tente novamente.';
+            }
+            erro.hidden = false;
+            salvando = false;
+            atualizar();
+        });
+    })();
 </script>

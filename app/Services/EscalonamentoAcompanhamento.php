@@ -111,6 +111,26 @@ class EscalonamentoAcompanhamento
         ];
     }
 
+    public function recebimentoDoItem(object $item, ?string $caixa, CarbonImmutable $referencia): ?CarbonImmutable
+    {
+        $recebimentos = $item->verificado_em !== null && $item->encaminhamentos !== null
+            ? json_decode($item->encaminhamentos, true)
+            : [];
+        if (! is_array($recebimentos) || $recebimentos === []) {
+            $recebimentos = $this->encaminharItem($item, $referencia)['recebimentos'] ?? [];
+        }
+
+        $recebidoEm = $caixa !== null ? ($recebimentos[$caixa] ?? null) : null;
+        if ($recebidoEm === null && ($caixa === null || $item->verificado_em !== null)) {
+            $recebidoEm = reset($recebimentos);
+        }
+        if (is_string($recebidoEm) && trim($recebidoEm) !== '') {
+            $recebidoEm = CarbonImmutable::parse($recebidoEm, 'UTC');
+        }
+
+        return $recebidoEm instanceof CarbonImmutable && $recebidoEm->lessThanOrEqualTo($referencia) ? $recebidoEm : null;
+    }
+
     public function podeConsultarVerificacao(object $verificacao, ?string $caixa, User $usuario): bool
     {
         if ($caixa === null || (string) $verificacao->id_usuario_verificacao === (string) $usuario->getKey()) {

@@ -17,7 +17,7 @@ class EsquemaRotinasTest extends TestCase
 
     #[TestWith(['processos.index', 'Organizar sala'])]
     #[TestWith(['processos.gestao-rotinas', 'Organizar sala'])]
-    #[TestWith(['monitoramento.index', 'Organizar sala'])]
+    #[TestWith(['monitoramento.index', 'Rotinas Diárias'])]
     #[TestWith(['relatorios.tarefas', 'Organizar sala'])]
     #[TestWith(['relatorios.locais', 'Sala de estar'])]
     #[TestWith(['relatorios.ferramentas', 'Kit de limpeza'])]

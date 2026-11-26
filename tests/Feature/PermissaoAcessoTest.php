@@ -65,6 +65,7 @@ class PermissaoAcessoTest extends TestCase
         ])->assertSessionHas('success');
         $this->get(route('relatorios.locais'))->assertForbidden();
         $this->get(route('monitoramento.index'))->assertOk()->assertDontSeeText('Atribuir tarefa');
+        $this->get(route('monitoramento.processo', 'diaria'))->assertForbidden();
         $this->post(route('rotinas.atribuir'))->assertForbidden();
 
         $this->actingAs($admin)->put($regrasIndividuais, ['regras' => ['tarefas' => 'herdar']])->assertSessionHasNoErrors();

@@ -610,6 +610,10 @@ class RotinaAcompanhamentoControllerTest extends TestCase
         $this->get(route('acompanhamento.index', ['aba' => 'verificadas', 'item' => $id, 'tipo' => 'nao_realizada']))
             ->assertOk()->assertSeeText(['Morador Ausente', 'Combinei um Novo Atendimento']);
 
+        $this->get(route('monitoramento.index', ['processo' => 'nao_realizada', 'status' => 'concluida']))->assertOk()
+            ->assertViewHas('processos', fn ($processos) => $processos->get('nao_realizada')->all() === ['concluida' => 1, 'todas' => 1])
+            ->assertViewHas('execucoes', fn ($itens) => $itens->sole()->id_execucao === $id && $itens->sole()->tipo === 'nao_realizada');
+
         $this->travelTo(CarbonImmutable::parse('2026-11-18 15:30:00', 'UTC'));
         $this->actingAs($gerente)->get(route('acompanhamento.index', ['aba' => 'nao_realizadas', 'item' => $id]))->assertNotFound();
     }
@@ -724,7 +728,9 @@ class RotinaAcompanhamentoControllerTest extends TestCase
             'concluido_em' => '2026-11-18 14:53:00',
             'duracao_prevista_segundos' => 300,
         ]);
-        $naoRealizada = $this->execucao('Rotina encaminhada por falta de realização', $colaborador, $empresa, ['status' => 'nao_realizada']);
+        $naoRealizada = $this->execucao('Rotina encaminhada por falta de realização', $colaborador, $empresa, [
+            'status' => 'nao_realizada', 'concluido_em' => '2026-11-18 14:45:00',
+        ]);
         DB::table('rotinas_acomp_nao_realizadas')->insert([
             'id_execucao' => $naoRealizada, 'caixa' => 'Enfermagem', 'recebido_em' => '2026-11-18 14:45:00',
         ]);
@@ -780,6 +786,31 @@ class RotinaAcompanhamentoControllerTest extends TestCase
         $this->get(route('relatorios.estatisticas', [...$filtros, 'detalhe' => 'processo-auxilio', 'pendentes' => 0, 'andamento' => 0]))
             ->assertOk()->assertSeeTextInOrder(['No prazo', 'Rotina iniciada', 'Concluída', 'Verificada em 18/11/2026'])
             ->assertViewHas('rotinasDetalhe', fn ($itens) => $itens->sole()->id_item === $pedido && $itens->sole()->situacao === 'noPrazo');
+
+        $this->get(route('monitoramento.index'))->assertOk()
+            ->assertSeeText('Verificação de Tarefas Não realizadas')
+            ->assertSee(route('monitoramento.index', ['processo' => 'nao_realizada']))
+            ->assertViewHas('processos', fn ($processos) => $processos->map(fn ($status) => $status->get('todas'))->all() === [
+                'diaria' => 4, 'acompanhamento' => 1, 'auxilio' => 2, 'emergencial' => 1, 'nao_realizada' => 1,
+            ])->assertViewHas('statusPorProcesso', fn ($status) => $status->map(fn (array $rotulos): array => array_keys($rotulos))->all() === [
+                'diaria' => ['pendente', 'em_andamento', 'concluida', 'nao_realizada', 'todas'],
+                'acompanhamento' => ['pendente', 'concluida', 'todas'],
+                'auxilio' => ['pendente', 'concluida', 'todas'],
+                'emergencial' => ['pendente', 'concluida', 'todas'],
+                'nao_realizada' => ['pendente', 'concluida', 'todas'],
+            ]);
+        $this->get(route('monitoramento.index', ['processo' => 'nao_realizada']))->assertOk()
+            ->assertViewHas('execucoes', fn ($itens) => $itens->sole()->id_execucao === $naoRealizada && $itens->sole()->status === 'pendente');
+        $this->get(route('monitoramento.index', ['processo' => 'auxilio', 'status' => 'concluida']))->assertOk()
+            ->assertViewHas('situacoes', fn ($situacoes) => $situacoes->all() === ['noPrazo' => 1])
+            ->assertViewHas('execucoes', fn ($itens) => $itens->sole()->id_item === $pedido && ! $itens->sole()->pode_atribuir);
+        $this->get(route('monitoramento.processo', 'auxilio'))->assertOk()
+            ->assertSeeText(['Apoio para Atendimento', 'Verificar tarefa'])
+            ->assertViewHas('tarefas', fn ($itens) => $itens->sole()->status === 'pendente')
+            ->assertDontSeeText(['Apoio para Materiais', 'Materiais Entregues', 'Atendimento emergencial', 'Rotina encaminhada em atraso']);
+        $this->actingAs($colaborador)->get(route('monitoramento.index'))->assertOk()
+            ->assertViewHas('processos', fn ($processos) => $processos->keys()->all() === ['diaria', 'emergencial']);
+        $this->get(route('monitoramento.processo', 'auxilio'))->assertForbidden();
     }
 
     public function test_estatisticas_de_acompanhamento_usam_a_data_da_verificacao_e_respeitam_caixas_e_unidades(): void

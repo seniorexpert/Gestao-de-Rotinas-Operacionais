@@ -375,26 +375,9 @@ class EstatisticasController extends Controller
 
     private function classificarAcompanhamento(stdClass $item, ?string $caixa, CarbonImmutable $referencia): ?string
     {
-        $recebimentos = $item->verificado_em !== null && $item->encaminhamentos !== null
-            ? json_decode($item->encaminhamentos, true)
-            : [];
-        if (! is_array($recebimentos) || $recebimentos === []) {
-            $recebimentos = $this->escalonamento->encaminharItem($item, $referencia)['recebimentos'] ?? [];
-        }
+        $recebidoEm = $this->escalonamento->recebimentoDoItem($item, $caixa, $referencia);
 
-        $recebidoEm = $caixa !== null ? ($recebimentos[$caixa] ?? null) : null;
-        if ($recebidoEm === null && ($caixa === null || $item->verificado_em !== null)) {
-            $recebidoEm = reset($recebimentos);
-        }
-        if (is_string($recebidoEm) && trim($recebidoEm) !== '') {
-            $recebidoEm = CarbonImmutable::parse($recebidoEm, 'UTC');
-        }
-
-        if (! $recebidoEm instanceof CarbonImmutable || $recebidoEm->greaterThan($referencia)) {
-            return null;
-        }
-
-        return $this->escalonamento->classificarSla($recebidoEm, $referencia, $item->tipo === 'auxilio');
+        return $recebidoEm ? $this->escalonamento->classificarSla($recebidoEm, $referencia, $item->tipo === 'auxilio') : null;
     }
 
     private function intervalo(
