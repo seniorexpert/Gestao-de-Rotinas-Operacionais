@@ -27,7 +27,7 @@
             </div>
 
             <div>
-                <label for="selectColaboradorModalRotina" class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Colaborador(a) (obrigatório)</label>
+                <label for="selectColaboradorModalRotina" class="block text-xs font-bold text-[#1e2d3d] uppercase tracking-wider mb-2">Colaborador(a) </label>
                 <select name="colaborador_id" id="selectColaboradorModalRotina" required class="w-full bg-white border border-gray-300 rounded-2xl px-4 py-3.5 text-sm text-gray-800 focus:outline-none focus:border-[#1e2d3d]">
                     <option value="" disabled selected>Selecione a unidade primeiro</option>
                 </select>

@@ -120,7 +120,7 @@
                       class="flex flex-col gap-2">
                     @csrf
                     <label for="acao-realizada" class="text-sm font-bold text-[#1e2d3d] sm:text-base">
-                        Qual ação foi realizada? <span class="font-normal">(obrigatório)</span>
+                        Qual ação foi realizada? <span class="font-normal"></span>
                     </label>
                     <textarea id="acao-realizada" name="acao" rows="3" maxlength="2000" required
                               placeholder="Conversei com a colaboradora e a tarefa foi feita às 15:20."

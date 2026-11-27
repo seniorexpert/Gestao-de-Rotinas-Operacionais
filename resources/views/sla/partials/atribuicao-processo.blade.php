@@ -126,7 +126,7 @@
                 @endif
                 @if ($permiteConcluir)
                     <div @class(['mt-4 border-t border-[#e8d6bf] pt-4' => $permiteAtribuir])>
-                        <label class="block text-xs font-semibold">Comentário da conclusão (obrigatório)
+                        <label class="block text-xs font-semibold">Comentário da conclusão 
                             <textarea name="comentario" rows="3" maxlength="2000" aria-required="true" aria-describedby="notaConclusaoEmLote"
                                       class="{{ $campo }}"></textarea>
                         </label>

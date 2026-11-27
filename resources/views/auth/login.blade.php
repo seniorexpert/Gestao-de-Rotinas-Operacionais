@@ -147,5 +147,6 @@
             }
         });
     </script>
+    <x-validacao-campos />
 </body>
 </html>

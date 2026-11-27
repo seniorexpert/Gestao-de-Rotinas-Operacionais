@@ -389,7 +389,7 @@ class ExecucoesDiariasTest extends TestCase
         $this->travelTo($agora->addSeconds(95));
         $estatisticas = route('relatorios.estatisticas', ['detalhe' => 'usuario-'.$usuario->getKey()]);
         $this->get($estatisticas)->assertOk()->assertSeeTextInOrder(['Preparar o salão', 'Iniciada'])
-            ->assertDontSeeText(['Ver SLA', 'Comentário (obrigatório)'])
+            ->assertDontSeeText(['Ver SLA', 'Comentário '])
             ->assertDontSee('action="'.route('execucoes.concluir', $id).'"', false);
 
         $formulario = route('execucoes.formulario', [$id, 'finalizar']);
@@ -416,7 +416,7 @@ class ExecucoesDiariasTest extends TestCase
 
         $this->actingAs($usuario)->get($formulario)->assertNotFound();
         $this->post(route('execucoes.iniciar', $id))->assertSessionHasNoErrors();
-        $this->get($formulario)->assertOk()->assertSeeTextInOrder(['Finalizar Tarefa', 'Comentário', '(obrigatório)', 'Confirmar Envio'])
+        $this->get($formulario)->assertOk()->assertSeeTextInOrder(['Finalizar Tarefa', 'Comentário', '', 'Confirmar Envio'])
             ->assertSee('name="comentario" rows="5" maxlength="2000" required', false);
         $this->from($formulario)->post(route('execucoes.concluir', $id), ['comentario' => '   '])
             ->assertRedirect($formulario)->assertSessionHasErrors(['comentario' => 'Informe um comentário sobre a execução.']);

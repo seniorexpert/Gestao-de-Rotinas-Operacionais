@@ -408,12 +408,12 @@
             <button type="button" id="toggleRelatorios" class="senior-sidebar__item senior-sidebar__reports-toggle" aria-controls="relatoriosMenu" aria-expanded="true">
                 <svg class="senior-sidebar__icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#senior-menu-chart-column"/></svg>
                 <span>Relatórios</span>
-                <svg id="relatoriosChevron" class="senior-sidebar__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <svg id="relatoriosChevron" class="senior-sidebar__chevron rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="m5 15 7-7 7 7"/>
                 </svg>
             </button>
 
-            <div id="relatoriosMenu" class="senior-sidebar__reports">
+            <div id="relatoriosMenu" class="senior-sidebar__reports hidden">
                 @foreach ($sidebarReports as $group => $reports)
                     <div class="senior-sidebar__report-group">
                         <p class="senior-sidebar__group-title">{{ $group }}</p>
@@ -678,5 +678,6 @@
             relatoriosChevron.classList.toggle('rotate-180', !expanded);
         });
     </script>
+    <x-validacao-campos />
 </body>
 </html>

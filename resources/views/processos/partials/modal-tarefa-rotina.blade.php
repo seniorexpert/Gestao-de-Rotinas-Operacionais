@@ -89,6 +89,8 @@
                     <span id="diasTextoBtn" class="text-gray-400">Selecionar dias</span>
                     <i id="diasIconeSeta" data-seta-dropdown class="fa-solid fa-chevron-up transition-transform duration-200 text-gray-400 text-xs" aria-hidden="true"></i>
                 </button>
+                <input type="text" id="diasObrigatorio" tabindex="-1" aria-hidden="true" data-campo-visual="diasDropdownBotao"
+                       class="pointer-events-none absolute bottom-0 left-6 h-px w-px opacity-0">
 
                 <div id="diasDropdownList" class="absolute left-0 right-0 mt-2 bg-white border border-gray-300 rounded-2xl p-4 max-h-56 overflow-y-auto space-y-3 shadow-xl z-50 hidden">
                     <label class="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-2 rounded-xl transition border-b border-gray-100 pb-3">
@@ -402,6 +404,7 @@
         const spanTexto = document.getElementById('diasTextoBtn');
         const masterCheckbox = document.getElementById('selectAllDias');
         const totalDias = document.querySelectorAll('.dia-checkbox').length;
+        document.getElementById('diasObrigatorio')?.setCustomValidity(checkboxes.length ? '' : 'Selecione pelo menos um dia da semana.');
 
         if (masterCheckbox) {
             masterCheckbox.checked = (checkboxes.length === totalDias);
@@ -459,8 +462,12 @@
         const auxiliares = necessitaAuxilio === 'Sim' ? opcoesAuxiliaresSelecionadas() : [];
         const observacao = document.getElementById('inputObservacao').value;
 
-        if (!tarefaId || !morador || (!localId && !localMorador) || !horario || (!data && diasSelecionados.length === 0)) {
-            alert('Preencha os campos obrigatórios da tarefa.');
+        atualizarContagemDias();
+        const camposInvalidos = ['inputDataEmergencial', 'diasObrigatorio', 'inputHorario', 'selectTarefa', 'selectMorador', 'selectLocal']
+            .map(id => document.getElementById(id))
+            .filter(campo => campo && !campo.checkValidity());
+        if (camposInvalidos.length) {
+            camposInvalidos[0].reportValidity();
             return;
         }
 

@@ -93,7 +93,7 @@
     @endif
 
     <label for="{{ $campo }}" class="mb-1.5 text-xs font-bold">
-        {{ $finalizar ? 'Comentário' : 'Justificativa' }} <span class="font-normal">(obrigatório)</span>
+        {{ $finalizar ? 'Comentário' : 'Justificativa' }} <span class="font-normal"></span>
     </label>
     <textarea id="{{ $campo }}" name="{{ $campo }}" rows="{{ $finalizar ? 5 : 7 }}" maxlength="2000" required
               placeholder="{{ $finalizar ? 'Descreva como a tarefa foi realizada...' : 'Descreva o motivo...' }}"

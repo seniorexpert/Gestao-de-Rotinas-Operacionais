@@ -32,7 +32,19 @@
             <div>
                 <label class="mb-2 block text-xs font-bold tracking-wider text-[#1e2d3d] uppercase">Duração</label>
                 <div class="relative flex items-center">
-                    <input type="number" name="tempo_tarefa" id="tempo_tarefa" required min="0.01" max="1439.99" step="any" class="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3.5 pr-14 text-sm text-gray-800 focus:border-[#1e2d3d] focus:outline-none" placeholder="15">
+                <input 
+                type="number" 
+                name="tempo_tarefa" 
+                id="tempo_tarefa" 
+                required 
+                min="1" 
+                max="9999" 
+                step="1"
+                onkeydown="if(['.', ',', '-', '+', 'e', 'E'].includes(event.key)) event.preventDefault();"
+                oninput="this.value = this.value.replace(/[^0-9]/g, ''); if (this.value !== '') { if (Number(this.value) <= 1) this.value = 1; if (Number(this.value) >= 9999) this.value = 9999; }"
+                class="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3.5 pr-14 text-sm text-gray-800 focus:border-[#1e2d3d] focus:outline-none" 
+                placeholder="15"
+                >
                     <span class="absolute right-4 text-sm font-medium text-gray-400">min</span>
                 </div>
             </div>

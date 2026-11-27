@@ -25,14 +25,14 @@
         @endif
 
         <section class="mb-5 rounded-2xl border border-[#b39359]/35 bg-white p-4 shadow-sm sm:p-5">
-            <nav aria-label="Tipo de permissão" class="mb-4 inline-grid grid-cols-2 gap-1 rounded-xl bg-[#f4f1ea] p-1">
+            <!-- <nav aria-label="Tipo de permissão" class="mb-4 inline-grid grid-cols-2 gap-1 rounded-xl bg-[#f4f1ea] p-1">
                 @foreach (['grupo' => 'Por grupo', 'usuario' => 'Por usuário'] as $chave => $texto)
                     <a href="{{ route('permissoes.index', ['tipo' => $chave]) }}" @if ($tipo === $chave) aria-current="page" @endif
                        class="rounded-lg px-4 py-2 text-center text-sm font-semibold {{ $tipo === $chave ? 'bg-white text-[#1e2d3d] shadow-sm' : 'text-slate-600 hover:text-[#1e2d3d]' }}">
                         {{ $texto }}
                     </a>
                 @endforeach
-            </nav>
+            </nav> -->
 
             @if ($opcoes->isNotEmpty())
                 <form method="GET" action="{{ route('permissoes.index') }}" class="flex flex-wrap items-end gap-2.5">
